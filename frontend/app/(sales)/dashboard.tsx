@@ -11,7 +11,6 @@ import { useToast } from "@/src/components/Toast";
 
 const CAT_ICONS: Record<string, any> = {
   BBM: "car-outline",
-  Parkir: "cash-outline",
   Servis: "construct-outline",
   "Lain-lain": "ellipsis-horizontal-outline",
 };

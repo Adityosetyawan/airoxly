@@ -17,7 +17,6 @@ import { useToast } from "@/src/components/Toast";
 
 const CATEGORIES = [
   { id: "BBM", icon: "car-outline" },
-  { id: "Parkir", icon: "cash-outline" },
   { id: "Servis", icon: "construct-outline" },
   { id: "Lain-lain", icon: "ellipsis-horizontal-outline" },
 ] as const;

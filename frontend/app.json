@@ -10,7 +10,11 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.oxlycrm.taw2qk"
+      "bundleIdentifier": "com.emergent.oxlycrm.taw2qk",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Scan barcode pelanggan",
+        "NSLocationWhenInUseUsageDescription": "Melacak lokasi sales di lapangan"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +22,8 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.oxlycrm.taw2qk"
+      "package": "com.emergent.oxlycrm.taw2qk",
+      "permissions": ["CAMERA", "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
     },
     "web": {
       "bundler": "metro",
@@ -35,6 +40,14 @@
           "resizeMode": "contain",
           "backgroundColor": "#000000"
         }
+      ],
+      [
+        "expo-camera",
+        { "cameraPermission": "Izinkan aplikasi mengakses kamera untuk scan barcode pelanggan" }
+      ],
+      [
+        "expo-location",
+        { "locationWhenInUsePermission": "Izinkan aplikasi mengakses lokasi untuk melacak sales di lapangan" }
       ]
     ],
     "experiments": {

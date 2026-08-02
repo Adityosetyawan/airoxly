@@ -1,0 +1,156 @@
+{
+  "app_name": "Air OXLY",
+  "personality": "1 iOS-Native Clean",
+  "personality_one_liner": "A crisp, high-contrast, professional field utility tool emphasizing trust, speed, and absolute clarity under sunlight.",
+  "color": {
+    "surface": "#FFFFFF",
+    "onSurface": "#18181B",
+    "surfaceSecondary": "#F4F4F5",
+    "onSurfaceSecondary": "#3F3F46",
+    "surfaceTertiary": "#E4E4E7",
+    "onSurfaceTertiary": "#52525B",
+    "surfaceInverse": "#18181B",
+    "onSurfaceInverse": "#FAFAFA",
+    "brand": "#059669",
+    "brandPrimary": "#10B981",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#34D399",
+    "onBrandSecondary": "#064E3B",
+    "brandTertiary": "#D1FAE5",
+    "onBrandTertiary": "#065F46",
+    "success": "#10B981",
+    "onSuccess": "#FFFFFF",
+    "warning": "#F59E0B",
+    "onWarning": "#FFFFFF",
+    "error": "#EF4444",
+    "onError": "#FFFFFF",
+    "info": "#14B8A6",
+    "onInfo": "#FFFFFF",
+    "border": "#E4E4E7",
+    "borderStrong": "#A1A1AA",
+    "divider": "#F4F4F5"
+  },
+  "typography": {
+    "displayFontFamily": "Plus Jakarta Sans",
+    "textFontFamily": "Plus Jakarta Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous touch targets (44pt+) with structured vertical rhythm. Cards utilize full horizontal width with safe margins. Padding ensures absolute legibility.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": 1,
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Use on bottom tab bar",
+      "Use on sticky headers over scrolling content (like customer lists)",
+      "Use on floating action buttons (FAB) over tinted background"
+    ],
+    "dont's": [
+      "Never on form fields",
+      "Never on dense list rows",
+      "Avoid stacking multiple glass surfaces over each other"
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "SalesDashboard",
+      "purpose": "Daily command center for Sales showcasing total items sold, total revenue, and quick actions.",
+      "states": {
+        "loading": "Centered brand-tinted spinner over surface canvas.",
+        "empty": "Illustration of water bottle with text 'Belum ada transaksi hari ini.' and primary CTA 'Mulai Transaksi'.",
+        "error": "Text 'Gagal memuat data penjualan' with Retry button."
+      },
+      "layout": "Sticky glass header with user code (e.g., A1). Top area features two large KPI cards (Total Uang, Terjual) using brandTertiary background. Below is a scrollable list of recent transactions. A sticky FAB at the bottom right for 'Scan QR / Manual Input'."
+    },
+    {
+      "name": "TransactionForm",
+      "purpose": "Core POS flow for Sales to record orders, payments, debts, and loaned gallons.",
+      "states": {
+        "loading": "Skeleton rows for product picker.",
+        "empty": "N/A - Form is prefilled with products.",
+        "error": "Error toast if submission fails, retaining form state."
+      },
+      "layout": "Customer profile summary at top. Vertical scrollable list of products (Galon 19L, cup, botol) with large +/- steppers. Below products: input fields for 'Bayar', 'Hutang', and 'Pinjam Galon'. Sticky glass bottom bar containing 'Kirim WA & Simpan' primary CTA."
+    },
+    {
+      "name": "CustomerDirectory",
+      "purpose": "Database for Sales to track customer ranks, debts, and last purchase dates.",
+      "states": {
+        "loading": "Staggered skeleton list cards.",
+        "empty": "Icon with text 'Belum ada pelanggan.' and 'Tambah Pelanggan' CTA.",
+        "error": "Text 'Gagal memuat database' with Retry button."
+      },
+      "layout": "Top sticky segmented control or filter chips (Urutkan: Ranking, Hutang, Lama Beli). Single-column scrollable list of customer cards. Each card displays Name, Barcode ID, last purchase date, and active debt in warning color if high."
+    },
+    {
+      "name": "AdminReportView",
+      "purpose": "Admin screen to monitor daily aggregated sales per Sales Group.",
+      "states": {
+        "loading": "Centered spinner.",
+        "empty": "Icon of empty clipboard with 'Tidak ada laporan penjualan untuk tanggal ini'.",
+        "error": "Text 'Gagal memuat laporan Admin' with Retry button."
+      },
+      "layout": "Sticky date picker and group filter (e.g., A1-A100). Full-width metric cards summarizing total gallons and revenue. Below, an accordion or sectioned list showing detailed transactions per Sales Rep, separating cash, debt, and loaned gallons clearly."
+    }
+  ],
+  "images": {
+    "hero_water_bottle": {
+      "url": "https://images.unsplash.com/photo-1616118133103-baf54a4790c6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2MzR8MHwxfHNlYXJjaHwxfHx3YXRlciUyMGRlbGl2ZXJ5JTIwZ2FsbG9uJTIwYm90dGxlJTIwZnJlc2h8ZW58MHx8fHwxNzg1NjY1NTE1fDA&ixlib=rb-4.1.0&q=85",
+      "dark": "https://images.unsplash.com/photo-1741518516939-cb68a5b7624b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2MzR8MHwxfHNlYXJjaHwzfHx3YXRlciUyMGRlbGl2ZXJ5JTIwZ2FsbG9uJTIwYm90dGxlJTIwZnJlc2h8ZW58MHx8fHwxNzg1NjY1NTE1fDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Clean water delivery gallon bottle representing freshness and hydration"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly enforce the 'No Blue' rule. The palette utilizes Emerald Green (brandPrimary #10B981) to communicate freshness, trust, and clean water without relying on overused corporate blues.",
+    "Implement thick touch targets (44pt minimum) for all steppers, form inputs, and buttons. Sales reps will use this app in the field, often one-handed or in bright sunlight.",
+    "For the TransactionForm, guarantee the 'Kirim WA & Simpan' button remains sticky at the bottom above the safe area, housed within a glassmorphic or solid surface wrapper so scrolling product rows slide behind it.",
+    "Utilize Plus Jakarta Sans at weight 400 and 500 only. Rely on font scale rather than heavy font weights for hierarchy.",
+    "For the Admin screen, organize data visually to prevent mixing metrics from different groups. Use surfaceSecondary cards with clear divider lines.",
+    "Ensure WhatsApp deep-linking is triggered seamlessly on transaction completion, with fallback error handling if WA is not installed.",
+    "Include subtle haptics on stepper (+/-) presses and success confirmations.",
+    "Render the hero image with a top-to-bottom gradient scrim (transparent to surfaceInverse) if text is overlaid."
+  ],
+  "haptics": {
+    "events": {
+      "primary_button_press": "impactLight",
+      "stepper_increment": "selection",
+      "stepper_decrement": "selection",
+      "transaction_success": "notificationSuccess",
+      "tab_change": "selection"
+    }
+  }
+}

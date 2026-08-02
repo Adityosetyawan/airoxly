@@ -75,6 +75,11 @@ export default function SalesLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
         }}
       />
+      <Tabs.Screen name="customer/new" options={{ href: null }} />
+      <Tabs.Screen name="customer/[id]" options={{ href: null }} />
+      <Tabs.Screen name="customer/edit" options={{ href: null }} />
+      <Tabs.Screen name="transaction/new" options={{ href: null }} />
+      <Tabs.Screen name="transaction/[id]" options={{ href: null }} />
     </Tabs>
   );
 }

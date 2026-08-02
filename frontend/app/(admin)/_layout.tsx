@@ -23,6 +23,7 @@ export default function AdminLayout() {
       <Tabs.Screen name="sales" options={{ title: "Sales", tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color} /> }} />
       <Tabs.Screen name="live" options={{ title: "GPS Live", tabBarIcon: ({ color, size }) => <Ionicons name="location-outline" size={size} color={color} /> }} />
       <Tabs.Screen name="profile" options={{ title: "Profil", tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} /> }} />
+      <Tabs.Screen name="sales-form" options={{ href: null }} />
     </Tabs>
   );
 }

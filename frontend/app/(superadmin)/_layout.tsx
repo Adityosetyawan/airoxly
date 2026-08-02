@@ -23,6 +23,7 @@ export default function SuperAdminLayout() {
       <Tabs.Screen name="users" options={{ title: "User", tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color} /> }} />
       <Tabs.Screen name="products" options={{ title: "Produk", tabBarIcon: ({ color, size }) => <Ionicons name="cube-outline" size={size} color={color} /> }} />
       <Tabs.Screen name="live" options={{ title: "Live", tabBarIcon: ({ color, size }) => <Ionicons name="location-outline" size={size} color={color} /> }} />
+      <Tabs.Screen name="user-form" options={{ href: null }} />
     </Tabs>
   );
 }

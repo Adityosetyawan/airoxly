@@ -264,6 +264,7 @@ async def seed():
     await db.users.create_index("id", unique=True)
     await db.customers.create_index("barcode_id", unique=True, sparse=True)
     await db.customers.create_index("customer_no")
+    await db.customers.create_index("created_by")
     await db.transactions.create_index("date")
     await db.transactions.create_index("sales_id")
 
@@ -443,26 +444,38 @@ async def delete_product(product_id: str, user=Depends(require_roles("super_admi
 
 # ============================================================
 # CUSTOMERS
-# Scoped by group_letter of sales; admin sees group; super_admin sees all.
+# Scoped per-sales (owner). Admin sees all customers of sales in own group; super_admin sees all.
 # ============================================================
-async def next_customer_no() -> int:
-    last = await db.customers.find({}, {"_id": 0, "customer_no": 1}).sort("customer_no", -1).limit(1).to_list(1)
+async def next_customer_no_for(sales_id: str) -> int:
+    last = await db.customers.find(
+        {"created_by": sales_id},
+        {"_id": 0, "customer_no": 1},
+    ).sort("customer_no", -1).limit(1).to_list(1)
     if not last:
-        return 100
-    return int(last[0].get("customer_no", 100)) + 1
+        return 1
+    return int(last[0].get("customer_no", 0)) + 1
 
 
 @api.get("/customers")
 async def list_customers(
     sort: str = Query("no", pattern="^(no|ranking|last|loans)$"),
     q: Optional[str] = None,
+    sales_id: Optional[str] = None,
     user=Depends(get_current_user),
 ):
     filt: dict = {}
     if user["role"] == "sales":
-        filt["group_letter"] = user.get("group_letter")
+        # sales only sees own customers
+        filt["created_by"] = user["id"]
     elif user["role"] == "admin":
+        # admin sees all customers of sales in own group
         filt["group_letter"] = user.get("group_letter")
+        if sales_id:
+            filt["created_by"] = sales_id
+    else:
+        # super_admin optional filter by sales
+        if sales_id:
+            filt["created_by"] = sales_id
     if q:
         filt["$or"] = [
             {"name": {"$regex": q, "$options": "i"}},
@@ -483,8 +496,10 @@ async def lookup_customer(barcode_id: str, user=Depends(get_current_user)):
     c = await db.customers.find_one({"barcode_id": barcode_id}, {"_id": 0})
     if not c:
         raise HTTPException(404, "Pelanggan tidak ditemukan")
-    if user["role"] == "sales" and c.get("group_letter") != user.get("group_letter"):
+    if user["role"] == "sales" and c.get("created_by") != user["id"]:
         raise HTTPException(403, "Bukan pelanggan Anda")
+    if user["role"] == "admin" and c.get("group_letter") != user.get("group_letter"):
+        raise HTTPException(403, "Bukan pelanggan wilayah Anda")
     return c
 
 
@@ -493,18 +508,22 @@ async def get_customer(customer_id: str, user=Depends(get_current_user)):
     c = await db.customers.find_one({"id": customer_id}, {"_id": 0})
     if not c:
         raise HTTPException(404, "Not found")
-    if user["role"] == "sales" and c.get("group_letter") != user.get("group_letter"):
+    if user["role"] == "sales" and c.get("created_by") != user["id"]:
+        raise HTTPException(403, "Forbidden")
+    if user["role"] == "admin" and c.get("group_letter") != user.get("group_letter"):
         raise HTTPException(403, "Forbidden")
     return c
 
 
 @api.post("/customers")
-async def create_customer(body: CustomerCreate, user=Depends(require_roles("sales", "admin", "super_admin"))):
+async def create_customer(body: CustomerCreate, user=Depends(require_roles("sales", "super_admin"))):
+    # Only sales (or super_admin acting as owner) can create.
+    if user["role"] != "sales":
+        raise HTTPException(403, "Hanya Sales yang bisa menambah pelanggan baru")
+    sales_code = (user.get("sales_code") or user.get("username") or "SALES").upper()
     group = user.get("group_letter")
-    if user["role"] == "super_admin":
-        group = group or "A"
-    customer_no = await next_customer_no()
-    barcode = body.barcode_id or f"OXLY-{customer_no}"
+    customer_no = await next_customer_no_for(user["id"])
+    barcode = (body.barcode_id or f"{sales_code}-OXLY-{customer_no}").strip()
     if await db.customers.find_one({"barcode_id": barcode}):
         raise HTTPException(409, "Barcode sudah dipakai")
     doc = {
@@ -515,6 +534,7 @@ async def create_customer(body: CustomerCreate, user=Depends(require_roles("sale
         "wa_number": body.wa_number or "",
         "barcode_id": barcode,
         "group_letter": group,
+        "sales_code": sales_code,
         "created_by": user["id"],
         "gallon_loans": 0,
         "total_debt": 0.0,
@@ -532,7 +552,9 @@ async def update_customer(customer_id: str, body: CustomerUpdate, user=Depends(g
     c = await db.customers.find_one({"id": customer_id})
     if not c:
         raise HTTPException(404, "Not found")
-    if user["role"] == "sales" and c.get("group_letter") != user.get("group_letter"):
+    if user["role"] == "sales" and c.get("created_by") != user["id"]:
+        raise HTTPException(403, "Forbidden")
+    if user["role"] == "admin" and c.get("group_letter") != user.get("group_letter"):
         raise HTTPException(403, "Forbidden")
     update = {k: v for k, v in body.dict(exclude_unset=True).items() if v is not None}
     if update:
@@ -559,7 +581,7 @@ async def create_transaction(body: TransactionCreate, user=Depends(require_roles
     customer = await db.customers.find_one({"id": body.customer_id})
     if not customer:
         raise HTTPException(404, "Pelanggan tidak ditemukan")
-    if user["role"] == "sales" and customer.get("group_letter") != user.get("group_letter"):
+    if user["role"] == "sales" and customer.get("created_by") != user["id"]:
         raise HTTPException(403, "Bukan pelanggan Anda")
 
     total = _txn_totals(body.items)
@@ -886,7 +908,7 @@ async def overview(user=Depends(get_current_user)):
     today = now_utc().strftime("%Y-%m-%d")
     if user["role"] == "sales":
         q_tx["sales_id"] = user["id"]
-        q_c["group_letter"] = user.get("group_letter")
+        q_c["created_by"] = user["id"]
     elif user["role"] == "admin":
         q_tx["group_letter"] = user.get("group_letter")
         q_c["group_letter"] = user.get("group_letter")

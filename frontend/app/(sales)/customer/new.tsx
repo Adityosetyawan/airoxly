@@ -71,7 +71,7 @@ export default function NewCustomer() {
 
           <Text style={styles.label}>Barcode / QR (opsional)</Text>
           <TextInput value={barcode} onChangeText={setBarcode} placeholder="Kosongkan untuk auto-generate" placeholderTextColor={theme.color.muted} style={styles.input} testID="barcode-input" />
-          <Text style={styles.hint}>Jika dikosongkan, sistem akan generate kode unik OXLY-xxx yang bisa dicetak.</Text>
+          <Text style={styles.hint}>Jika dikosongkan, sistem generate otomatis: [KODE_SALES]-OXLY-[No.urut per sales]</Text>
 
           <TouchableOpacity onPress={save} disabled={loading} style={[styles.btn, loading && { opacity: 0.6 }]} testID="save-customer-btn">
             <Text style={styles.btnText}>{loading ? "Menyimpan…" : "Simpan Pelanggan"}</Text>

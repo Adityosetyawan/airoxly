@@ -38,6 +38,8 @@ export type Customer = {
   wa_number?: string;
   barcode_id: string;
   group_letter: string;
+  sales_code?: string;
+  created_by?: string;
   gallon_loans: number;
   total_debt: number;
   total_purchases: number;
@@ -135,10 +137,11 @@ export const api = {
   deleteProduct: (id: string) => req(`/products/${id}`, { method: "DELETE" }),
 
   // Customers
-  listCustomers: (params?: { sort?: string; q?: string }) => {
+  listCustomers: (params?: { sort?: string; q?: string; sales_id?: string }) => {
     const q = new URLSearchParams();
     if (params?.sort) q.set("sort", params.sort);
     if (params?.q) q.set("q", params.q);
+    if (params?.sales_id) q.set("sales_id", params.sales_id);
     const s = q.toString();
     return req<Customer[]>(`/customers${s ? "?" + s : ""}`);
   },

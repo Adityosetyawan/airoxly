@@ -161,6 +161,13 @@ class LocationPing(BaseModel):
     lng: float
 
 
+class ExpenseCreate(BaseModel):
+    category: str  # BBM, Makan, Parkir, Servis, Lain-lain
+    description: Optional[str] = ""
+    amount: float
+    date: Optional[str] = None  # ISO date; defaults to today
+
+
 # ============================================================
 # HELPERS
 # ============================================================
@@ -267,6 +274,8 @@ async def seed():
     await db.customers.create_index("created_by")
     await db.transactions.create_index("date")
     await db.transactions.create_index("sales_id")
+    await db.expenses.create_index("date_only")
+    await db.expenses.create_index("sales_id")
 
     # Seed products if none
     if await db.products.count_documents({}) == 0:
@@ -814,9 +823,19 @@ async def daily_report(
         q["sales_code"] = sales_code
 
     txns = await db.transactions.find(q, {"_id": 0}).to_list(5000)
+    # Expenses in same scope
+    q_exp: dict = {"date_only": d}
+    if user["role"] == "sales":
+        q_exp["sales_id"] = user["id"]
+    elif user["role"] == "admin":
+        q_exp["group_letter"] = user.get("group_letter")
+    if sales_code:
+        q_exp["sales_code"] = sales_code
+    expenses = await db.expenses.find(q_exp, {"_id": 0}).to_list(5000)
+
     # aggregate by sales_code
     agg: dict = {}
-    total_all = {"total_uang": 0.0, "total_bayar": 0.0, "total_hutang": 0.0, "total_pinjam": 0, "total_kembali": 0, "total_gln_terjual": 0, "count": 0}
+    total_all = {"total_uang": 0.0, "total_bayar": 0.0, "total_hutang": 0.0, "total_pinjam": 0, "total_kembali": 0, "total_gln_terjual": 0, "count": 0, "total_pengeluaran": 0.0, "total_setoran": 0.0}
     for t in txns:
         code = t.get("sales_code") or "?"
         a = agg.setdefault(code, {
@@ -829,6 +848,9 @@ async def daily_report(
             "total_kembali": 0,
             "total_gln_terjual": 0,
             "count": 0,
+            "total_pengeluaran": 0.0,
+            "total_setoran": 0.0,
+            "expenses": [],
             "transactions": [],
         })
         a["total_uang"] += float(t.get("total", 0))
@@ -848,7 +870,93 @@ async def daily_report(
         total_all["total_kembali"] += int(t.get("galon_kembali", 0))
         total_all["total_gln_terjual"] += gln
         total_all["count"] += 1
+
+    # apply expenses per sales
+    for e in expenses:
+        code = e.get("sales_code") or "?"
+        a = agg.setdefault(code, {
+            "sales_code": code,
+            "sales_id": e.get("sales_id"),
+            "total_uang": 0.0, "total_bayar": 0.0, "total_hutang": 0.0,
+            "total_pinjam": 0, "total_kembali": 0, "total_gln_terjual": 0,
+            "count": 0, "total_pengeluaran": 0.0, "total_setoran": 0.0,
+            "expenses": [], "transactions": [],
+        })
+        a["total_pengeluaran"] += float(e.get("amount", 0))
+        a["expenses"].append(e)
+        total_all["total_pengeluaran"] += float(e.get("amount", 0))
+
+    # compute setoran = bayar - pengeluaran per sales & overall
+    for code, a in agg.items():
+        a["total_setoran"] = max(0.0, a["total_bayar"] - a["total_pengeluaran"])
+    total_all["total_setoran"] = max(0.0, total_all["total_bayar"] - total_all["total_pengeluaran"])
     return {"date": d, "totals": total_all, "groups": list(agg.values())}
+
+
+# ============================================================
+# EXPENSES (Pengeluaran Sales)
+# ============================================================
+@api.post("/expenses")
+async def create_expense(body: ExpenseCreate, user=Depends(require_roles("sales", "super_admin"))):
+    if body.amount <= 0:
+        raise HTTPException(400, "Jumlah pengeluaran harus > 0")
+    date_iso = (body.date or now_utc().isoformat())
+    date_only = date_iso[:10] if "T" in date_iso else date_iso[:10]
+    doc = {
+        "id": str(uuid.uuid4()),
+        "sales_id": user["id"],
+        "sales_code": user.get("sales_code") or user.get("username"),
+        "group_letter": user.get("group_letter"),
+        "category": body.category.strip() or "Lain-lain",
+        "description": (body.description or "").strip(),
+        "amount": float(body.amount),
+        "date": date_iso,
+        "date_only": date_only,
+        "created_at": now_utc().isoformat(),
+    }
+    await db.expenses.insert_one(doc)
+    return strip_id(doc)
+
+
+@api.get("/expenses")
+async def list_expenses(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    sales_id: Optional[str] = None,
+    sales_code: Optional[str] = None,
+    user=Depends(get_current_user),
+):
+    q: dict = {}
+    if user["role"] == "sales":
+        q["sales_id"] = user["id"]
+    elif user["role"] == "admin":
+        q["group_letter"] = user.get("group_letter")
+    if sales_id:
+        q["sales_id"] = sales_id
+    if sales_code:
+        q["sales_code"] = sales_code
+    if date_from or date_to:
+        dq: dict = {}
+        if date_from:
+            dq["$gte"] = date_from
+        if date_to:
+            dq["$lte"] = date_to
+        q["date_only"] = dq
+    items = await db.expenses.find(q, {"_id": 0}).sort("date", -1).to_list(2000)
+    return items
+
+
+@api.delete("/expenses/{expense_id}")
+async def delete_expense(expense_id: str, user=Depends(get_current_user)):
+    e = await db.expenses.find_one({"id": expense_id})
+    if not e:
+        raise HTTPException(404, "Not found")
+    if user["role"] == "sales" and e.get("sales_id") != user["id"]:
+        raise HTTPException(403, "Bukan pengeluaran Anda")
+    if user["role"] == "admin":
+        raise HTTPException(403, "Admin tidak bisa hapus pengeluaran")
+    await db.expenses.delete_one({"id": expense_id})
+    return {"ok": True}
 
 
 # ============================================================
@@ -918,9 +1026,19 @@ async def overview(user=Depends(get_current_user)):
     q_today = dict(q_tx, date_only=today)
     today_tx = await db.transactions.find(q_today, {"_id": 0}).to_list(2000)
 
+    # Expenses today in same scope
+    q_exp_today: dict = {"date_only": today}
+    if user["role"] == "sales":
+        q_exp_today["sales_id"] = user["id"]
+    elif user["role"] == "admin":
+        q_exp_today["group_letter"] = user.get("group_letter")
+    today_expenses_list = await db.expenses.find(q_exp_today, {"_id": 0}).to_list(2000)
+    today_expenses = sum(float(e.get("amount", 0)) for e in today_expenses_list)
+
     today_revenue = sum(float(t.get("bayar", 0)) for t in today_tx)
     today_total = sum(float(t.get("total", 0)) for t in today_tx)
     today_gln = sum(sum(int(it.get("qty", 0)) for it in t.get("items", []) if it.get("unit") == "gln" and "Kosong" not in it.get("product_name", "")) for t in today_tx)
+    today_deposit = max(0.0, today_revenue - today_expenses)
     return {
         "total_customers": total_customers,
         "total_transactions": total_tx,
@@ -928,6 +1046,8 @@ async def overview(user=Depends(get_current_user)):
         "today_revenue": today_revenue,
         "today_total": today_total,
         "today_gln_sold": today_gln,
+        "today_expenses": today_expenses,
+        "today_deposit": today_deposit,
     }
 
 

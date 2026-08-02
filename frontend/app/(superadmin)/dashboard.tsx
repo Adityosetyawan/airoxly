@@ -49,18 +49,21 @@ export default function SuperDashboard() {
       >
         <View style={styles.kpiRow}>
           <View style={[styles.kpi, { backgroundColor: theme.color.brandPrimary }]}>
-            <Text style={[styles.kpiLabel, { color: "#D1FAE5" }]}>Uang Diterima (Hari Ini)</Text>
-            <Text style={[styles.kpiValue, { color: "#fff" }]}>Rp {rp(report?.totals?.total_bayar || 0)}</Text>
+            <Text style={[styles.kpiLabel, { color: "#D1FAE5" }]}>Setoran Bersih Hari Ini</Text>
+            <Text style={[styles.kpiValue, { color: "#fff" }]}>Rp {rp(report?.totals?.total_setoran || 0)}</Text>
+            <Text style={{ color: "#A7F3D0", fontSize: 11, marginTop: 6 }}>
+              Diterima Rp {rp(report?.totals?.total_bayar || 0)} − Pengeluaran Rp {rp(report?.totals?.total_pengeluaran || 0)}
+            </Text>
           </View>
         </View>
 
         <View style={styles.grid}>
-          <MiniCard label="Nilai Jual Hari Ini" value={"Rp " + rp(report?.totals?.total_uang || 0)} icon="cash" />
+          <MiniCard label="Uang Diterima" value={"Rp " + rp(report?.totals?.total_bayar || 0)} icon="cash" />
+          <MiniCard label="Pengeluaran Sales" value={"Rp " + rp(report?.totals?.total_pengeluaran || 0)} icon="remove-circle" color={theme.color.error} />
           <MiniCard label="Galon Terjual" value={String(report?.totals?.total_gln_terjual || 0)} icon="cube" />
           <MiniCard label="Transaksi Hari Ini" value={String(report?.totals?.count || 0)} icon="receipt" />
           <MiniCard label="Hutang Baru" value={"Rp " + rp(report?.totals?.total_hutang || 0)} icon="alert-circle" color={theme.color.error} />
           <MiniCard label="Total Pelanggan" value={String(stats?.total_customers || 0)} icon="people" />
-          <MiniCard label="Total Transaksi" value={String(stats?.total_transactions || 0)} icon="list" />
         </View>
 
         <Text style={styles.section}>Quick Access</Text>
@@ -84,7 +87,12 @@ export default function SuperDashboard() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.gLabel}>{g.count} tx · {g.total_gln_terjual} gln</Text>
-              <Text style={styles.gValue}>Rp {rp(g.total_bayar)}</Text>
+              <Text style={styles.gValue}>Setoran Rp {rp(g.total_setoran || 0)}</Text>
+              {g.total_pengeluaran > 0 && (
+                <Text style={{ fontSize: 11, color: theme.color.error, marginTop: 2 }}>
+                  Pengeluaran: Rp {rp(g.total_pengeluaran)}
+                </Text>
+              )}
             </View>
             <Ionicons name="chevron-forward" size={20} color={theme.color.muted} />
           </TouchableOpacity>

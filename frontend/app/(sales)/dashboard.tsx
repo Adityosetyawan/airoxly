@@ -1,28 +1,43 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { theme, rp } from "@/src/theme";
-import { api, Transaction } from "@/src/api";
+import { api, Expense, Transaction } from "@/src/api";
 import { useAuth } from "@/src/AuthContext";
+import { ExpenseModal } from "@/src/components/ExpenseModal";
+import { useToast } from "@/src/components/Toast";
+
+const CAT_ICONS: Record<string, any> = {
+  BBM: "car-outline",
+  Makan: "fast-food-outline",
+  Parkir: "cash-outline",
+  Servis: "construct-outline",
+  "Lain-lain": "ellipsis-horizontal-outline",
+};
 
 export default function SalesDashboard() {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const toast = useToast();
   const [stats, setStats] = useState<any>(null);
   const [txns, setTxns] = useState<Transaction[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [expenseModal, setExpenseModal] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
 
   const load = useCallback(async () => {
     try {
-      const [s, t] = await Promise.all([
+      const [s, t, e] = await Promise.all([
         api.overview(),
         api.listTransactions({ date_from: today, date_to: today }),
+        api.listExpenses({ date_from: today, date_to: today }),
       ]);
       setStats(s);
       setTxns(t);
+      setExpenses(e);
     } catch {}
   }, [today]);
 
@@ -32,6 +47,16 @@ export default function SalesDashboard() {
     setRefreshing(true);
     await load();
     setRefreshing(false);
+  };
+
+  const deleteExpense = async (id: string) => {
+    try {
+      await api.deleteExpense(id);
+      toast.show("Pengeluaran dihapus", "success");
+      load();
+    } catch (e: any) {
+      toast.show(e.message || "Gagal", "error");
+    }
   };
 
   return (
@@ -47,28 +72,55 @@ export default function SalesDashboard() {
       </View>
 
       <FlatList
-        data={txns}
-        keyExtractor={(t) => t.id}
+        data={[]}
+        keyExtractor={() => "x"}
+        renderItem={() => null}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.color.brandPrimary} />}
         ListHeaderComponent={
           <View>
-            <View style={styles.kpiRow}>
-              <View style={[styles.kpi, { backgroundColor: theme.color.brandTertiary }]} testID="kpi-uang">
-                <Text style={styles.kpiLabel}>Total Uang Diterima</Text>
-                <Text style={styles.kpiValue}>Rp {rp(stats?.today_revenue || 0)}</Text>
+            {/* HERO: SETORAN (net) */}
+            <View style={styles.depositCard} testID="kpi-setoran">
+              <View style={{ flex: 1 }}>
+                <Text style={styles.depositLabel}>Setoran ke Admin (net)</Text>
+                <Text style={styles.depositValue}>Rp {rp(stats?.today_deposit || 0)}</Text>
+                <Text style={styles.depositFormula}>
+                  = Uang Diterima Rp {rp(stats?.today_revenue || 0)}
+                  {"  −  "}
+                  Pengeluaran Rp {rp(stats?.today_expenses || 0)}
+                </Text>
               </View>
-              <View style={[styles.kpi, { backgroundColor: theme.color.surfaceSecondary }]} testID="kpi-galon">
-                <Text style={styles.kpiLabel}>Galon Terjual</Text>
-                <Text style={styles.kpiValue}>{stats?.today_gln_sold || 0} <Text style={styles.kpiUnit}>gln</Text></Text>
+              <View style={styles.depositIcon}>
+                <Ionicons name="wallet" size={28} color="#fff" />
               </View>
             </View>
+
+            {/* KPI ROW */}
+            <View style={styles.kpiRow}>
+              <View style={[styles.kpi, { backgroundColor: theme.color.brandTertiary }]} testID="kpi-uang">
+                <Ionicons name="cash-outline" size={16} color={theme.color.onBrandTertiary} />
+                <Text style={styles.kpiLabel}>Uang Diterima</Text>
+                <Text style={styles.kpiValue}>Rp {rp(stats?.today_revenue || 0)}</Text>
+              </View>
+              <View style={[styles.kpi, { backgroundColor: "#FEE2E2" }]} testID="kpi-pengeluaran">
+                <Ionicons name="remove-circle-outline" size={16} color={theme.color.error} />
+                <Text style={[styles.kpiLabel, { color: "#991B1B" }]}>Pengeluaran</Text>
+                <Text style={[styles.kpiValue, { color: theme.color.error }]}>Rp {rp(stats?.today_expenses || 0)}</Text>
+              </View>
+              <View style={[styles.kpi, { backgroundColor: theme.color.surfaceSecondary }]} testID="kpi-galon">
+                <Ionicons name="water-outline" size={16} color={theme.color.brand} />
+                <Text style={styles.kpiLabel}>Galon Terjual</Text>
+                <Text style={styles.kpiValue}>{stats?.today_gln_sold || 0}<Text style={styles.kpiUnit}> gln</Text></Text>
+              </View>
+            </View>
+
             <View style={styles.miniRow}>
               <MiniStat label="Transaksi" value={String(stats?.today_count || 0)} />
               <MiniStat label="Nilai Jual" value={"Rp " + rp(stats?.today_total || 0)} />
-              <MiniStat label="Total Pelanggan" value={String(stats?.total_customers || 0)} />
+              <MiniStat label="Pelanggan" value={String(stats?.total_customers || 0)} />
             </View>
 
+            {/* ACTIONS */}
             <View style={styles.actions}>
               <TouchableOpacity style={styles.act} onPress={() => router.push("/(sales)/scan")} testID="action-scan">
                 <Ionicons name="scan" size={20} color={theme.color.brand} />
@@ -78,43 +130,90 @@ export default function SalesDashboard() {
                 <Ionicons name="people" size={20} color={theme.color.brand} />
                 <Text style={styles.actText}>Pelanggan</Text>
               </TouchableOpacity>
+              <TouchableOpacity style={[styles.act, { backgroundColor: "#FEE2E2" }]} onPress={() => setExpenseModal(true)} testID="action-expense">
+                <Ionicons name="add-circle" size={20} color={theme.color.error} />
+                <Text style={[styles.actText, { color: theme.color.error }]}>Pengeluaran</Text>
+              </TouchableOpacity>
             </View>
 
-            <Text style={styles.section}>Transaksi Hari Ini</Text>
+            {/* EXPENSES TODAY */}
+            <View style={styles.secHeader}>
+              <Text style={styles.section}>Pengeluaran Hari Ini ({expenses.length})</Text>
+              <TouchableOpacity onPress={() => setExpenseModal(true)} testID="add-expense-header-btn">
+                <Text style={styles.addLink}>+ Tambah</Text>
+              </TouchableOpacity>
+            </View>
+            {expenses.length === 0 ? (
+              <View style={styles.expEmpty}>
+                <Text style={styles.expEmptyText}>Belum ada pengeluaran hari ini</Text>
+              </View>
+            ) : (
+              expenses.map((e) => (
+                <View key={e.id} style={styles.expRow} testID={`expense-${e.id}`}>
+                  <View style={styles.expIcon}>
+                    <Ionicons name={CAT_ICONS[e.category] || "cash-outline"} size={18} color={theme.color.error} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.expCat}>{e.category}</Text>
+                    <Text style={styles.expDesc} numberOfLines={1}>
+                      {e.description || new Date(e.date).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                    </Text>
+                  </View>
+                  <Text style={styles.expAmount}>−Rp {rp(e.amount)}</Text>
+                  <TouchableOpacity onPress={() => deleteExpense(e.id)} style={styles.expDel} testID={`del-expense-${e.id}`}>
+                    <Ionicons name="close" size={18} color={theme.color.muted} />
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+
+            {/* TRANSACTIONS TODAY */}
+            <Text style={styles.section}>Transaksi Hari Ini ({txns.length})</Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.tx}
-            onPress={() => router.push({ pathname: "/(sales)/transaction/[id]", params: { id: item.id } })}
-            testID={`tx-${item.id}`}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.txName}>{item.customer_name}</Text>
-              <Text style={styles.txSub}>
-                {new Date(item.date).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
-                {" · "}
-                {item.items.reduce((a, b) => a + b.qty, 0)} item
-                {item.edited ? " · diedit" : ""}
-              </Text>
-            </View>
-            <View style={{ alignItems: "flex-end" }}>
-              <Text style={styles.txTotal}>Rp {rp(item.total)}</Text>
-              {item.hutang_transaksi > 0 && (
-                <Text style={styles.txDebt}>Hutang Rp {rp(item.hutang_transaksi)}</Text>
-              )}
-            </View>
-          </TouchableOpacity>
-        )}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Ionicons name="water-outline" size={48} color={theme.color.brandSecondary} />
-            <Text style={styles.emptyTitle}>Belum ada transaksi hari ini</Text>
-            <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push("/(sales)/scan")} testID="empty-start-btn">
-              <Text style={styles.emptyBtnText}>Mulai Transaksi</Text>
-            </TouchableOpacity>
+        ListFooterComponent={
+          <View>
+            {txns.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.tx}
+                onPress={() => router.push({ pathname: "/(sales)/transaction/[id]", params: { id: item.id } })}
+                testID={`tx-${item.id}`}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.txName}>{item.customer_name}</Text>
+                  <Text style={styles.txSub}>
+                    {new Date(item.date).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                    {" · "}
+                    {item.items.reduce((a, b) => a + b.qty, 0)} item
+                    {item.edited ? " · diedit" : ""}
+                  </Text>
+                </View>
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text style={styles.txTotal}>Rp {rp(item.total)}</Text>
+                  {item.hutang_transaksi > 0 && (
+                    <Text style={styles.txDebt}>Hutang Rp {rp(item.hutang_transaksi)}</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+            ))}
+            {txns.length === 0 && (
+              <View style={styles.empty}>
+                <Ionicons name="water-outline" size={40} color={theme.color.brandSecondary} />
+                <Text style={styles.emptyTitle}>Belum ada transaksi hari ini</Text>
+                <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push("/(sales)/scan")} testID="empty-start-btn">
+                  <Text style={styles.emptyBtnText}>Mulai Transaksi</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         }
+      />
+
+      <ExpenseModal
+        visible={expenseModal}
+        onClose={() => setExpenseModal(false)}
+        onSaved={() => { setExpenseModal(false); load(); }}
       />
     </SafeAreaView>
   );
@@ -135,34 +234,69 @@ const styles = StyleSheet.create({
   hello: { fontSize: 18, fontWeight: "600", color: theme.color.onSurface },
   code: { fontSize: 13, color: theme.color.muted, marginTop: 2 },
   iconBtn: { padding: 8, borderRadius: 12, backgroundColor: theme.color.surfaceSecondary },
-  kpiRow: { flexDirection: "row", gap: 12, marginBottom: 12 },
-  kpi: { flex: 1, borderRadius: 20, padding: 16 },
-  kpiLabel: { fontSize: 12, color: theme.color.onBrandTertiary, fontWeight: "500" },
-  kpiValue: { fontSize: 22, fontWeight: "600", color: theme.color.onSurface, marginTop: 6, letterSpacing: -0.5 },
-  kpiUnit: { fontSize: 13, color: theme.color.muted, fontWeight: "400" },
-  miniRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
-  mini: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-  },
-  miniLabel: { fontSize: 11, color: theme.color.muted },
-  miniValue: { fontSize: 14, fontWeight: "600", color: theme.color.onSurface, marginTop: 2 },
-  actions: { flexDirection: "row", gap: 8, marginBottom: 16 },
-  act: {
-    flex: 1,
+  depositCard: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: theme.color.brandTertiary,
+    padding: 20,
+    borderRadius: 20,
+    backgroundColor: theme.color.brandPrimary,
+    marginBottom: 12,
+    shadowColor: theme.color.brandPrimary,
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
   },
-  actText: { color: theme.color.onBrandTertiary, fontWeight: "600" },
-  section: { fontSize: 15, fontWeight: "600", color: theme.color.onSurface, marginBottom: 8, marginTop: 4 },
+  depositLabel: { fontSize: 12, color: "#D1FAE5", fontWeight: "500" },
+  depositValue: { fontSize: 30, fontWeight: "700", color: "#fff", marginTop: 6, letterSpacing: -0.8 },
+  depositFormula: { fontSize: 11, color: "#A7F3D0", marginTop: 6 },
+  depositIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  kpiRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  kpi: { flex: 1, borderRadius: 14, padding: 12, gap: 4 },
+  kpiLabel: { fontSize: 10, color: theme.color.onBrandTertiary, fontWeight: "500" },
+  kpiValue: { fontSize: 14, fontWeight: "700", color: theme.color.onSurface, letterSpacing: -0.3 },
+  kpiUnit: { fontSize: 11, color: theme.color.muted, fontWeight: "400" },
+  miniRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
+  mini: { flex: 1, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: theme.color.border },
+  miniLabel: { fontSize: 11, color: theme.color.muted },
+  miniValue: { fontSize: 13, fontWeight: "600", color: theme.color.onSurface, marginTop: 2 },
+  actions: { flexDirection: "row", gap: 8, marginBottom: 16 },
+  act: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, padding: 12, borderRadius: 12, backgroundColor: theme.color.brandTertiary },
+  actText: { color: theme.color.onBrandTertiary, fontWeight: "600", fontSize: 12 },
+  secHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 4, marginBottom: 8 },
+  section: { fontSize: 15, fontWeight: "600", color: theme.color.onSurface },
+  addLink: { fontSize: 13, color: theme.color.brand, fontWeight: "600" },
+  expEmpty: { padding: 16, alignItems: "center", borderRadius: 12, backgroundColor: theme.color.surfaceSecondary, marginBottom: 16 },
+  expEmptyText: { color: theme.color.muted, fontSize: 12 },
+  expRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+    borderRadius: 12,
+    marginBottom: 8,
+    gap: 12,
+  },
+  expIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  expCat: { fontSize: 14, fontWeight: "600", color: theme.color.onSurface },
+  expDesc: { fontSize: 11, color: theme.color.muted, marginTop: 2 },
+  expAmount: { fontSize: 14, fontWeight: "700", color: theme.color.error },
+  expDel: { padding: 6, borderRadius: 6 },
   tx: {
     flexDirection: "row",
     alignItems: "center",
@@ -170,15 +304,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.color.border,
     borderRadius: 14,
-    marginBottom: 8,
+    marginTop: 8,
     backgroundColor: theme.color.surface,
   },
   txName: { fontSize: 15, fontWeight: "500", color: theme.color.onSurface },
   txSub: { fontSize: 12, color: theme.color.muted, marginTop: 2 },
   txTotal: { fontSize: 15, fontWeight: "600", color: theme.color.brand },
   txDebt: { fontSize: 11, color: theme.color.error, marginTop: 2 },
-  empty: { alignItems: "center", padding: 32 },
-  emptyTitle: { fontSize: 14, color: theme.color.muted, marginTop: 12, marginBottom: 16 },
+  empty: { alignItems: "center", padding: 24, marginTop: 8 },
+  emptyTitle: { fontSize: 13, color: theme.color.muted, marginTop: 12, marginBottom: 16 },
   emptyBtn: { backgroundColor: theme.color.brandPrimary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
   emptyBtnText: { color: "#fff", fontWeight: "600" },
 });

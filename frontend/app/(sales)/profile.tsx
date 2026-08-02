@@ -82,6 +82,20 @@ export default function Profile() {
           <StatCard label="Total Transaksi" value={String(stats?.total_transactions || 0)} icon="receipt" />
         </View>
 
+        <Text style={styles.section}>Setoran Hari Ini</Text>
+        <View style={styles.depositCard}>
+          <Text style={styles.depositLabel}>Yang Harus Disetor ke Admin</Text>
+          <Text style={styles.depositValue}>Rp {rp(stats?.today_deposit || 0)}</Text>
+          <View style={styles.formulaRow}>
+            <Text style={styles.formulaText}>Uang Diterima</Text>
+            <Text style={styles.formulaValue}>Rp {rp(stats?.today_revenue || 0)}</Text>
+          </View>
+          <View style={styles.formulaRow}>
+            <Text style={styles.formulaText}>Pengeluaran</Text>
+            <Text style={[styles.formulaValue, { color: theme.color.error }]}>−Rp {rp(stats?.today_expenses || 0)}</Text>
+          </View>
+        </View>
+
         <Text style={styles.section}>Lokasi Saat Ini (GPS)</Text>
         <View style={styles.locCard}>
           <Ionicons name="location" size={20} color={theme.color.brand} />
@@ -187,4 +201,15 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   logoutText: { color: theme.color.error, fontWeight: "600" },
+  depositCard: {
+    padding: 16,
+    borderRadius: 14,
+    backgroundColor: theme.color.brandPrimary,
+    marginBottom: 8,
+  },
+  depositLabel: { fontSize: 12, color: "#D1FAE5", fontWeight: "500" },
+  depositValue: { fontSize: 26, fontWeight: "700", color: "#fff", marginTop: 6, marginBottom: 12, letterSpacing: -0.5 },
+  formulaRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
+  formulaText: { fontSize: 12, color: "#A7F3D0" },
+  formulaValue: { fontSize: 12, color: "#fff", fontWeight: "500" },
 });

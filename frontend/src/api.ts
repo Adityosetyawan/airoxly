@@ -81,6 +81,18 @@ export type Transaction = {
   edit_count: number;
 };
 
+export type Expense = {
+  id: string;
+  sales_id: string;
+  sales_code?: string;
+  group_letter?: string;
+  category: string;
+  description?: string;
+  amount: number;
+  date: string;
+  date_only: string;
+};
+
 async function req<T = any>(
   path: string,
   init: RequestInit = {},
@@ -172,6 +184,17 @@ export const api = {
     const s = q.toString();
     return req<any>(`/reports/daily${s ? "?" + s : ""}`);
   },
+
+  // Expenses
+  listExpenses: (params?: Record<string, string | undefined>) => {
+    const q = new URLSearchParams();
+    if (params) Object.entries(params).forEach(([k, v]) => v && q.set(k, v));
+    const s = q.toString();
+    return req<Expense[]>(`/expenses${s ? "?" + s : ""}`);
+  },
+  createExpense: (body: { category: string; description?: string; amount: number; date?: string }) =>
+    req<Expense>("/expenses", { method: "POST", body: JSON.stringify(body) }),
+  deleteExpense: (id: string) => req(`/expenses/${id}`, { method: "DELETE" }),
 
   // Location
   pingLocation: (lat: number, lng: number) =>

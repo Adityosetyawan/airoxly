@@ -84,8 +84,16 @@ export default function AdminReport() {
           <Text style={styles.totalLabel}>Total {date}</Text>
           <View style={styles.totalGrid}>
             <View style={styles.tCell}>
+              <Text style={styles.tCellLabel}>Setoran Bersih</Text>
+              <Text style={[styles.tCellValue, { color: theme.color.brand }]}>Rp {rp(data?.totals?.total_setoran || 0)}</Text>
+            </View>
+            <View style={styles.tCell}>
               <Text style={styles.tCellLabel}>Uang Diterima</Text>
               <Text style={styles.tCellValue}>Rp {rp(data?.totals?.total_bayar || 0)}</Text>
+            </View>
+            <View style={styles.tCell}>
+              <Text style={styles.tCellLabel}>Pengeluaran</Text>
+              <Text style={[styles.tCellValue, { color: theme.color.error }]}>Rp {rp(data?.totals?.total_pengeluaran || 0)}</Text>
             </View>
             <View style={styles.tCell}>
               <Text style={styles.tCellLabel}>Nilai Jual</Text>
@@ -117,14 +125,29 @@ export default function AdminReport() {
                 <Text style={styles.gBadgeText}>{g.sales_code}</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.gCount}>{g.count} transaksi</Text>
-                <Text style={styles.gGln}>{g.total_gln_terjual} galon terjual</Text>
+                <Text style={styles.gCount}>{g.count} transaksi · {g.total_gln_terjual} gln</Text>
+                <Text style={styles.gGln}>
+                  Terima Rp {rp(g.total_bayar)}
+                  {g.total_pengeluaran > 0 ? `  −  BBM/dll Rp ${rp(g.total_pengeluaran)}` : ""}
+                </Text>
               </View>
               <View>
-                <Text style={styles.gTotal}>Rp {rp(g.total_bayar)}</Text>
-                {g.total_hutang > 0 && <Text style={styles.gDebt}>+ hutang Rp {rp(g.total_hutang)}</Text>}
+                <Text style={styles.gTotalLabel}>Setoran</Text>
+                <Text style={styles.gTotal}>Rp {rp(g.total_setoran || 0)}</Text>
+                {g.total_hutang > 0 && <Text style={styles.gDebt}>hutang Rp {rp(g.total_hutang)}</Text>}
               </View>
             </View>
+            {g.expenses && g.expenses.length > 0 && (
+              <View style={styles.expenseBlock}>
+                <Text style={styles.expenseHead}>Pengeluaran ({g.expenses.length})</Text>
+                {g.expenses.map((e: any) => (
+                  <View key={e.id} style={styles.expenseRow}>
+                    <Text style={styles.expenseCat}>• {e.category}{e.description ? ` — ${e.description}` : ""}</Text>
+                    <Text style={styles.expenseAmt}>−Rp {rp(e.amount)}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
             <View style={styles.gDivider} />
             {g.transactions.map((t: any) => (
               <View key={t.id} style={styles.txRow}>
@@ -176,8 +199,14 @@ const styles = StyleSheet.create({
   gBadgeText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   gCount: { fontSize: 13, color: theme.color.onSurface, fontWeight: "500" },
   gGln: { fontSize: 11, color: theme.color.muted, marginTop: 2 },
+  gTotalLabel: { fontSize: 10, color: theme.color.muted, textAlign: "right" },
   gTotal: { fontSize: 15, fontWeight: "600", color: theme.color.brand, textAlign: "right" },
-  gDebt: { fontSize: 11, color: theme.color.error, marginTop: 2 },
+  gDebt: { fontSize: 11, color: theme.color.error, marginTop: 2, textAlign: "right" },
+  expenseBlock: { padding: 10, backgroundColor: "#FEF2F2", borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: "#FEE2E2" },
+  expenseHead: { fontSize: 11, fontWeight: "600", color: theme.color.error, marginBottom: 4 },
+  expenseRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 },
+  expenseCat: { fontSize: 12, color: "#7F1D1D", flex: 1 },
+  expenseAmt: { fontSize: 12, color: theme.color.error, fontWeight: "600" },
   gDivider: { height: StyleSheet.hairlineWidth, backgroundColor: theme.color.border },
   txRow: { flexDirection: "row", padding: 10, alignItems: "center", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.color.border },
   txCustomer: { fontSize: 13, fontWeight: "500", color: theme.color.onSurface },

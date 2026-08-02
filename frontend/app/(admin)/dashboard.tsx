@@ -49,8 +49,8 @@ export default function AdminDashboard() {
       >
         <View style={styles.kpiRow}>
           <View style={[styles.kpi, { backgroundColor: theme.color.brandTertiary }]}>
-            <Text style={styles.kpiLabel}>Uang Diterima Hari Ini</Text>
-            <Text style={styles.kpiValue}>Rp {rp(report?.totals?.total_bayar || 0)}</Text>
+            <Text style={styles.kpiLabel}>Setoran Bersih Hari Ini</Text>
+            <Text style={styles.kpiValue}>Rp {rp(report?.totals?.total_setoran || 0)}</Text>
           </View>
           <View style={[styles.kpi, { backgroundColor: theme.color.surfaceSecondary }]}>
             <Text style={styles.kpiLabel}>Galon Terjual</Text>
@@ -59,10 +59,10 @@ export default function AdminDashboard() {
         </View>
 
         <View style={styles.grid}>
+          <MiniCard label="Uang Diterima" value={"Rp " + rp(report?.totals?.total_bayar || 0)} icon="cash" />
+          <MiniCard label="Pengeluaran Sales" value={"Rp " + rp(report?.totals?.total_pengeluaran || 0)} icon="remove-circle" color={theme.color.error} />
           <MiniCard label="Transaksi Hari Ini" value={String(report?.totals?.count || 0)} icon="receipt" />
-          <MiniCard label="Total Belanja Hari Ini" value={"Rp " + rp(report?.totals?.total_uang || 0)} icon="cash" />
           <MiniCard label="Hutang Terbentuk" value={"Rp " + rp(report?.totals?.total_hutang || 0)} icon="alert-circle" color={theme.color.error} />
-          <MiniCard label="Total Pelanggan" value={String(stats?.total_customers || 0)} icon="people" />
         </View>
 
         <Text style={styles.section}>Rangkuman Per Sales (Hari Ini)</Text>
@@ -78,7 +78,11 @@ export default function AdminDashboard() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.gLabel}>{g.count} transaksi · {g.total_gln_terjual} gln</Text>
-              <Text style={styles.gValue}>Rp {rp(g.total_bayar)} diterima</Text>
+              <Text style={styles.gValue}>Setoran Rp {rp(g.total_setoran || 0)}</Text>
+              <Text style={styles.gSub}>
+                Terima Rp {rp(g.total_bayar)}
+                {g.total_pengeluaran > 0 ? ` − BBM/dll Rp ${rp(g.total_pengeluaran)}` : ""}
+              </Text>
               {g.total_hutang > 0 && <Text style={styles.gDebt}>Hutang baru: Rp {rp(g.total_hutang)}</Text>}
             </View>
             <Ionicons name="chevron-forward" size={20} color={theme.color.muted} />
@@ -122,6 +126,7 @@ const styles = StyleSheet.create({
   gBadgeText: { color: "#fff", fontWeight: "700", fontSize: 15 },
   gLabel: { fontSize: 12, color: theme.color.muted },
   gValue: { fontSize: 14, fontWeight: "600", color: theme.color.brand, marginTop: 2 },
+  gSub: { fontSize: 11, color: theme.color.muted, marginTop: 2 },
   gDebt: { fontSize: 11, color: theme.color.error, marginTop: 2 },
   empty: { textAlign: "center", color: theme.color.muted, padding: 24 },
 });

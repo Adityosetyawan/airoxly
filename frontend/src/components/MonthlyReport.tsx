@@ -38,6 +38,7 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [editModal, setEditModal] = useState<{ type: "yellow" | "red" | "part"; item?: any } | null>(null);
+  const [partEditor, setPartEditor] = useState<{ mode: "create" | "edit"; part?: any } | null>(null);
 
   // Load sales list
   useEffect(() => {
@@ -298,15 +299,18 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
             </View>
             {data.parts.map((p: any) => (
               <View key={p.id} style={styles.trow}>
-                <Text style={[styles.tdCell, { flex: 1 }]}>{p.name}</Text>
                 <TouchableOpacity
                   disabled={!canEditRed}
-                  onPress={() =>
-                    setEditModal({
-                      type: "red",
-                      item: { id: p.id, name: p.name, rp_per_pcs: p.rp_per_pcs, order: p.order },
-                    })
-                  }
+                  onPress={() => setPartEditor({ mode: "edit", part: p })}
+                  style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 4, padding: 6 }}
+                  testID={`part-name-${p.id}`}
+                >
+                  <Text style={[styles.tdCell, { flex: 1, padding: 0 }]}>{p.name}</Text>
+                  {canEditRed && <Ionicons name="pencil" size={11} color={theme.color.muted} />}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  disabled={!canEditRed}
+                  onPress={() => setPartEditor({ mode: "edit", part: p })}
                   style={[styles.colUnit, styles.redCell]}
                 >
                   <Text style={styles.redText}>{p.rp_per_pcs > 0 ? rp(p.rp_per_pcs) : "-"}</Text>
@@ -328,6 +332,16 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
                 </View>
               </View>
             ))}
+            {canEditRed && (
+              <TouchableOpacity
+                onPress={() => setPartEditor({ mode: "create" })}
+                style={styles.addPartRow}
+                testID="add-part-btn"
+              >
+                <Ionicons name="add-circle" size={16} color={theme.color.brand} />
+                <Text style={styles.addPartText}>Tambah Item Part</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* SECTION D: SALES EXPENSES (green auto) */}
@@ -436,6 +450,21 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
           } catch (e: any) {
             toast.show(e.message || "Gagal", "error");
           }
+        }}
+      />
+
+      <PartEditorModal
+        modal={partEditor}
+        onClose={() => setPartEditor(null)}
+        onSaved={async () => {
+          setPartEditor(null);
+          await load();
+          toast.show("Tersimpan", "success");
+        }}
+        onDeleted={async () => {
+          setPartEditor(null);
+          await load();
+          toast.show("Item part dihapus", "success");
         }}
       />
     </SafeAreaView>
@@ -748,6 +777,113 @@ function IncomeRow({
   );
 }
 
+function PartEditorModal({
+  modal,
+  onClose,
+  onSaved,
+  onDeleted,
+}: {
+  modal: { mode: "create" | "edit"; part?: any } | null;
+  onClose: () => void;
+  onSaved: () => void;
+  onDeleted: () => void;
+}) {
+  const toast = useToast();
+  const [name, setName] = useState("");
+  const [price, setPrice] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (modal) {
+      setName(modal.part?.name || "");
+      setPrice(String(modal.part?.rp_per_pcs || ""));
+    }
+  }, [modal]);
+
+  if (!modal) return null;
+
+  const save = async () => {
+    if (!name.trim()) {
+      toast.show("Nama part wajib diisi", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = { name: name.trim(), rp_per_pcs: parseFloat(price) || 0, order: modal.part?.order || 0 };
+      if (modal.mode === "create") {
+        await api.createPartPrice(payload);
+      } else {
+        await api.updatePartPrice(modal.part.id, payload);
+      }
+      onSaved();
+    } catch (e: any) {
+      toast.show(e.message || "Gagal simpan", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const del = async () => {
+    if (modal.mode !== "edit" || !modal.part?.id) return;
+    try {
+      await api.deletePartPrice(modal.part.id);
+      onDeleted();
+    } catch (e: any) {
+      toast.show(e.message || "Gagal hapus", "error");
+    }
+  };
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalWrap}>
+        <View style={styles.modalCard}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{modal.mode === "create" ? "Tambah Item Part" : "Edit Item Part"}</Text>
+            <TouchableOpacity onPress={onClose} testID="close-part-editor">
+              <Ionicons name="close" size={24} color={theme.color.onSurface} />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.modalHint}>Merah (permanen) — hanya Super Admin</Text>
+
+          <Text style={styles.partLabel}>Nama Part</Text>
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            placeholder="mis. Seal, Mur, Filter…"
+            placeholderTextColor={theme.color.muted}
+            style={styles.partInput}
+            testID="part-name-input"
+          />
+
+          <Text style={styles.partLabel}>Harga per Pcs (Rp)</Text>
+          <TextInput
+            value={price}
+            onChangeText={(v) => setPrice(v.replace(/[^\d.]/g, ""))}
+            keyboardType="number-pad"
+            placeholder="0"
+            placeholderTextColor={theme.color.muted}
+            style={[styles.partInput, { fontSize: 18, fontWeight: "700" }]}
+            testID="part-price-input"
+          />
+
+          <TouchableOpacity onPress={save} disabled={saving} style={[styles.modalBtn, saving && { opacity: 0.6 }]} testID="save-part-btn">
+            <Text style={styles.modalBtnText}>{saving ? "Menyimpan…" : "Simpan"}</Text>
+          </TouchableOpacity>
+
+          {modal.mode === "edit" && (
+            <TouchableOpacity onPress={del} style={styles.deleteBtn} testID="delete-part-btn">
+              <Ionicons name="trash-outline" size={18} color={theme.color.error} />
+              <Text style={styles.deleteBtnText}>Hapus Part</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+
+
 function EditModal({
   modal,
   onClose,
@@ -892,4 +1028,37 @@ const styles = StyleSheet.create({
   modalInput: { borderWidth: 1, borderColor: theme.color.border, borderRadius: 12, padding: 16, fontSize: 20, fontWeight: "700", backgroundColor: theme.color.surfaceSecondary, textAlign: "center" },
   modalBtn: { backgroundColor: theme.color.brandPrimary, padding: 16, borderRadius: 14, alignItems: "center", marginTop: 16 },
   modalBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  addPartRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    padding: 10,
+    backgroundColor: theme.color.brandTertiary,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.color.border,
+  },
+  addPartText: { color: theme.color.brand, fontWeight: "700", fontSize: 12 },
+  partLabel: { fontSize: 13, fontWeight: "500", color: theme.color.onSurfaceSecondary, marginBottom: 6, marginTop: 12 },
+  partInput: {
+    borderWidth: 1,
+    borderColor: theme.color.border,
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    color: theme.color.onSurface,
+    backgroundColor: theme.color.surfaceSecondary,
+  },
+  deleteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.color.error,
+    marginTop: 10,
+  },
+  deleteBtnText: { color: theme.color.error, fontWeight: "600" },
 });

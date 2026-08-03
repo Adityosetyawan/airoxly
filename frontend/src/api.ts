@@ -198,8 +198,11 @@ export const api = {
 
   // Part prices (red — super admin)
   listPartPrices: () => req<any[]>("/part-prices"),
+  createPartPrice: (body: { name: string; rp_per_pcs: number; order?: number }) =>
+    req<any>("/part-prices", { method: "POST", body: JSON.stringify(body) }),
   updatePartPrice: (id: string, body: { name: string; rp_per_pcs: number; order?: number }) =>
     req(`/part-prices/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deletePartPrice: (id: string) => req(`/part-prices/${id}`, { method: "DELETE" }),
 
   // Settings
   getSetting: (key: string) => req<{ key: string; value: any }>(`/settings/${key}`),

@@ -25,6 +25,7 @@ export default function AdminLayout() {
       <Tabs.Screen name="live" options={{ title: "GPS", tabBarIcon: ({ color, size }) => <Ionicons name="location-outline" size={size} color={color} /> }} />
       <Tabs.Screen name="profile" options={{ title: "Profil", tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} /> }} />
       <Tabs.Screen name="sales-form" options={{ href: null }} />
+      <Tabs.Screen name="route-history" options={{ href: null }} />
     </Tabs>
   );
 }

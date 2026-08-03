@@ -234,6 +234,14 @@ export const api = {
   pingLocation: (lat: number, lng: number) =>
     req("/location/ping", { method: "POST", body: JSON.stringify({ lat, lng }) }),
   liveLocations: () => req<any[]>("/location/live"),
+  locationHistory: (sales_id: string, date?: string) => {
+    const q = new URLSearchParams();
+    if (date) q.set("date", date);
+    const s = q.toString();
+    return req<{ id: string; sales_id: string; sales_code?: string; lat: number; lng: number; ts: string }[]>(
+      `/location/history/${sales_id}${s ? "?" + s : ""}`,
+    );
+  },
 
   // Stats
   overview: () => req<any>("/stats/overview"),

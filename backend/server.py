@@ -1322,7 +1322,8 @@ async def location_history(sales_id: str, date: Optional[str] = None, user=Depen
     q = {"sales_id": sales_id}
     if date:
         q["ts"] = {"$gte": date, "$lte": date + "T23:59:59"}
-    items = await db.locations.find(q, {"_id": 0}).sort("ts", -1).limit(500).to_list(500)
+    # Ascending order so caller can draw polyline chronologically
+    items = await db.locations.find(q, {"_id": 0}).sort("ts", 1).limit(2000).to_list(2000)
     return items
 
 

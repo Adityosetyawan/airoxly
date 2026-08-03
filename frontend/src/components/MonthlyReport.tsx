@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Modal,
@@ -12,6 +12,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import ViewShot, { captureRef } from "react-native-view-shot";
+import * as Sharing from "expo-sharing";
 import { theme, rp } from "@/src/theme";
 import { api, User } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
@@ -523,16 +525,55 @@ function BiayaRow({
 // COMPACT EXCEL VIEW — spreadsheet-style 3 columns
 // ============================================================
 function CompactExcelView({ data, year, month }: { data: any; year: number; month: number }) {
+  const toast = useToast();
+  const shotRef = useRef<ViewShot>(null);
+  const [sharing, setSharing] = useState(false);
+
+  const shareShot = async () => {
+    if (!shotRef.current) return;
+    setSharing(true);
+    try {
+      const uri = await captureRef(shotRef, { format: "png", quality: 1, result: "tmpfile" });
+      const canShare = await Sharing.isAvailableAsync();
+      if (!canShare) {
+        toast.show("Fitur share tidak tersedia di device ini", "error");
+        return;
+      }
+      await Sharing.shareAsync(uri, {
+        mimeType: "image/png",
+        dialogTitle: `Laporan Bulanan ${data.sales_code} ${MONTHS[month - 1]} ${year}`,
+      });
+    } catch (e: any) {
+      toast.show(e?.message || "Gagal share", "error");
+    } finally {
+      setSharing(false);
+    }
+  };
+
   // Fixed cell dimensions to mimic Excel grid on phone (~360 usable width for 3 columns)
   return (
-    <ScrollView contentContainerStyle={{ padding: 8, paddingBottom: 40 }}>
-      {/* Header */}
-      <Text style={compactStyles.title}>
-        GROUP: {data.sales_code} · Wilayah {data.group_letter}
-      </Text>
-      <Text style={compactStyles.subtitle}>
-        PENJUALAN BULAN {MONTHS[month - 1].toUpperCase()} TAHUN {year}
-      </Text>
+    <View style={{ flex: 1 }}>
+      <View style={compactStyles.shareRow}>
+        <TouchableOpacity
+          onPress={shareShot}
+          disabled={sharing}
+          style={[compactStyles.shareBtn, sharing && { opacity: 0.6 }]}
+          testID="share-screenshot-btn"
+        >
+          <Ionicons name="share-social" size={16} color="#fff" />
+          <Text style={compactStyles.shareText}>{sharing ? "Menyiapkan…" : "Share Screenshot"}</Text>
+        </TouchableOpacity>
+      </View>
+      <ScrollView contentContainerStyle={{ padding: 8, paddingBottom: 40 }}>
+        <ViewShot ref={shotRef} style={{ backgroundColor: theme.color.surface }} options={{ format: "png", quality: 1 }}>
+          <View style={{ padding: 4 }}>
+            {/* Header */}
+            <Text style={compactStyles.title}>
+              GROUP: {data.sales_code} · Wilayah {data.group_letter}
+            </Text>
+            <Text style={compactStyles.subtitle}>
+              PENJUALAN BULAN {MONTHS[month - 1].toUpperCase()} TAHUN {year}
+            </Text>
 
       {/* Right-side summary card (top for visibility) */}
       <View style={compactStyles.summaryCard}>
@@ -696,11 +737,25 @@ function CompactExcelView({ data, year, month }: { data: any; year: number; mont
         <Text style={{ color: COLOR_YELLOW_TEXT, fontWeight: "700" }}>■ Kuning</Text> input Admin · {" "}
         <Text style={{ color: COLOR_RED_TEXT, fontWeight: "700" }}>■ Merah</Text> Super Admin
       </Text>
+          </View>
+        </ViewShot>
     </ScrollView>
+    </View>
   );
 }
 
 const compactStyles = StyleSheet.create({
+  shareRow: { padding: 8, paddingBottom: 0, alignItems: "flex-end" },
+  shareBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#25D366",
+  },
+  shareText: { color: "#fff", fontWeight: "700", fontSize: 12 },
   title: { fontSize: 12, fontWeight: "700", color: theme.color.onSurface, textAlign: "center" },
   subtitle: { fontSize: 10, color: theme.color.muted, textAlign: "center", marginBottom: 8 },
   summaryCard: {

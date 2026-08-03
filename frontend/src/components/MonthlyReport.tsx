@@ -89,6 +89,7 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
     <SafeAreaView style={styles.wrap} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.title}>Laporan Bulanan</Text>
+        <Text style={styles.subtitle}>Khusus Penjualan Air Galon</Text>
       </View>
 
       {/* Legend */}
@@ -133,12 +134,42 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
         <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: 40 }}>
           {/* Group header */}
           <View style={styles.groupHeader}>
-            <View>
-              <Text style={styles.groupLabel}>GROUP</Text>
-              <Text style={styles.groupValue}>
-                {data.sales_code} · Wilayah {data.group_letter} · {MONTHS[month - 1]} {year}
-              </Text>
+            <Text style={styles.groupLabel}>LAPORAN PENJUALAN AIR GALON</Text>
+            <Text style={styles.groupValue}>
+              {data.sales_code} · Wilayah {data.group_letter} · {MONTHS[month - 1]} {year}
+            </Text>
+          </View>
+
+          {/* PENDAPATAN BERSIH — SUMMARY di atas supaya screenshot langsung dapat ringkasannya */}
+          <View style={styles.netCardTop}>
+            <Text style={styles.netTopHeader}>PENDAPATAN BERSIH</Text>
+            <Text
+              style={[
+                styles.netTopValue,
+                { color: data.pendapatan_bersih >= 0 ? "#fff" : "#FEE2E2" },
+              ]}
+            >
+              Rp {rp(data.pendapatan_bersih)}
+            </Text>
+            <View style={styles.netTopGrid}>
+              <View style={styles.netTopCell}>
+                <Text style={styles.netTopCellLabel}>A1 · Penjualan</Text>
+                <Text style={styles.netTopCellVal}>Rp {rp(data.A1_penjualan)}</Text>
+              </View>
+              <View style={styles.netTopCell}>
+                <Text style={styles.netTopCellLabel}>A4 · Kulakan</Text>
+                <Text style={styles.netTopCellVal}>− Rp {rp(data.A4_kulakan)}</Text>
+              </View>
+              <View style={styles.netTopCell}>
+                <Text style={styles.netTopCellLabel}>A2 · Gaji/Bonus</Text>
+                <Text style={styles.netTopCellVal}>− Rp {rp(data.A2_gaji_bonus)}</Text>
+              </View>
+              <View style={styles.netTopCell}>
+                <Text style={styles.netTopCellLabel}>A3 · Biaya Ops</Text>
+                <Text style={styles.netTopCellVal}>− Rp {rp(data.A3_biaya_operasional)}</Text>
+              </View>
             </View>
+            <Text style={styles.netTopFormula}>A1 − A4 − A3 − A2  ·  {data.total_gln_sold} galon terjual</Text>
           </View>
 
           {/* SECTION A: DAILY PENJUALAN */}
@@ -148,14 +179,18 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
               <Text style={[styles.thCell, styles.colNo]}>No</Text>
               <Text style={[styles.thCell, styles.colDate]}>Tgl</Text>
               <Text style={[styles.thCell, styles.colDay]}>Hari</Text>
-              <Text style={[styles.thCell, styles.colAmt]}>Penjualan (Rp)</Text>
+              <Text style={[styles.thCell, styles.colAir]}>Air (gln)</Text>
+              <Text style={[styles.thCell, styles.colAmt]}>Rp</Text>
             </View>
             {data.daily.map((d: any) => (
               <View key={d.no} style={styles.trow}>
                 <Text style={[styles.tdCell, styles.colNo]}>{d.no}</Text>
                 <Text style={[styles.tdCell, styles.colDate]}>{d.date.slice(5)}</Text>
                 <Text style={[styles.tdCell, styles.colDay]}>{d.day_name}</Text>
-                <View style={[styles.colAmt, styles.greenCell]}>
+                <View style={[styles.colAir, styles.greenCell]}>
+                  <Text style={styles.greenText}>{d.gln > 0 ? d.gln : "-"}</Text>
+                </View>
+                <View style={[styles.colAmt, styles.greenCellRight]}>
                   <Text style={styles.greenText}>{d.penjualan > 0 ? rp(d.penjualan) : "-"}</Text>
                 </View>
               </View>
@@ -163,9 +198,12 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
             <View style={[styles.trow, styles.totalRow]}>
               <Text style={[styles.tdCell, styles.colNo, { fontWeight: "700" }]}>—</Text>
               <Text style={[styles.tdCell, styles.colDate]} />
-              <Text style={[styles.tdCell, styles.colDay, { fontWeight: "700" }]}>TOTAL A1</Text>
-              <View style={[styles.colAmt, styles.greenCell]}>
-                <Text style={[styles.greenText, { fontWeight: "700" }]}>Rp {rp(data.A1_penjualan)}</Text>
+              <Text style={[styles.tdCell, styles.colDay, { fontWeight: "700" }]}>TOTAL</Text>
+              <View style={[styles.colAir, styles.greenCell]}>
+                <Text style={[styles.greenText, { fontWeight: "700" }]}>{data.total_gln_sold}</Text>
+              </View>
+              <View style={[styles.colAmt, styles.greenCellRight]}>
+                <Text style={[styles.greenText, { fontWeight: "700" }]}>{rp(data.A1_penjualan)}</Text>
               </View>
             </View>
           </View>
@@ -297,7 +335,7 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
                 <Text style={[styles.tdCell, { flex: 1 }]}>
                   {e.category}{e.description ? ` — ${e.description}` : ""}
                 </Text>
-                <View style={[styles.colUnit, styles.greenCell]}>
+                <View style={[styles.colUnit, styles.greenCellRight]}>
                   <Text style={styles.greenText}>{rp(e.amount)}</Text>
                 </View>
               </View>
@@ -310,8 +348,8 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
             </View>
           </View>
 
-          {/* SECTION E: PENDAPATAN BERSIH */}
-          <SectionTitle icon="stats-chart-outline">Pendapatan Bersih</SectionTitle>
+          {/* SECTION E: PENDAPATAN BERSIH DETAIL */}
+          <SectionTitle icon="stats-chart-outline">Rincian Pendapatan Bersih</SectionTitle>
           <View style={styles.netCard}>
             <IncomeRow
               label="Penjualan (A1)"
@@ -527,7 +565,8 @@ function EditModal({
 const styles = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: theme.color.surface },
   header: { padding: 16, paddingBottom: 8 },
-  title: { fontSize: 22, fontWeight: "600", color: theme.color.onSurface },
+  title: { fontSize: 20, fontWeight: "700", color: theme.color.onSurface },
+  subtitle: { fontSize: 11, color: theme.color.muted, marginTop: 2, fontStyle: "italic" },
   legendRow: { paddingHorizontal: 16, paddingBottom: 8, gap: 12 },
   legend: { flexDirection: "row", alignItems: "center", gap: 6 },
   legendBox: { width: 14, height: 14, borderRadius: 3, borderWidth: 1, borderColor: theme.color.border },
@@ -549,27 +588,47 @@ const styles = StyleSheet.create({
   sectionTitleText: { fontSize: 13, fontWeight: "700", color: theme.color.onSurface },
   tableCard: { borderWidth: 1, borderColor: theme.color.border, borderRadius: 10, overflow: "hidden" },
   rowHead: { flexDirection: "row", backgroundColor: theme.color.surfaceSecondary },
-  thCell: { fontSize: 11, fontWeight: "700", color: theme.color.onSurfaceSecondary, padding: 8, textTransform: "uppercase" },
+  thCell: { fontSize: 10, fontWeight: "700", color: theme.color.onSurfaceSecondary, padding: 6, textTransform: "uppercase" },
   trow: { flexDirection: "row", borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.color.border, alignItems: "stretch" },
-  tdCell: { fontSize: 12, color: theme.color.onSurface, padding: 8 },
-  colNo: { width: 34 },
-  colDate: { width: 46 },
-  colDay: { width: 66 },
+  tdCell: { fontSize: 11, color: theme.color.onSurface, padding: 6 },
+  colNo: { width: 28 },
+  colDate: { width: 40 },
+  colDay: { width: 52 },
+  colAir: { width: 54, alignItems: "center", justifyContent: "center" },
   colAmt: { flex: 1, alignItems: "flex-end" },
   colUnit: { width: 78, alignItems: "center", justifyContent: "center" },
-  greenCell: { backgroundColor: COLOR_GREEN, padding: 8, alignItems: "flex-end" },
-  greenText: { fontSize: 12, color: COLOR_GREEN_TEXT, fontWeight: "600" },
-  redCell: { backgroundColor: COLOR_RED, padding: 8 },
-  redText: { fontSize: 12, color: COLOR_RED_TEXT, fontWeight: "700" },
-  yellowCell: { backgroundColor: COLOR_YELLOW, padding: 8 },
-  yellowText: { fontSize: 12, color: COLOR_YELLOW_TEXT, fontWeight: "700" },
-  subtotalCell: { backgroundColor: theme.color.surface, padding: 8 },
-  subtotalText: { fontSize: 12, color: theme.color.brand, fontWeight: "700" },
+  greenCell: { backgroundColor: COLOR_GREEN, padding: 6, alignItems: "center", justifyContent: "center" },
+  greenCellRight: { backgroundColor: COLOR_GREEN, padding: 6, alignItems: "flex-end", justifyContent: "center" },
+  greenText: { fontSize: 11, color: COLOR_GREEN_TEXT, fontWeight: "600" },
+  redCell: { backgroundColor: COLOR_RED, padding: 6, alignItems: "center", justifyContent: "center" },
+  redText: { fontSize: 11, color: COLOR_RED_TEXT, fontWeight: "700" },
+  yellowCell: { backgroundColor: COLOR_YELLOW, padding: 6, alignItems: "center", justifyContent: "center" },
+  yellowText: { fontSize: 11, color: COLOR_YELLOW_TEXT, fontWeight: "700" },
+  subtotalCell: { backgroundColor: theme.color.surface, padding: 6, alignItems: "center", justifyContent: "center" },
+  subtotalText: { fontSize: 11, color: theme.color.brand, fontWeight: "700" },
   totalRow: { backgroundColor: theme.color.surfaceSecondary },
   biayaValCell: { width: 130, padding: 8, alignItems: "flex-end", justifyContent: "center" },
   biayaValText: { fontSize: 12, fontWeight: "700" },
   emptyText: { padding: 14, textAlign: "center", color: theme.color.muted, fontSize: 12 },
   netCard: { padding: 14, borderRadius: 12, backgroundColor: theme.color.surface, borderWidth: 1, borderColor: theme.color.border, marginBottom: 12 },
+  netCardTop: {
+    padding: 16,
+    borderRadius: 14,
+    backgroundColor: theme.color.brandPrimary,
+    marginBottom: 12,
+    shadowColor: theme.color.brandPrimary,
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  netTopHeader: { fontSize: 11, color: "#A7F3D0", fontWeight: "700", letterSpacing: 1 },
+  netTopValue: { fontSize: 26, fontWeight: "800", marginTop: 4, marginBottom: 12, letterSpacing: -0.6 },
+  netTopGrid: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  netTopCell: { width: "48%", padding: 8, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.12)" },
+  netTopCellLabel: { fontSize: 9, color: "#D1FAE5", fontWeight: "600", letterSpacing: 0.4 },
+  netTopCellVal: { fontSize: 12, color: "#fff", fontWeight: "700", marginTop: 2 },
+  netTopFormula: { fontSize: 10, color: "#A7F3D0", marginTop: 8, textAlign: "center", fontStyle: "italic" },
   incomeRow: { flexDirection: "row", alignItems: "center", paddingVertical: 8, gap: 12 },
   incomeLabel: { fontSize: 13, color: theme.color.onSurface, fontWeight: "500" },
   incomeHint: { fontSize: 11, color: theme.color.muted, marginTop: 1 },

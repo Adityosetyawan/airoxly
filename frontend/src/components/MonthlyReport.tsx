@@ -85,11 +85,23 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
   const currentSales = salesList.find((s) => s.id === salesId);
   void currentSales;
 
+  const [compactMode, setCompactMode] = useState(false);
+
   return (
     <SafeAreaView style={styles.wrap} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Laporan Bulanan</Text>
-        <Text style={styles.subtitle}>Khusus Penjualan Air Galon</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Laporan Bulanan</Text>
+          <Text style={styles.subtitle}>Khusus Penjualan Air Galon</Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => setCompactMode((v) => !v)}
+          style={styles.modeBtn}
+          testID="toggle-compact-mode"
+        >
+          <Ionicons name={compactMode ? "list" : "grid"} size={16} color={theme.color.brand} />
+          <Text style={styles.modeBtnText}>{compactMode ? "Detail" : "Excel"}</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Legend */}
@@ -130,6 +142,8 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
         <View style={styles.center}>
           <Text style={{ color: theme.color.muted }}>{loading ? "Memuat…" : "Pilih sales"}</Text>
         </View>
+      ) : compactMode ? (
+        <CompactExcelView data={data} year={year} month={month} />
       ) : (
         <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: 40 }}>
           {/* Group header */}
@@ -476,6 +490,236 @@ function BiayaRow({
   );
 }
 
+// ============================================================
+// COMPACT EXCEL VIEW — spreadsheet-style 3 columns
+// ============================================================
+function CompactExcelView({ data, year, month }: { data: any; year: number; month: number }) {
+  // Fixed cell dimensions to mimic Excel grid on phone (~360 usable width for 3 columns)
+  return (
+    <ScrollView contentContainerStyle={{ padding: 8, paddingBottom: 40 }}>
+      {/* Header */}
+      <Text style={compactStyles.title}>
+        GROUP: {data.sales_code} · Wilayah {data.group_letter}
+      </Text>
+      <Text style={compactStyles.subtitle}>
+        PENJUALAN BULAN {MONTHS[month - 1].toUpperCase()} TAHUN {year}
+      </Text>
+
+      {/* Right-side summary card (top for visibility) */}
+      <View style={compactStyles.summaryCard}>
+        <Text style={compactStyles.summaryHead}>PENDAPATAN BERSIH</Text>
+        <View style={compactStyles.summaryGrid}>
+          <View style={compactStyles.sumRow}>
+            <Text style={compactStyles.sumLabel}>PENJUALAN (A1)</Text>
+            <Text style={compactStyles.sumValGreen}>Rp {rp(data.A1_penjualan)}</Text>
+          </View>
+          <View style={compactStyles.sumRow}>
+            <Text style={compactStyles.sumLabel}>Rp Kulakan × {data.total_gln_sold} gln (A4)</Text>
+            <Text style={compactStyles.sumValRed}>Rp {rp(data.A4_kulakan)}</Text>
+          </View>
+          <View style={compactStyles.sumRow}>
+            <Text style={compactStyles.sumLabel}>Gaji, Komisi, Bonus (A2)</Text>
+            <Text style={compactStyles.sumValYellow}>Rp {rp(data.A2_gaji_bonus)}</Text>
+          </View>
+          <View style={compactStyles.sumRow}>
+            <Text style={compactStyles.sumLabel}>Biaya Operasional (A3)</Text>
+            <Text style={compactStyles.sumValYellow}>Rp {rp(data.A3_biaya_operasional)}</Text>
+          </View>
+        </View>
+        <View style={compactStyles.summaryTotal}>
+          <Text style={compactStyles.summaryTotalLabel}>PENDAPATAN BERSIH</Text>
+          <Text
+            style={[
+              compactStyles.summaryTotalVal,
+              { color: data.pendapatan_bersih >= 0 ? theme.color.brand : theme.color.error },
+            ]}
+          >
+            Rp {rp(data.pendapatan_bersih)}
+          </Text>
+        </View>
+        <Text style={compactStyles.summaryFormula}>A1 − A4 − A3 − A2</Text>
+      </View>
+
+      {/* Two-column layout: Penjualan Harian | Biaya */}
+      <View style={compactStyles.twoCol}>
+        {/* LEFT: PENJUALAN */}
+        <View style={compactStyles.colLeft}>
+          <Text style={compactStyles.colTitle}>PENJUALAN HARIAN</Text>
+          <View style={compactStyles.tHead}>
+            <Text style={[compactStyles.th, { width: 20 }]}>N</Text>
+            <Text style={[compactStyles.th, { width: 28 }]}>Tgl</Text>
+            <Text style={[compactStyles.th, { flex: 1 }]}>Rp</Text>
+          </View>
+          {data.daily.map((d: any) => (
+            <View key={d.no} style={compactStyles.tRow}>
+              <Text style={[compactStyles.td, { width: 20 }]}>{d.no}</Text>
+              <Text style={[compactStyles.td, { width: 28 }]}>{d.date.slice(8)}</Text>
+              <View style={[compactStyles.td, { flex: 1, backgroundColor: COLOR_GREEN, alignItems: "flex-end" }]}>
+                <Text style={compactStyles.greenTxt}>{d.penjualan > 0 ? rp(d.penjualan) : ""}</Text>
+              </View>
+            </View>
+          ))}
+          <View style={[compactStyles.tRow, compactStyles.totalRow]}>
+            <Text style={[compactStyles.td, { width: 48, fontWeight: "700" }]}>TOTAL</Text>
+            <View style={[compactStyles.td, { flex: 1, backgroundColor: COLOR_GREEN, alignItems: "flex-end" }]}>
+              <Text style={[compactStyles.greenTxt, { fontWeight: "800" }]}>{rp(data.A1_penjualan)}</Text>
+            </View>
+          </View>
+          <Text style={compactStyles.hintText}>{data.total_gln_sold} galon terjual</Text>
+        </View>
+
+        {/* RIGHT: BIAYA */}
+        <View style={compactStyles.colRight}>
+          <Text style={compactStyles.colTitle}>BIAYA</Text>
+          <View style={compactStyles.tHead}>
+            <Text style={[compactStyles.th, { flex: 1 }]}>Uraian</Text>
+            <Text style={[compactStyles.th, { width: 60, textAlign: "right" }]}>Jumlah</Text>
+          </View>
+          {/* Yellow rows */}
+          {[
+            ["Gaji Sopir", data.admin.gaji_sopir],
+            ["Gaji Kernet", data.admin.gaji_kernet],
+            ["Bonus/Galon 1", data.admin.bonus_per_galon_1],
+            ["Bonus/Galon 2", data.admin.bonus_per_galon_2],
+            ["Komisi", data.admin.komisi],
+            ["Bns Trg Mg 1", data.admin.bonus_target_mg1],
+            ["Bns Trg Mg 2", data.admin.bonus_target_mg2],
+            ["Bns Trg Mg 3", data.admin.bonus_target_mg3],
+            ["Bns Trg Mg 4", data.admin.bonus_target_mg4],
+            ["Bns Trg Mg 5", data.admin.bonus_target_mg5],
+          ].map(([lab, val]: any) => (
+            <View key={lab} style={compactStyles.tRow}>
+              <Text style={[compactStyles.td, { flex: 1 }]}>{lab}</Text>
+              <View style={[compactStyles.td, { width: 60, backgroundColor: COLOR_YELLOW, alignItems: "flex-end" }]}>
+                <Text style={compactStyles.yellowTxt}>{val > 0 ? rp(val) : "-"}</Text>
+              </View>
+            </View>
+          ))}
+          <View style={[compactStyles.tRow, compactStyles.totalRow]}>
+            <Text style={[compactStyles.td, { flex: 1, fontWeight: "700" }]}>Total A2</Text>
+            <Text style={[compactStyles.td, { width: 60, textAlign: "right", fontWeight: "700", color: theme.color.brand }]}>
+              {rp(data.A2_gaji_bonus)}
+            </Text>
+          </View>
+
+          {/* Parts (red price + yellow qty) */}
+          <Text style={compactStyles.subTitle}>Penggantian Part</Text>
+          <View style={compactStyles.tHead}>
+            <Text style={[compactStyles.th, { flex: 1 }]}>Part</Text>
+            <Text style={[compactStyles.th, { width: 34, textAlign: "center" }]}>Pcs</Text>
+            <Text style={[compactStyles.th, { width: 60, textAlign: "right" }]}>Sub</Text>
+          </View>
+          {data.parts.map((p: any) => (
+            <View key={p.id} style={compactStyles.tRow}>
+              <View style={[compactStyles.td, { flex: 1, flexDirection: "row", alignItems: "center", gap: 2 }]}>
+                <Text style={compactStyles.tdText}>{p.name}</Text>
+              </View>
+              <View style={[compactStyles.td, { width: 34, backgroundColor: COLOR_YELLOW, alignItems: "center" }]}>
+                <Text style={compactStyles.yellowTxt}>{p.qty || 0}</Text>
+              </View>
+              <View style={[compactStyles.td, { width: 60, alignItems: "flex-end", backgroundColor: p.subtotal > 0 ? COLOR_GREEN : "transparent" }]}>
+                <Text style={p.subtotal > 0 ? compactStyles.greenTxt : compactStyles.tdText}>{p.subtotal > 0 ? rp(p.subtotal) : "-"}</Text>
+              </View>
+            </View>
+          ))}
+          {/* Sales expenses (green) */}
+          {data.sales_expenses.length > 0 && (
+            <>
+              <Text style={compactStyles.subTitle}>Pengeluaran Sales</Text>
+              {data.sales_expenses.map((e: any) => (
+                <View key={e.id} style={compactStyles.tRow}>
+                  <Text style={[compactStyles.td, { flex: 1 }]} numberOfLines={1}>
+                    {e.date_only.slice(8)} {e.category}
+                  </Text>
+                  <View style={[compactStyles.td, { width: 60, backgroundColor: COLOR_GREEN, alignItems: "flex-end" }]}>
+                    <Text style={compactStyles.greenTxt}>{rp(e.amount)}</Text>
+                  </View>
+                </View>
+              ))}
+            </>
+          )}
+          <View style={[compactStyles.tRow, compactStyles.totalRow]}>
+            <Text style={[compactStyles.td, { flex: 1, fontWeight: "700" }]}>Total A3</Text>
+            <Text style={[compactStyles.td, { width: 60, textAlign: "right", fontWeight: "700", color: theme.color.brand }]}>
+              {rp(data.A3_biaya_operasional)}
+            </Text>
+          </View>
+
+          {/* Kulakan (red) */}
+          <Text style={compactStyles.subTitle}>Harga Kulakan (per galon)</Text>
+          <View style={compactStyles.tRow}>
+            <Text style={[compactStyles.td, { flex: 1 }]}>Kulakan × Galon</Text>
+            <View style={[compactStyles.td, { width: 60, backgroundColor: COLOR_RED, alignItems: "flex-end" }]}>
+              <Text style={compactStyles.redTxt}>{rp(data.rp_kulakan_per_galon)}</Text>
+            </View>
+          </View>
+          <View style={[compactStyles.tRow, compactStyles.totalRow]}>
+            <Text style={[compactStyles.td, { flex: 1, fontWeight: "700" }]}>A4 Total</Text>
+            <Text style={[compactStyles.td, { width: 60, textAlign: "right", fontWeight: "700", color: theme.color.error }]}>
+              {rp(data.A4_kulakan)}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      <Text style={compactStyles.legendNote}>
+        <Text style={{ color: COLOR_GREEN_TEXT, fontWeight: "700" }}>■ Hijau</Text> otomatis dari sales · {" "}
+        <Text style={{ color: COLOR_YELLOW_TEXT, fontWeight: "700" }}>■ Kuning</Text> input Admin · {" "}
+        <Text style={{ color: COLOR_RED_TEXT, fontWeight: "700" }}>■ Merah</Text> Super Admin
+      </Text>
+    </ScrollView>
+  );
+}
+
+const compactStyles = StyleSheet.create({
+  title: { fontSize: 12, fontWeight: "700", color: theme.color.onSurface, textAlign: "center" },
+  subtitle: { fontSize: 10, color: theme.color.muted, textAlign: "center", marginBottom: 8 },
+  summaryCard: {
+    padding: 8,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+    borderRadius: 8,
+    marginBottom: 8,
+    backgroundColor: theme.color.surface,
+  },
+  summaryHead: { fontSize: 10, fontWeight: "800", color: theme.color.onSurface, textAlign: "center", marginBottom: 4, letterSpacing: 0.5 },
+  summaryGrid: { gap: 2 },
+  sumRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 },
+  sumLabel: { fontSize: 9, color: theme.color.onSurfaceSecondary, flex: 1 },
+  sumValGreen: { fontSize: 10, fontWeight: "700", color: COLOR_GREEN_TEXT, backgroundColor: COLOR_GREEN, paddingHorizontal: 4, borderRadius: 3 },
+  sumValRed: { fontSize: 10, fontWeight: "700", color: COLOR_RED_TEXT, backgroundColor: COLOR_RED, paddingHorizontal: 4, borderRadius: 3 },
+  sumValYellow: { fontSize: 10, fontWeight: "700", color: COLOR_YELLOW_TEXT, backgroundColor: COLOR_YELLOW, paddingHorizontal: 4, borderRadius: 3 },
+  summaryTotal: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 6,
+    marginTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: theme.color.border,
+  },
+  summaryTotalLabel: { fontSize: 10, fontWeight: "800", color: theme.color.onSurface },
+  summaryTotalVal: { fontSize: 14, fontWeight: "900", letterSpacing: -0.3 },
+  summaryFormula: { fontSize: 8, color: theme.color.muted, fontStyle: "italic", textAlign: "right", marginTop: 2 },
+  twoCol: { flexDirection: "row", gap: 4 },
+  colLeft: { flex: 1, borderWidth: 1, borderColor: theme.color.border, borderRadius: 4, backgroundColor: theme.color.surface },
+  colRight: { flex: 1.15, borderWidth: 1, borderColor: theme.color.border, borderRadius: 4, backgroundColor: theme.color.surface },
+  colTitle: { fontSize: 9, fontWeight: "800", padding: 4, textAlign: "center", backgroundColor: theme.color.brandTertiary, color: theme.color.onBrandTertiary, letterSpacing: 0.5 },
+  subTitle: { fontSize: 8, fontWeight: "700", padding: 3, backgroundColor: theme.color.surfaceSecondary, color: theme.color.onSurfaceSecondary, textAlign: "center", marginTop: 2 },
+  tHead: { flexDirection: "row", backgroundColor: theme.color.surfaceSecondary, borderBottomWidth: 1, borderBottomColor: theme.color.border },
+  th: { fontSize: 8, fontWeight: "700", padding: 3, color: theme.color.onSurfaceSecondary, textTransform: "uppercase" },
+  tRow: { flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.color.border, alignItems: "stretch" },
+  td: { fontSize: 8, padding: 3, color: theme.color.onSurface, justifyContent: "center" },
+  tdText: { fontSize: 8, color: theme.color.onSurface },
+  greenTxt: { fontSize: 8, color: COLOR_GREEN_TEXT, fontWeight: "700" },
+  yellowTxt: { fontSize: 8, color: COLOR_YELLOW_TEXT, fontWeight: "700" },
+  redTxt: { fontSize: 8, color: COLOR_RED_TEXT, fontWeight: "700" },
+  totalRow: { backgroundColor: theme.color.surfaceSecondary },
+  hintText: { fontSize: 8, textAlign: "center", padding: 3, color: theme.color.muted, fontStyle: "italic" },
+  legendNote: { fontSize: 9, textAlign: "center", marginTop: 8, color: theme.color.muted },
+});
+
+
 function IncomeRow({
   label,
   value,
@@ -564,9 +808,11 @@ function EditModal({
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: theme.color.surface },
-  header: { padding: 16, paddingBottom: 8 },
+  header: { flexDirection: "row", padding: 16, paddingBottom: 8, alignItems: "center", gap: 12 },
   title: { fontSize: 20, fontWeight: "700", color: theme.color.onSurface },
   subtitle: { fontSize: 11, color: theme.color.muted, marginTop: 2, fontStyle: "italic" },
+  modeBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: theme.color.brandTertiary },
+  modeBtnText: { color: theme.color.brand, fontWeight: "700", fontSize: 12 },
   legendRow: { paddingHorizontal: 16, paddingBottom: 8, gap: 12 },
   legend: { flexDirection: "row", alignItems: "center", gap: 6 },
   legendBox: { width: 14, height: 14, borderRadius: 3, borderWidth: 1, borderColor: theme.color.border },

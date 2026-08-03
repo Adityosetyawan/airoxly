@@ -13,7 +13,9 @@
       "bundleIdentifier": "com.emergent.oxlycrm.taw2qk",
       "infoPlist": {
         "NSCameraUsageDescription": "Scan barcode pelanggan",
-        "NSLocationWhenInUseUsageDescription": "Melacak lokasi sales di lapangan"
+        "NSLocationWhenInUseUsageDescription": "Melacak lokasi sales di lapangan",
+        "NSPhotoLibraryUsageDescription": "Simpan screenshot laporan ke galeri",
+        "NSPhotoLibraryAddUsageDescription": "Simpan screenshot laporan ke galeri"
       }
     },
     "android": {
@@ -23,7 +25,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.emergent.oxlycrm.taw2qk",
-      "permissions": ["CAMERA", "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
+      "permissions": ["CAMERA", "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "READ_MEDIA_IMAGES", "WRITE_EXTERNAL_STORAGE"]
     },
     "web": {
       "bundler": "metro",
@@ -48,6 +50,14 @@
       [
         "expo-location",
         { "locationWhenInUsePermission": "Izinkan aplikasi mengakses lokasi untuk melacak sales di lapangan" }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Simpan screenshot laporan bulanan ke galeri HP",
+          "savePhotosPermission": "Simpan screenshot laporan bulanan ke galeri HP",
+          "isAccessMediaLocationEnabled": false
+        }
       ]
     ],
     "experiments": {

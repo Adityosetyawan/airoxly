@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import ViewShot, { captureRef } from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
+import * as MediaLibrary from "expo-media-library";
 import { theme, rp } from "@/src/theme";
 import { api, User } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
@@ -89,6 +90,7 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
   void currentSales;
 
   const [compactMode, setCompactMode] = useState(false);
+  const detailShotRef = useRef<ViewShot>(null);
 
   return (
     <SafeAreaView style={styles.wrap} edges={["top"]}>
@@ -148,7 +150,15 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
       ) : compactMode ? (
         <CompactExcelView data={data} year={year} month={month} />
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: 40 }}>
+        <>
+          <ShareActionBar
+            shotRef={detailShotRef}
+            filename={`OXLY-Detail-${data.sales_code}-${year}-${String(month).padStart(2, "0")}`}
+            title={`Laporan Bulanan Detail ${data.sales_code} ${MONTHS[month - 1]} ${year}`}
+          />
+          <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: 40 }}>
+            <ViewShot ref={detailShotRef} style={{ backgroundColor: theme.color.surface }} options={{ format: "png", quality: 1 }}>
+              <View style={{ padding: 4 }}>
           {/* Group header */}
           <View style={styles.groupHeader}>
             <Text style={styles.groupLabel}>LAPORAN PENJUALAN AIR GALON</Text>
@@ -420,7 +430,10 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
             </View>
             <Text style={styles.formula}>A1 − A4 − A3 − A2</Text>
           </View>
-        </ScrollView>
+              </View>
+            </ViewShot>
+          </ScrollView>
+        </>
       )}
 
       <EditModal
@@ -522,48 +535,129 @@ function BiayaRow({
 }
 
 // ============================================================
-// COMPACT EXCEL VIEW — spreadsheet-style 3 columns
+// SHARE / SAVE ACTION BAR — used by both Compact & Detail modes
 // ============================================================
-function CompactExcelView({ data, year, month }: { data: any; year: number; month: number }) {
+function ShareActionBar({
+  shotRef,
+  filename,
+  title,
+}: {
+  shotRef: React.RefObject<ViewShot | null>;
+  filename: string;
+  title: string;
+}) {
   const toast = useToast();
-  const shotRef = useRef<ViewShot>(null);
-  const [sharing, setSharing] = useState(false);
+  const [busy, setBusy] = useState<null | "share" | "save">(null);
 
-  const shareShot = async () => {
-    if (!shotRef.current) return;
-    setSharing(true);
+  const capture = async (): Promise<string> => {
+    if (!shotRef.current) throw new Error("View belum siap");
+    return await captureRef(shotRef, { format: "png", quality: 1, result: "tmpfile", fileName: filename });
+  };
+
+  const doShare = async () => {
+    setBusy("share");
     try {
-      const uri = await captureRef(shotRef, { format: "png", quality: 1, result: "tmpfile" });
+      const uri = await capture();
       const canShare = await Sharing.isAvailableAsync();
       if (!canShare) {
         toast.show("Fitur share tidak tersedia di device ini", "error");
         return;
       }
-      await Sharing.shareAsync(uri, {
-        mimeType: "image/png",
-        dialogTitle: `Laporan Bulanan ${data.sales_code} ${MONTHS[month - 1]} ${year}`,
-      });
+      await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: title });
     } catch (e: any) {
       toast.show(e?.message || "Gagal share", "error");
     } finally {
-      setSharing(false);
+      setBusy(null);
     }
   };
+
+  const doSave = async () => {
+    setBusy("save");
+    try {
+      // Ask for permission
+      let perm = await MediaLibrary.getPermissionsAsync();
+      if (!perm.granted) {
+        if (!perm.canAskAgain) {
+          toast.show("Izin galeri ditolak. Buka Settings untuk aktifkan.", "error");
+          return;
+        }
+        perm = await MediaLibrary.requestPermissionsAsync();
+        if (!perm.granted) {
+          toast.show("Izin galeri diperlukan untuk menyimpan gambar", "error");
+          return;
+        }
+      }
+      const uri = await capture();
+      await MediaLibrary.saveToLibraryAsync(uri);
+      toast.show("Screenshot tersimpan di galeri", "success");
+    } catch (e: any) {
+      toast.show(e?.message || "Gagal simpan", "error");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <View style={shareBarStyles.row}>
+      <TouchableOpacity
+        onPress={doSave}
+        disabled={busy !== null}
+        style={[shareBarStyles.saveBtn, busy !== null && { opacity: 0.6 }]}
+        testID="save-screenshot-btn"
+      >
+        <Ionicons name="download-outline" size={16} color={theme.color.brand} />
+        <Text style={shareBarStyles.saveText}>{busy === "save" ? "Menyimpan…" : "Simpan ke Galeri"}</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={doShare}
+        disabled={busy !== null}
+        style={[shareBarStyles.shareBtn, busy !== null && { opacity: 0.6 }]}
+        testID="share-screenshot-btn"
+      >
+        <Ionicons name="share-social" size={16} color="#fff" />
+        <Text style={shareBarStyles.shareText}>{busy === "share" ? "Menyiapkan…" : "Share"}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const shareBarStyles = StyleSheet.create({
+  row: { flexDirection: "row", gap: 8, padding: 8, paddingBottom: 4, justifyContent: "flex-end" },
+  saveBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.color.brandPrimary,
+    backgroundColor: theme.color.surface,
+  },
+  saveText: { color: theme.color.brand, fontWeight: "700", fontSize: 12 },
+  shareBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#25D366",
+  },
+  shareText: { color: "#fff", fontWeight: "700", fontSize: 12 },
+});
+
+
+// ============================================================
+// COMPACT EXCEL VIEW — spreadsheet-style 3 columns
+// ============================================================
+function CompactExcelView({ data, year, month }: { data: any; year: number; month: number }) {
+  const shotRef = useRef<ViewShot>(null);
 
   // Fixed cell dimensions to mimic Excel grid on phone (~360 usable width for 3 columns)
   return (
     <View style={{ flex: 1 }}>
-      <View style={compactStyles.shareRow}>
-        <TouchableOpacity
-          onPress={shareShot}
-          disabled={sharing}
-          style={[compactStyles.shareBtn, sharing && { opacity: 0.6 }]}
-          testID="share-screenshot-btn"
-        >
-          <Ionicons name="share-social" size={16} color="#fff" />
-          <Text style={compactStyles.shareText}>{sharing ? "Menyiapkan…" : "Share Screenshot"}</Text>
-        </TouchableOpacity>
-      </View>
+      <ShareActionBar shotRef={shotRef} filename={`OXLY-${data.sales_code}-${year}-${String(month).padStart(2, "0")}`} title={`Laporan Bulanan ${data.sales_code} ${MONTHS[month - 1]} ${year}`} />
       <ScrollView contentContainerStyle={{ padding: 8, paddingBottom: 40 }}>
         <ViewShot ref={shotRef} style={{ backgroundColor: theme.color.surface }} options={{ format: "png", quality: 1 }}>
           <View style={{ padding: 4 }}>
@@ -745,17 +839,6 @@ function CompactExcelView({ data, year, month }: { data: any; year: number; mont
 }
 
 const compactStyles = StyleSheet.create({
-  shareRow: { padding: 8, paddingBottom: 0, alignItems: "flex-end" },
-  shareBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "#25D366",
-  },
-  shareText: { color: "#fff", fontWeight: "700", fontSize: 12 },
   title: { fontSize: 12, fontWeight: "700", color: theme.color.onSurface, textAlign: "center" },
   subtitle: { fontSize: 10, color: theme.color.muted, textAlign: "center", marginBottom: 8 },
   summaryCard: {

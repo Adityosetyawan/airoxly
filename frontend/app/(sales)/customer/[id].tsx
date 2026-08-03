@@ -1,9 +1,12 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import QRCode from "react-native-qrcode-svg";
+import ViewShot, { captureRef } from "react-native-view-shot";
+import * as Sharing from "expo-sharing";
+import * as MediaLibrary from "expo-media-library";
 import { theme, rp } from "@/src/theme";
 import { api, Customer, Transaction } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
@@ -16,6 +19,8 @@ export default function CustomerDetail() {
   const [txns, setTxns] = useState<Transaction[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  const [qrBusy, setQrBusy] = useState<null | "share" | "save">(null);
+  const qrShotRef = useRef<ViewShot>(null);
 
   const load = useCallback(async () => {
     try {
@@ -42,6 +47,63 @@ export default function CustomerDetail() {
     setRefreshing(true);
     await load();
     setRefreshing(false);
+  };
+
+  const captureQR = async (): Promise<string> => {
+    if (!qrShotRef.current) throw new Error("QR belum siap");
+    return await captureRef(qrShotRef, {
+      format: "png",
+      quality: 1,
+      result: "tmpfile",
+      fileName: `OXLY-QR-${c?.barcode_id || "customer"}`,
+    });
+  };
+
+  const shareQR = async () => {
+    if (!c) return;
+    setQrBusy("share");
+    try {
+      const uri = await captureQR();
+      const canShare = await Sharing.isAvailableAsync();
+      if (!canShare) {
+        toast.show("Fitur share tidak tersedia di device ini", "error");
+        return;
+      }
+      await Sharing.shareAsync(uri, {
+        mimeType: "image/png",
+        dialogTitle: `QR Pelanggan ${c.name}`,
+      });
+    } catch (e: any) {
+      toast.show(e?.message || "Gagal share QR", "error");
+    } finally {
+      setQrBusy(null);
+    }
+  };
+
+  const saveQR = async () => {
+    if (!c) return;
+    setQrBusy("save");
+    try {
+      let perm = await MediaLibrary.getPermissionsAsync();
+      if (!perm.granted) {
+        if (!perm.canAskAgain) {
+          toast.show("Izin galeri ditolak. Buka Settings untuk aktifkan.", "error");
+          return;
+        }
+        perm = await MediaLibrary.requestPermissionsAsync();
+        if (!perm.granted) {
+          toast.show("Izin galeri diperlukan untuk menyimpan gambar", "error");
+          return;
+        }
+      }
+      const uri = await captureQR();
+      await MediaLibrary.saveToLibraryAsync(uri);
+      toast.show("QR tersimpan di galeri", "success");
+    } catch (e: any) {
+      toast.show(e?.message || "Gagal simpan QR", "error");
+    } finally {
+      setQrBusy(null);
+    }
   };
 
   if (!c) {
@@ -79,10 +141,45 @@ export default function CustomerDetail() {
         </View>
 
         {showQR && (
-          <View style={styles.qrCard}>
-            <QRCode value={c.barcode_id} size={180} />
-            <Text style={styles.qrText}>{c.barcode_id}</Text>
-            <Text style={styles.qrHint}>Tempel/print QR ini di rumah pelanggan</Text>
+          <View style={styles.qrWrap}>
+            <ViewShot
+              ref={qrShotRef}
+              style={styles.qrCard}
+              options={{ format: "png", quality: 1 }}
+            >
+              <Text style={styles.qrStore}>Air OXLY</Text>
+              <Text style={styles.qrCustName}>{c.name}</Text>
+              <Text style={styles.qrCustNo}>Pelanggan #{c.customer_no}</Text>
+              <View style={styles.qrCodeBox}>
+                <QRCode value={c.barcode_id} size={200} />
+              </View>
+              <Text style={styles.qrText}>{c.barcode_id}</Text>
+              <Text style={styles.qrHint}>Scan untuk transaksi cepat</Text>
+            </ViewShot>
+            <View style={styles.qrActions}>
+              <TouchableOpacity
+                onPress={saveQR}
+                disabled={qrBusy !== null}
+                style={[styles.qrBtnGhost, qrBusy !== null && { opacity: 0.6 }]}
+                testID="save-qr-btn"
+              >
+                <Ionicons name="download-outline" size={16} color={theme.color.brand} />
+                <Text style={styles.qrBtnGhostText}>
+                  {qrBusy === "save" ? "Menyimpan…" : "Simpan ke Galeri"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={shareQR}
+                disabled={qrBusy !== null}
+                style={[styles.qrBtnShare, qrBusy !== null && { opacity: 0.6 }]}
+                testID="share-qr-btn"
+              >
+                <Ionicons name="share-social" size={16} color="#fff" />
+                <Text style={styles.qrBtnShareText}>
+                  {qrBusy === "share" ? "Menyiapkan…" : "Share"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -180,9 +277,59 @@ const styles = StyleSheet.create({
   avatarText: { color: "#fff", fontSize: 28, fontWeight: "600" },
   name: { fontSize: 20, fontWeight: "600", color: theme.color.onSurface, marginTop: 10 },
   no: { fontSize: 12, color: theme.color.muted, marginTop: 2 },
-  qrCard: { alignItems: "center", padding: 16, borderRadius: 14, backgroundColor: theme.color.surfaceSecondary, marginBottom: 16 },
-  qrText: { fontSize: 14, marginTop: 12, fontWeight: "600", color: theme.color.onSurface },
-  qrHint: { fontSize: 11, color: theme.color.muted, marginTop: 4 },
+  qrWrap: { marginBottom: 16 },
+  qrCard: {
+    alignItems: "center",
+    padding: 20,
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: theme.color.border,
+  },
+  qrStore: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: theme.color.brand,
+    letterSpacing: 1,
+  },
+  qrCustName: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#000",
+    marginTop: 6,
+    textAlign: "center",
+  },
+  qrCustNo: { fontSize: 11, color: "#555", marginBottom: 12 },
+  qrCodeBox: {
+    padding: 12,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+  },
+  qrText: { fontSize: 14, marginTop: 12, fontWeight: "700", color: "#000", letterSpacing: 0.5 },
+  qrHint: { fontSize: 10, color: "#666", marginTop: 4 },
+  qrActions: { flexDirection: "row", gap: 8, marginTop: 12, justifyContent: "flex-end" },
+  qrBtnGhost: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.color.brandPrimary,
+    backgroundColor: theme.color.surface,
+  },
+  qrBtnGhostText: { color: theme.color.brand, fontWeight: "700", fontSize: 12 },
+  qrBtnShare: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#25D366",
+  },
+  qrBtnShareText: { color: "#fff", fontWeight: "700", fontSize: 12 },
   kpiRow: { flexDirection: "row", gap: 12, marginBottom: 12 },
   kpi: { flex: 1, borderRadius: 14, padding: 14 },
   kpiLabel: { fontSize: 12, color: theme.color.onSurfaceSecondary },

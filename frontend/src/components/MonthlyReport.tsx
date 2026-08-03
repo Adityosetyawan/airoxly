@@ -12,12 +12,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import ViewShot, { captureRef } from "react-native-view-shot";
-import * as Sharing from "expo-sharing";
-import * as MediaLibrary from "expo-media-library";
+import ViewShot from "react-native-view-shot";
 import { theme, rp } from "@/src/theme";
 import { api, User } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
+import { saveShot, shareShot } from "@/src/utils/capture";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
 
@@ -153,11 +152,13 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
         <>
           <ShareActionBar
             shotRef={detailShotRef}
+            nativeId="oxly-report-detail-shot"
             filename={`OXLY-Detail-${data.sales_code}-${year}-${String(month).padStart(2, "0")}`}
             title={`Laporan Bulanan Detail ${data.sales_code} ${MONTHS[month - 1]} ${year}`}
           />
           <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: 40 }}>
-            <ViewShot ref={detailShotRef} style={{ backgroundColor: theme.color.surface }} options={{ format: "png", quality: 1 }}>
+            <View nativeID="oxly-report-detail-shot">
+              <ViewShot ref={detailShotRef} style={{ backgroundColor: theme.color.surface }} options={{ format: "png", quality: 1 }}>
               <View style={{ padding: 4 }}>
           {/* Group header */}
           <View style={styles.groupHeader}>
@@ -432,6 +433,7 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
           </View>
               </View>
             </ViewShot>
+            </View>
           </ScrollView>
         </>
       )}
@@ -539,31 +541,22 @@ function BiayaRow({
 // ============================================================
 function ShareActionBar({
   shotRef,
+  nativeId,
   filename,
   title,
 }: {
   shotRef: React.RefObject<ViewShot | null>;
+  nativeId: string;
   filename: string;
   title: string;
 }) {
   const toast = useToast();
   const [busy, setBusy] = useState<null | "share" | "save">(null);
 
-  const capture = async (): Promise<string> => {
-    if (!shotRef.current) throw new Error("View belum siap");
-    return await captureRef(shotRef, { format: "png", quality: 1, result: "tmpfile", fileName: filename });
-  };
-
   const doShare = async () => {
     setBusy("share");
     try {
-      const uri = await capture();
-      const canShare = await Sharing.isAvailableAsync();
-      if (!canShare) {
-        toast.show("Fitur share tidak tersedia di device ini", "error");
-        return;
-      }
-      await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: title });
+      await shareShot(shotRef, nativeId, filename, title);
     } catch (e: any) {
       toast.show(e?.message || "Gagal share", "error");
     } finally {
@@ -574,22 +567,11 @@ function ShareActionBar({
   const doSave = async () => {
     setBusy("save");
     try {
-      // Ask for permission
-      let perm = await MediaLibrary.getPermissionsAsync();
-      if (!perm.granted) {
-        if (!perm.canAskAgain) {
-          toast.show("Izin galeri ditolak. Buka Settings untuk aktifkan.", "error");
-          return;
-        }
-        perm = await MediaLibrary.requestPermissionsAsync();
-        if (!perm.granted) {
-          toast.show("Izin galeri diperlukan untuk menyimpan gambar", "error");
-          return;
-        }
-      }
-      const uri = await capture();
-      await MediaLibrary.saveToLibraryAsync(uri);
-      toast.show("Screenshot tersimpan di galeri", "success");
+      await saveShot(shotRef, nativeId, filename);
+      toast.show(
+        Platform.OS === "web" ? "Berhasil diunduh" : "Screenshot tersimpan di galeri",
+        "success",
+      );
     } catch (e: any) {
       toast.show(e?.message || "Gagal simpan", "error");
     } finally {
@@ -657,9 +639,10 @@ function CompactExcelView({ data, year, month }: { data: any; year: number; mont
   // Fixed cell dimensions to mimic Excel grid on phone (~360 usable width for 3 columns)
   return (
     <View style={{ flex: 1 }}>
-      <ShareActionBar shotRef={shotRef} filename={`OXLY-${data.sales_code}-${year}-${String(month).padStart(2, "0")}`} title={`Laporan Bulanan ${data.sales_code} ${MONTHS[month - 1]} ${year}`} />
+      <ShareActionBar shotRef={shotRef} nativeId="oxly-report-excel-shot" filename={`OXLY-${data.sales_code}-${year}-${String(month).padStart(2, "0")}`} title={`Laporan Bulanan ${data.sales_code} ${MONTHS[month - 1]} ${year}`} />
       <ScrollView contentContainerStyle={{ padding: 8, paddingBottom: 40 }}>
-        <ViewShot ref={shotRef} style={{ backgroundColor: theme.color.surface }} options={{ format: "png", quality: 1 }}>
+        <View nativeID="oxly-report-excel-shot">
+          <ViewShot ref={shotRef} style={{ backgroundColor: theme.color.surface }} options={{ format: "png", quality: 1 }}>
           <View style={{ padding: 4 }}>
             {/* Header */}
             <Text style={compactStyles.title}>
@@ -833,6 +816,7 @@ function CompactExcelView({ data, year, month }: { data: any; year: number; mont
       </Text>
           </View>
         </ViewShot>
+        </View>
     </ScrollView>
     </View>
   );

@@ -1,0 +1,28 @@
+{
+  "summary": "Web preview bug fix VERIFIED. All 4 target flows (Save/Share QR Pelanggan, Save/Share Laporan Bulanan Detail + Excel) now trigger browser PNG downloads with NO 'findNodeHandle is not supported on web' errors. Downloads captured: OXLY-QR-A1-OXLY-1.png (save+share), OXLY-Detail-A1-2026-08.png (save+share), OXLY-A1-2026-08.png (save+share). Toast displays 'Berhasil diunduh' on save. html-to-image@1.11.13 present in node_modules. Regression: Login (sales A1, super_admin), customers list, customer detail with QR toggle, Bulanan tab with sales chips A1/A2/B1/A3, mode toggle Detail↔Excel all render correctly.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_oxly_backend.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "capture.ts: uses `React.RefObject<ViewShot | null>` – fine; native path relies on captureRef which is unchanged. Web path guards `typeof document === 'undefined'` – good.",
+    "webShare() catches any error from navigator.share and always falls back to webDownload – acceptable UX (user gets file either way). On headless Chrome, navigator.share is undefined so download fallback fires – confirmed working.",
+    "Both ShareActionBar and QR actions correctly wrap ViewShot in <View nativeID='oxly-*-shot'> which renders as DOM id, and html-to-image resolves the element via getElementById. Verified: document.getElementById returned the element on both /monthly (detail & excel) and /customer/[id] pages.",
+    "No 'expo-av' / 'expo-barcode-scanner' / 'expo-background-fetch' deprecated packages found in package.json.",
+    "Two React Native web deprecation warnings appear in console (informational, non-blocking): 'shadow*' style props deprecated (use boxShadow) and 'props.pointerEvents deprecated (use style.pointerEvents)'. Coming from react-native-web internals and library styles; not from the capture bug fix. Safe to leave for main agent to address separately if desired."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not re-tested (unchanged since iteration_1)", "frontend": "100% on 4 targeted flows + regression sanity"},
+  "seed_data_creation": "Reused existing seed data (A1 customer #1 = 'Budi', barcode A1-OXLY-1). Sales A1 already has transactions/GPS pings for Aug 2026 which populated the Bulanan report with Rp 80.000 penjualan, 4 galon, -22.000 net income – confirms end-to-end capture with real data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Bug fix for 'findNodeHandle is not supported on web' fully verified in web preview at https://oxly-crm.preview.emergentagent.com. QR flow: login A1/sales123 → /customers → click any customer card (data-testid=customer-<UUID>) → data-testid=show-qr-btn → save-qr-btn / share-qr-btn. Monthly flow: login superadmin/super123 → click bottom-tab 'Bulanan' (or /monthly) → sales-chip-A1 → save-screenshot-btn / share-screenshot-btn (Detail mode default); then toggle-compact-mode → same buttons for Excel. On headless Chrome, share falls back to download because navigator.canShare({files}) returns false – this is correct spec behavior."
+}

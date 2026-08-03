@@ -1,16 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Platform, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import QRCode from "react-native-qrcode-svg";
-import ViewShot, { captureRef } from "react-native-view-shot";
-import * as Sharing from "expo-sharing";
-import * as MediaLibrary from "expo-media-library";
+import ViewShot from "react-native-view-shot";
 import * as Location from "expo-location";
 import { theme, rp } from "@/src/theme";
 import { api, Customer, Transaction } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
+import { saveShot, shareShot } from "@/src/utils/capture";
 
 export default function CustomerDetail() {
   const params = useLocalSearchParams<{ id: string; action?: string }>();
@@ -51,30 +50,13 @@ export default function CustomerDetail() {
     setRefreshing(false);
   };
 
-  const captureQR = async (): Promise<string> => {
-    if (!qrShotRef.current) throw new Error("QR belum siap");
-    return await captureRef(qrShotRef, {
-      format: "png",
-      quality: 1,
-      result: "tmpfile",
-      fileName: `OXLY-QR-${c?.barcode_id || "customer"}`,
-    });
-  };
+  const captureFilename = () => `OXLY-QR-${c?.barcode_id || "customer"}`;
 
   const shareQR = async () => {
     if (!c) return;
     setQrBusy("share");
     try {
-      const uri = await captureQR();
-      const canShare = await Sharing.isAvailableAsync();
-      if (!canShare) {
-        toast.show("Fitur share tidak tersedia di device ini", "error");
-        return;
-      }
-      await Sharing.shareAsync(uri, {
-        mimeType: "image/png",
-        dialogTitle: `QR Pelanggan ${c.name}`,
-      });
+      await shareShot(qrShotRef, "oxly-qr-shot", captureFilename(), `QR Pelanggan ${c.name}`);
     } catch (e: any) {
       toast.show(e?.message || "Gagal share QR", "error");
     } finally {
@@ -86,21 +68,11 @@ export default function CustomerDetail() {
     if (!c) return;
     setQrBusy("save");
     try {
-      let perm = await MediaLibrary.getPermissionsAsync();
-      if (!perm.granted) {
-        if (!perm.canAskAgain) {
-          toast.show("Izin galeri ditolak. Buka Settings untuk aktifkan.", "error");
-          return;
-        }
-        perm = await MediaLibrary.requestPermissionsAsync();
-        if (!perm.granted) {
-          toast.show("Izin galeri diperlukan untuk menyimpan gambar", "error");
-          return;
-        }
-      }
-      const uri = await captureQR();
-      await MediaLibrary.saveToLibraryAsync(uri);
-      toast.show("QR tersimpan di galeri", "success");
+      await saveShot(qrShotRef, "oxly-qr-shot", captureFilename());
+      toast.show(
+        Platform.OS === "web" ? "QR berhasil diunduh" : "QR tersimpan di galeri",
+        "success",
+      );
     } catch (e: any) {
       toast.show(e?.message || "Gagal simpan QR", "error");
     } finally {
@@ -174,6 +146,7 @@ export default function CustomerDetail() {
 
         {showQR && (
           <View style={styles.qrWrap}>
+          <View nativeID="oxly-qr-shot">
             <ViewShot
               ref={qrShotRef}
               style={styles.qrCard}
@@ -188,6 +161,7 @@ export default function CustomerDetail() {
               <Text style={styles.qrText}>{c.barcode_id}</Text>
               <Text style={styles.qrHint}>Scan untuk transaksi cepat</Text>
             </ViewShot>
+          </View>
             <View style={styles.qrActions}>
               <TouchableOpacity
                 onPress={saveQR}

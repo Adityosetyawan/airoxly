@@ -196,6 +196,37 @@ export const api = {
     req<Expense>("/expenses", { method: "POST", body: JSON.stringify(body) }),
   deleteExpense: (id: string) => req(`/expenses/${id}`, { method: "DELETE" }),
 
+  // Part prices (red — super admin)
+  listPartPrices: () => req<any[]>("/part-prices"),
+  updatePartPrice: (id: string, body: { name: string; rp_per_pcs: number; order?: number }) =>
+    req(`/part-prices/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+
+  // Settings
+  getSetting: (key: string) => req<{ key: string; value: any }>(`/settings/${key}`),
+  setSetting: (key: string, value: any) =>
+    req(`/settings/${key}`, { method: "PUT", body: JSON.stringify({ key, value }) }),
+
+  // Monthly report
+  monthlyReport: (params: { sales_id: string; year: number; month: number }) => {
+    const q = new URLSearchParams({
+      sales_id: params.sales_id,
+      year: String(params.year),
+      month: String(params.month),
+    });
+    return req<any>(`/reports/monthly?${q.toString()}`);
+  },
+  updateMonthlyReport: (
+    params: { sales_id: string; year: number; month: number },
+    body: any,
+  ) => {
+    const q = new URLSearchParams({
+      sales_id: params.sales_id,
+      year: String(params.year),
+      month: String(params.month),
+    });
+    return req(`/reports/monthly?${q.toString()}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+
   // Location
   pingLocation: (lat: number, lng: number) =>
     req("/location/ping", { method: "POST", body: JSON.stringify({ lat, lng }) }),

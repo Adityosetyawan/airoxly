@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Literal, Any
 import uuid
 from datetime import datetime, timezone, timedelta
+import calendar
 import jwt
 from passlib.context import CryptContext
 
@@ -168,6 +169,33 @@ class ExpenseCreate(BaseModel):
     date: Optional[str] = None  # ISO date; defaults to today
 
 
+class PartPriceUpdate(BaseModel):
+    name: str
+    rp_per_pcs: float
+    order: Optional[int] = 0
+
+
+class SettingUpdate(BaseModel):
+    key: str
+    value: Any
+
+
+class MonthlyReportUpdate(BaseModel):
+    # yellow — filled by admin
+    gaji_sopir: Optional[float] = None
+    gaji_kernet: Optional[float] = None
+    bonus_per_galon_1: Optional[float] = None
+    bonus_per_galon_2: Optional[float] = None
+    komisi: Optional[float] = None
+    bonus_target_mg1: Optional[float] = None
+    bonus_target_mg2: Optional[float] = None
+    bonus_target_mg3: Optional[float] = None
+    bonus_target_mg4: Optional[float] = None
+    bonus_target_mg5: Optional[float] = None
+    # part qty consumed this month (yellow — admin)
+    part_qtys: Optional[dict] = None  # { "Seal": 5, "Mur": 3, ... }
+
+
 # ============================================================
 # HELPERS
 # ============================================================
@@ -276,12 +304,33 @@ async def seed():
     await db.transactions.create_index("sales_id")
     await db.expenses.create_index("date_only")
     await db.expenses.create_index("sales_id")
+    await db.monthly_reports.create_index([("sales_id", 1), ("year", 1), ("month", 1)], unique=True)
+    await db.settings.create_index("key", unique=True)
 
     # Seed products if none
     if await db.products.count_documents({}) == 0:
         for p in DEFAULT_PRODUCTS:
             p2 = dict(p, id=str(uuid.uuid4()), created_at=now_utc().isoformat())
             await db.products.insert_one(p2)
+
+    # Seed part prices (red — super admin permanent)
+    DEFAULT_PARTS = [
+        {"name": "Seal", "rp_per_pcs": 5000, "order": 1},
+        {"name": "Mur", "rp_per_pcs": 3000, "order": 2},
+        {"name": "Kran", "rp_per_pcs": 15000, "order": 3},
+        {"name": "Galon Kran", "rp_per_pcs": 45000, "order": 4},
+        {"name": "Galon Polos", "rp_per_pcs": 40000, "order": 5},
+        {"name": "Stiker", "rp_per_pcs": 2000, "order": 6},
+        {"name": "Stoper", "rp_per_pcs": 4000, "order": 7},
+        {"name": "Karet Kran", "rp_per_pcs": 3000, "order": 8},
+    ]
+    if await db.part_prices.count_documents({}) == 0:
+        for p in DEFAULT_PARTS:
+            await db.part_prices.insert_one({**p, "id": str(uuid.uuid4()), "created_at": now_utc().isoformat()})
+
+    # Seed default rp_kulakan (per galon)
+    if not await db.settings.find_one({"key": "rp_kulakan_per_galon"}):
+        await db.settings.insert_one({"key": "rp_kulakan_per_galon", "value": 13000})
 
     # Seed users if none
     for u in DEFAULT_USERS:
@@ -891,6 +940,247 @@ async def daily_report(
         a["total_setoran"] = max(0.0, a["total_bayar"] - a["total_pengeluaran"])
     total_all["total_setoran"] = max(0.0, total_all["total_bayar"] - total_all["total_pengeluaran"])
     return {"date": d, "totals": total_all, "groups": list(agg.values())}
+
+
+# ============================================================
+# PART PRICES & SETTINGS (Red — Super Admin permanent)
+# ============================================================
+@api.get("/part-prices")
+async def list_part_prices(user=Depends(get_current_user)):
+    items = await db.part_prices.find({}, {"_id": 0}).sort("order", 1).to_list(100)
+    return items
+
+
+@api.patch("/part-prices/{part_id}")
+async def update_part_price(part_id: str, body: PartPriceUpdate, user=Depends(require_roles("super_admin"))):
+    await db.part_prices.update_one(
+        {"id": part_id},
+        {"$set": {"name": body.name, "rp_per_pcs": float(body.rp_per_pcs), "order": int(body.order or 0)}},
+    )
+    p = await db.part_prices.find_one({"id": part_id}, {"_id": 0})
+    return p
+
+
+@api.get("/settings/{key}")
+async def get_setting(key: str, user=Depends(get_current_user)):
+    s = await db.settings.find_one({"key": key}, {"_id": 0})
+    if not s:
+        return {"key": key, "value": None}
+    return s
+
+
+@api.put("/settings/{key}")
+async def set_setting(key: str, body: SettingUpdate, user=Depends(require_roles("super_admin"))):
+    await db.settings.update_one({"key": key}, {"$set": {"key": key, "value": body.value}}, upsert=True)
+    return {"key": key, "value": body.value}
+
+
+# ============================================================
+# MONTHLY REPORT (Laporan Bulanan)
+# ============================================================
+DAY_NAMES_ID = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
+
+
+async def _get_monthly_admin_doc(sales_id: str, year: int, month: int) -> dict:
+    doc = await db.monthly_reports.find_one(
+        {"sales_id": sales_id, "year": year, "month": month},
+        {"_id": 0},
+    )
+    if not doc:
+        doc = {
+            "sales_id": sales_id,
+            "year": year,
+            "month": month,
+            "gaji_sopir": 0,
+            "gaji_kernet": 0,
+            "bonus_per_galon_1": 0,
+            "bonus_per_galon_2": 0,
+            "komisi": 0,
+            "bonus_target_mg1": 0,
+            "bonus_target_mg2": 0,
+            "bonus_target_mg3": 0,
+            "bonus_target_mg4": 0,
+            "bonus_target_mg5": 0,
+            "part_qtys": {},
+        }
+    return doc
+
+
+@api.get("/reports/monthly")
+async def monthly_report(
+    sales_id: str,
+    year: int,
+    month: int,
+    user=Depends(get_current_user),
+):
+    # RBAC
+    target_user = await db.users.find_one({"id": sales_id})
+    if not target_user:
+        raise HTTPException(404, "Sales tidak ditemukan")
+    if user["role"] == "sales" and user["id"] != sales_id:
+        raise HTTPException(403, "Forbidden")
+    if user["role"] == "admin" and target_user.get("group_letter") != user.get("group_letter"):
+        raise HTTPException(403, "Forbidden")
+
+    # date range
+    ndays = calendar.monthrange(year, month)[1]
+    start = f"{year:04d}-{month:02d}-01"
+    end = f"{year:04d}-{month:02d}-{ndays:02d}"
+
+    # Green: daily transactions
+    txns = await db.transactions.find(
+        {"sales_id": sales_id, "date_only": {"$gte": start, "$lte": end}},
+        {"_id": 0},
+    ).to_list(10000)
+
+    daily_map: dict = {}  # day -> {"bayar": .., "gln": .., "count": ..}
+    total_bayar = 0.0
+    total_uang = 0.0
+    total_gln = 0
+    for t in txns:
+        d = int(t["date_only"].split("-")[2])
+        row = daily_map.setdefault(d, {"bayar": 0.0, "uang": 0.0, "gln": 0, "count": 0})
+        row["bayar"] += float(t.get("bayar", 0))
+        row["uang"] += float(t.get("total", 0))
+        gln = sum(int(it.get("qty", 0)) for it in t.get("items", []) if it.get("unit") == "gln" and "Kosong" not in it.get("product_name", ""))
+        row["gln"] += gln
+        row["count"] += 1
+        total_bayar += float(t.get("bayar", 0))
+        total_uang += float(t.get("total", 0))
+        total_gln += gln
+
+    daily = []
+    for day in range(1, ndays + 1):
+        dt = datetime(year, month, day)
+        day_name = DAY_NAMES_ID[dt.weekday()]
+        r = daily_map.get(day, {"bayar": 0.0, "uang": 0.0, "gln": 0, "count": 0})
+        daily.append({
+            "no": day,
+            "date": dt.strftime("%Y-%m-%d"),
+            "day_name": day_name,
+            "penjualan": r["uang"],  # nilai jual per hari
+            "bayar": r["bayar"],
+            "gln": r["gln"],
+            "count": r["count"],
+        })
+    A1_penjualan = total_uang  # nilai penjualan (total kotor / omzet)
+
+    # Green: sales expenses (BBM/Servis/dll) in the month
+    expenses = await db.expenses.find(
+        {"sales_id": sales_id, "date_only": {"$gte": start, "$lte": end}},
+        {"_id": 0},
+    ).sort("date", 1).to_list(10000)
+    total_sales_expenses = sum(float(e.get("amount", 0)) for e in expenses)
+
+    # Yellow: admin filled values
+    admin = await _get_monthly_admin_doc(sales_id, year, month)
+
+    A2_gaji_bonus = sum([
+        float(admin.get("gaji_sopir", 0) or 0),
+        float(admin.get("gaji_kernet", 0) or 0),
+        float(admin.get("bonus_per_galon_1", 0) or 0),
+        float(admin.get("bonus_per_galon_2", 0) or 0),
+        float(admin.get("komisi", 0) or 0),
+        float(admin.get("bonus_target_mg1", 0) or 0),
+        float(admin.get("bonus_target_mg2", 0) or 0),
+        float(admin.get("bonus_target_mg3", 0) or 0),
+        float(admin.get("bonus_target_mg4", 0) or 0),
+        float(admin.get("bonus_target_mg5", 0) or 0),
+    ])
+
+    # Red: part prices + Yellow: qty
+    parts_docs = await db.part_prices.find({}, {"_id": 0}).sort("order", 1).to_list(100)
+    part_qtys = admin.get("part_qtys", {}) or {}
+    parts = []
+    parts_total = 0.0
+    for p in parts_docs:
+        qty = int(part_qtys.get(p["name"], 0) or 0)
+        subtotal = float(p.get("rp_per_pcs", 0)) * qty
+        parts_total += subtotal
+        parts.append({
+            "id": p["id"],
+            "name": p["name"],
+            "rp_per_pcs": float(p.get("rp_per_pcs", 0)),
+            "qty": qty,
+            "subtotal": subtotal,
+        })
+
+    A3_biaya_operasional = parts_total + total_sales_expenses
+
+    # Red: Rp kulakan per galon
+    kulakan_setting = await db.settings.find_one({"key": "rp_kulakan_per_galon"}, {"_id": 0})
+    rp_kulakan = float((kulakan_setting or {}).get("value") or 0)
+    A4_kulakan = rp_kulakan * total_gln
+
+    # Net income
+    pendapatan_bersih = A1_penjualan - A4_kulakan - A3_biaya_operasional - A2_gaji_bonus
+
+    return {
+        "sales_id": sales_id,
+        "sales_code": target_user.get("sales_code") or target_user.get("username"),
+        "sales_name": target_user.get("name"),
+        "group_letter": target_user.get("group_letter"),
+        "year": year,
+        "month": month,
+        "days_in_month": ndays,
+        "daily": daily,
+        "total_gln_sold": total_gln,
+        "total_bayar": total_bayar,
+        # green
+        "sales_expenses": expenses,
+        "total_sales_expenses": total_sales_expenses,
+        # yellow (admin)
+        "admin": {
+            "gaji_sopir": float(admin.get("gaji_sopir", 0) or 0),
+            "gaji_kernet": float(admin.get("gaji_kernet", 0) or 0),
+            "bonus_per_galon_1": float(admin.get("bonus_per_galon_1", 0) or 0),
+            "bonus_per_galon_2": float(admin.get("bonus_per_galon_2", 0) or 0),
+            "komisi": float(admin.get("komisi", 0) or 0),
+            "bonus_target_mg1": float(admin.get("bonus_target_mg1", 0) or 0),
+            "bonus_target_mg2": float(admin.get("bonus_target_mg2", 0) or 0),
+            "bonus_target_mg3": float(admin.get("bonus_target_mg3", 0) or 0),
+            "bonus_target_mg4": float(admin.get("bonus_target_mg4", 0) or 0),
+            "bonus_target_mg5": float(admin.get("bonus_target_mg5", 0) or 0),
+        },
+        "parts": parts,
+        "rp_kulakan_per_galon": rp_kulakan,
+        # totals
+        "A1_penjualan": A1_penjualan,
+        "A2_gaji_bonus": A2_gaji_bonus,
+        "A3_biaya_operasional": A3_biaya_operasional,
+        "A3_parts_total": parts_total,
+        "A3_sales_expenses_total": total_sales_expenses,
+        "A4_kulakan": A4_kulakan,
+        "pendapatan_bersih": pendapatan_bersih,
+    }
+
+
+@api.patch("/reports/monthly")
+async def update_monthly_report(
+    sales_id: str,
+    year: int,
+    month: int,
+    body: MonthlyReportUpdate,
+    user=Depends(get_current_user),
+):
+    # only admin (own group) & super_admin can edit yellow fields
+    target_user = await db.users.find_one({"id": sales_id})
+    if not target_user:
+        raise HTTPException(404, "Sales tidak ditemukan")
+    if user["role"] == "sales":
+        raise HTTPException(403, "Forbidden")
+    if user["role"] == "admin" and target_user.get("group_letter") != user.get("group_letter"):
+        raise HTTPException(403, "Forbidden")
+
+    update = {k: v for k, v in body.dict(exclude_unset=True).items() if v is not None}
+    if not update:
+        return {"ok": True}
+    await db.monthly_reports.update_one(
+        {"sales_id": sales_id, "year": year, "month": month},
+        {"$set": {**update, "sales_id": sales_id, "year": year, "month": month, "updated_at": now_utc().isoformat()}},
+        upsert=True,
+    )
+    return {"ok": True}
 
 
 # ============================================================

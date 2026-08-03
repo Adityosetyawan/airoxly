@@ -45,6 +45,8 @@ export type Customer = {
   total_purchases: number;
   purchase_count: number;
   last_purchase_date?: string | null;
+  lat?: number | null;
+  lng?: number | null;
 };
 
 export type TransactionItem = {

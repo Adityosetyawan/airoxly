@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { theme } from "@/src/theme";
-import { api } from "@/src/api";
+import { api, Customer } from "@/src/api";
 import LeafletMap, { MapMarker, MapPolyline } from "@/src/components/LeafletMap";
 import { useToast } from "@/src/components/Toast";
 
@@ -46,6 +46,8 @@ export default function RouteHistory() {
   const [salesList, setSalesList] = useState<any[]>([]);
   const [date, setDate] = useState<string>(todayISO());
   const [points, setPoints] = useState<{ lat: number; lng: number; ts: string }[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [showCustomers, setShowCustomers] = useState(true);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -65,8 +67,12 @@ export default function RouteHistory() {
     if (!salesId) return;
     setLoading(true);
     try {
-      const items = await api.locationHistory(salesId, date);
+      const [items, custs] = await Promise.all([
+        api.locationHistory(salesId, date),
+        api.listCustomers({ sales_id: salesId }),
+      ]);
       setPoints(items.map((p) => ({ lat: p.lat, lng: p.lng, ts: p.ts })));
+      setCustomers(custs.filter((c) => c.lat != null && c.lng != null));
     } catch (e: any) {
       toast.show(e?.message || "Gagal ambil riwayat", "error");
     } finally {
@@ -101,8 +107,32 @@ export default function RouteHistory() {
       const last = points[points.length - 1];
       m.push({ lat: last.lat, lng: last.lng, label: "END", color: "dc2626" });
     }
+    if (showCustomers) {
+      customers.forEach((c) => {
+        if (c.lat == null || c.lng == null) return;
+        // Highlight customers "visited" (within 100m of any route point)
+        const visited = points.some((p) => haversineKm({ lat: p.lat, lng: p.lng }, { lat: c.lat!, lng: c.lng! }) < 0.1);
+        m.push({
+          lat: c.lat,
+          lng: c.lng,
+          label: `#${c.customer_no}`,
+          color: visited ? "f59e0b" : "6b7280",
+          popup: `<b>${c.name}</b><br>${c.barcode_id}<br>${visited ? "✅ Dikunjungi" : "Belum dikunjungi hari ini"}`,
+        });
+      });
+    }
     return m;
-  }, [points]);
+  }, [points, customers, showCustomers]);
+
+  const visitedCount = useMemo(() => {
+    if (points.length === 0) return 0;
+    return customers.filter(
+      (c) =>
+        c.lat != null &&
+        c.lng != null &&
+        points.some((p) => haversineKm({ lat: p.lat, lng: p.lng }, { lat: c.lat!, lng: c.lng! }) < 0.1),
+    ).length;
+  }, [points, customers]);
 
   const selectedSales = salesList.find((s) => s.id === salesId);
 
@@ -168,9 +198,37 @@ export default function RouteHistory() {
         <View style={{ height: 16 }} />
         <LeafletMap markers={markers} polylines={polylines} height={340} />
 
+        <View style={styles.legendRow}>
+          <TouchableOpacity
+            onPress={() => setShowCustomers((v) => !v)}
+            style={[styles.toggleBtn, showCustomers && styles.toggleBtnActive]}
+            testID="toggle-customers-btn"
+          >
+            <Ionicons
+              name={showCustomers ? "eye" : "eye-off"}
+              size={14}
+              color={showCustomers ? "#fff" : theme.color.brand}
+            />
+            <Text style={[styles.toggleText, showCustomers && styles.toggleTextActive]}>
+              Pelanggan ({customers.length})
+            </Text>
+          </TouchableOpacity>
+          <View style={styles.legendGroup}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: "#f59e0b" }]} />
+              <Text style={styles.legendText}>Dikunjungi</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: "#6b7280" }]} />
+              <Text style={styles.legendText}>Terlewat</Text>
+            </View>
+          </View>
+        </View>
+
         <View style={styles.statsRow}>
           <StatBox label="Titik" value={String(points.length)} icon="location" />
           <StatBox label="Jarak" value={`${totalKm.toFixed(2)} km`} icon="walk" />
+          <StatBox label="Kunjungan" value={`${visitedCount}/${customers.length}`} icon="people" />
           <StatBox
             label="Durasi"
             value={
@@ -297,19 +355,44 @@ const styles = StyleSheet.create({
   todayText: { color: "#fff", fontWeight: "600", fontSize: 12 },
   statsRow: {
     flexDirection: "row",
-    gap: 8,
-    marginTop: 12,
+    gap: 6,
+    marginTop: 8,
   },
   stat: {
     flex: 1,
-    padding: 12,
+    padding: 10,
     borderRadius: 12,
     backgroundColor: theme.color.surfaceSecondary,
     alignItems: "center",
-    gap: 4,
+    gap: 2,
   },
-  statValue: { fontSize: 16, fontWeight: "700", color: theme.color.onSurface },
-  statLabel: { fontSize: 11, color: theme.color.muted },
+  statValue: { fontSize: 14, fontWeight: "700", color: theme.color.onSurface },
+  statLabel: { fontSize: 10, color: theme.color.muted },
+  legendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 10,
+    gap: 8,
+  },
+  toggleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.color.brandPrimary,
+    backgroundColor: theme.color.surface,
+  },
+  toggleBtnActive: { backgroundColor: theme.color.brandPrimary },
+  toggleText: { fontSize: 11, color: theme.color.brand, fontWeight: "600" },
+  toggleTextActive: { color: "#fff" },
+  legendGroup: { flexDirection: "row", gap: 10, alignItems: "center", flexShrink: 1 },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 4 },
+  legendDot: { width: 10, height: 10, borderRadius: 5 },
+  legendText: { fontSize: 11, color: theme.color.muted },
   infoCard: {
     marginTop: 12,
     padding: 12,

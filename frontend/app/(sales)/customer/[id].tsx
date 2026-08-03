@@ -7,6 +7,7 @@ import QRCode from "react-native-qrcode-svg";
 import ViewShot, { captureRef } from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
 import * as MediaLibrary from "expo-media-library";
+import * as Location from "expo-location";
 import { theme, rp } from "@/src/theme";
 import { api, Customer, Transaction } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
@@ -20,6 +21,7 @@ export default function CustomerDetail() {
   const [refreshing, setRefreshing] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [qrBusy, setQrBusy] = useState<null | "share" | "save">(null);
+  const [locBusy, setLocBusy] = useState(false);
   const qrShotRef = useRef<ViewShot>(null);
 
   const load = useCallback(async () => {
@@ -103,6 +105,36 @@ export default function CustomerDetail() {
       toast.show(e?.message || "Gagal simpan QR", "error");
     } finally {
       setQrBusy(null);
+    }
+  };
+
+  const setLocation = async () => {
+    if (!c) return;
+    setLocBusy(true);
+    try {
+      let perm = await Location.getForegroundPermissionsAsync();
+      if (!perm.granted) {
+        if (!perm.canAskAgain) {
+          toast.show("Izin lokasi ditolak. Buka Settings untuk aktifkan.", "error");
+          return;
+        }
+        perm = await Location.requestForegroundPermissionsAsync();
+        if (!perm.granted) {
+          toast.show("Izin lokasi diperlukan untuk simpan titik pelanggan", "error");
+          return;
+        }
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const updated = await api.updateCustomer(c.id, {
+        lat: loc.coords.latitude,
+        lng: loc.coords.longitude,
+      });
+      setC(updated);
+      toast.show("Lokasi pelanggan tersimpan", "success");
+    } catch (e: any) {
+      toast.show(e?.message || "Gagal ambil lokasi", "error");
+    } finally {
+      setLocBusy(false);
     }
   };
 
@@ -199,10 +231,38 @@ export default function CustomerDetail() {
         <View style={styles.card}>
           <Row label="Alamat" value={c.address || "-"} />
           <Row label="No. WhatsApp" value={c.wa_number || "-"} />
+          <Row
+            label="Titik Lokasi"
+            value={
+              c.lat != null && c.lng != null
+                ? `${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}`
+                : "Belum diset"
+            }
+          />
           <Row label="Total belanja" value={"Rp " + rp(c.total_purchases || 0)} />
           <Row label="Jumlah transaksi" value={String(c.purchase_count || 0) + "×"} />
           <Row label="Terakhir beli" value={c.last_purchase_date ? new Date(c.last_purchase_date).toLocaleString("id-ID") : "Belum pernah"} />
         </View>
+
+        <TouchableOpacity
+          onPress={setLocation}
+          disabled={locBusy}
+          style={[styles.locBtn, locBusy && { opacity: 0.6 }]}
+          testID="set-location-btn"
+        >
+          <Ionicons
+            name={c.lat != null ? "refresh-outline" : "location-outline"}
+            size={18}
+            color={theme.color.brand}
+          />
+          <Text style={styles.locBtnText}>
+            {locBusy
+              ? "Mengambil GPS…"
+              : c.lat != null
+              ? "Perbarui Titik Lokasi Pelanggan"
+              : "Set Titik Lokasi Pelanggan (GPS)"}
+          </Text>
+        </TouchableOpacity>
 
         <View style={styles.actions}>
           <TouchableOpacity
@@ -346,6 +406,20 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: 13, color: theme.color.muted },
   rowValue: { fontSize: 13, color: theme.color.onSurface, fontWeight: "500", flexShrink: 1, textAlign: "right" },
   actions: { flexDirection: "row", gap: 8, marginTop: 16 },
+  locBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.color.brandPrimary,
+    borderStyle: "dashed",
+    marginTop: 12,
+    backgroundColor: theme.color.brandTertiary,
+  },
+  locBtnText: { color: theme.color.brand, fontWeight: "600", fontSize: 13 },
   actMain: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 14, borderRadius: 14, backgroundColor: theme.color.brandPrimary },
   actMainText: { color: "#fff", fontWeight: "600", fontSize: 15 },
   actGhost: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 16, borderRadius: 14, borderWidth: 1, borderColor: theme.color.brandPrimary },

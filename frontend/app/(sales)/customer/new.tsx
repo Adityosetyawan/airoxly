@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as Location from "expo-location";
 import { theme } from "@/src/theme";
 import { api } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
@@ -25,6 +26,33 @@ export default function NewCustomer() {
   const [address, setAddress] = useState("");
   const [barcode, setBarcode] = useState(params.barcode || "");
   const [loading, setLoading] = useState(false);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locBusy, setLocBusy] = useState(false);
+
+  const captureLocation = async () => {
+    setLocBusy(true);
+    try {
+      let perm = await Location.getForegroundPermissionsAsync();
+      if (!perm.granted) {
+        if (!perm.canAskAgain) {
+          toast.show("Izin lokasi ditolak. Buka Settings.", "error");
+          return;
+        }
+        perm = await Location.requestForegroundPermissionsAsync();
+        if (!perm.granted) {
+          toast.show("Izin lokasi diperlukan", "error");
+          return;
+        }
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      setCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+      toast.show("Lokasi tersimpan", "success");
+    } catch (e: any) {
+      toast.show(e?.message || "Gagal ambil lokasi", "error");
+    } finally {
+      setLocBusy(false);
+    }
+  };
 
   const save = async () => {
     if (!name.trim()) {
@@ -38,6 +66,8 @@ export default function NewCustomer() {
         wa_number: wa.trim(),
         address: address.trim(),
         barcode_id: barcode.trim() || undefined,
+        lat: coords?.lat,
+        lng: coords?.lng,
       });
       toast.show("Pelanggan disimpan", "success");
       router.replace({ pathname: "/(sales)/customer/[id]", params: { id: c.id } });
@@ -73,6 +103,30 @@ export default function NewCustomer() {
           <TextInput value={barcode} onChangeText={setBarcode} placeholder="Kosongkan untuk auto-generate" placeholderTextColor={theme.color.muted} style={styles.input} testID="barcode-input" />
           <Text style={styles.hint}>Jika dikosongkan, sistem generate otomatis: [KODE_SALES]-OXLY-[No.urut per sales]</Text>
 
+          <Text style={styles.label}>Titik Lokasi (opsional)</Text>
+          <TouchableOpacity
+            onPress={captureLocation}
+            disabled={locBusy}
+            style={[styles.locBtn, locBusy && { opacity: 0.6 }]}
+            testID="capture-location-btn"
+          >
+            <Ionicons
+              name={coords ? "checkmark-circle" : "location-outline"}
+              size={18}
+              color={coords ? theme.color.success : theme.color.brand}
+            />
+            <Text style={styles.locBtnText}>
+              {locBusy
+                ? "Mengambil GPS…"
+                : coords
+                ? `Tersimpan: ${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`
+                : "Ambil Lokasi GPS Sekarang"}
+            </Text>
+          </TouchableOpacity>
+          <Text style={styles.hint}>
+            Ambil sambil berdiri di depan rumah pelanggan agar akurat. Digunakan untuk overlay peta.
+          </Text>
+
           <TouchableOpacity onPress={save} disabled={loading} style={[styles.btn, loading && { opacity: 0.6 }]} testID="save-customer-btn">
             <Text style={styles.btnText}>{loading ? "Menyimpan…" : "Simpan Pelanggan"}</Text>
           </TouchableOpacity>
@@ -106,6 +160,19 @@ const styles = StyleSheet.create({
     backgroundColor: theme.color.surfaceSecondary,
   },
   hint: { fontSize: 12, color: theme.color.muted, marginTop: 6 },
+  locBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.color.brandPrimary,
+    borderStyle: "dashed",
+    backgroundColor: theme.color.brandTertiary,
+  },
+  locBtnText: { color: theme.color.brand, fontWeight: "600", fontSize: 13 },
   btn: {
     backgroundColor: theme.color.brandPrimary,
     padding: 16,

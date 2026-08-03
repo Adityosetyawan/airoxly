@@ -125,12 +125,16 @@ class CustomerCreate(BaseModel):
     address: Optional[str] = ""
     wa_number: Optional[str] = ""
     barcode_id: Optional[str] = None  # if empty, auto-generated
+    lat: Optional[float] = None
+    lng: Optional[float] = None
 
 
 class CustomerUpdate(BaseModel):
     name: Optional[str] = None
     address: Optional[str] = None
     wa_number: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
 
 
 class TransactionItem(BaseModel):
@@ -599,6 +603,8 @@ async def create_customer(body: CustomerCreate, user=Depends(require_roles("sale
         "total_purchases": 0.0,
         "purchase_count": 0,
         "last_purchase_date": None,
+        "lat": body.lat,
+        "lng": body.lng,
         "created_at": now_utc().isoformat(),
     }
     await db.customers.insert_one(doc)

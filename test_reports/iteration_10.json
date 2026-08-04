@@ -1,0 +1,35 @@
+{
+  "summary": "Frontend-only E2E verification of the wa.me deep-link refactor (iteration_10). Change under test: /app/frontend/app/(sales)/transaction/[id].tsx — resendWA now (a) if lottery_tickets exist calls saveShot to persist the Kartu Undian PNG, then (b) ALWAYS calls sendWhatsApp(customer_wa, msg) which opens wa.me/{phone}?text=... directly to the customer chat. No more native share sheet / clipboard fallback for the resend button. All 5 scenarios PASS.\n\n[SCENARIO A — with tickets] Tx a20a02be-... (Budi, +6281234567890, 2 tickets). Button label = 'Kirim Nota + Simpan Kartu Undian ke Budi' ✓. Tapping resend-wa-btn produced exactly 1 anchor click with download='OXLY-Kartu-Budi.png' (saveShot) AND exactly 1 window.open to https://wa.me/6281234567890?text=<encoded receipt> ✓. Clipboard writes = 0, navigator.share calls = 0 (NO share sheet).\n\n[SCENARIO B — no tickets] Tx a95101ce-... (Budi, Cup 150ml). Button label = 'Kirim Nota WA ke Budi' ✓. Tapping resend-wa-btn produced exactly 1 wa.me open, 0 downloads, 0 clipboard, 0 shares ✓.\n\n[SCENARIO C — empty WA] Tx 5f8b2c8b-... (TEST_UI_Cust_f0e57, empty wa). Button label = 'Nomor WA pelanggan kosong' ✓. Tapping resend-wa-btn produced 0 window.open, 0 downloads ✓ (sendWhatsApp throws 'Nomor WA kosong' → toast). Button remained tappable (not disabled).\n\n[SCENARIO D — auto-trigger] Created new gallon tx via /transaction/new?customer_id=Budi, +2 Air Galon 19L, bayar=40000, tap save-wa-btn. URL redirected to /transaction/{id}?autoSendWA=1 ✓. After 900ms useEffect fired resendWA which produced exactly 1 OXLY-Kartu-Budi.png saveShot AND exactly 1 wa.me/6281234567890 open with receipt text ✓. 0 clipboard writes, 0 navigator.share calls — no share dialog. wa.me body contains 'Air OXLY', '*Pembelian:*', '2 gln × Rp 20.000', 'Total: Rp 40.000' and does NOT contain 'Nomor Undian'. autoSentRef guard prevents duplicate fire.\n\n[SCENARIO E — regression on Kartu Undian buttons] save-ticket-card-btn still downloads PNG via saveShot ✓. share-ticket-card-btn still uses shareShot (navigator.canShare stubbed false → falls back to download) ✓.\n\n[whatsapp.ts inspection] formatReceipt confirmed does NOT emit any '🎁 Nomor Undian' or ticket-code lines in the receipt (verified in decoded wa.me body across scenarios A, B, D). sendWhatsApp still uses wa.me/{sanitized}?text={encoded}. broadcastWhatsApp is unchanged.\n\nCONCLUSION: Iteration_10 feature is FULLY VERIFIED. Direct-to-chat wa.me deep-link behaviour achieved, no share sheet, PNG auto-saved for follow-up attach. No new regressions introduced.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_9.json (previous — auto-trigger useRef fix)",
+    "/app/test_reports/iteration_8.json (formatReceipt no-lottery-text refactor)"
+  ],
+  "action_items": [
+    "No action items — feature verified working end-to-end. Ready for release."
+  ],
+  "critical_code_review_comments": [
+    "[id].tsx:47-93 resendWA correctly splits into two independent steps: (1) conditional saveShot for tickets (fire-and-forget in try/catch — save failures do NOT block WA send), (2) always sendWhatsApp deep-link. Good separation of concerns.",
+    "[id].tsx:72-84 The saveShot toast messaging is platform-aware (web 'terunduh' vs native 'tersimpan di galeri') — matches capture.ts behavior.",
+    "[id].tsx:96-106 Auto-trigger useEffect unchanged from iter_9. autoSentRef guard still idempotent; 900ms delay still sufficient for ViewShot paint.",
+    "[id].tsx:243-247 Button label ternary correctly branches on customer_wa truthiness first, then tickets presence — matches spec.",
+    "whatsapp.ts:12-20 sendWhatsApp throws 'Nomor WA kosong' when phone empty (verified via scenario C — no open happens). Deep-link uses wa.me/{sanitized}?text={encoded} on both platforms via Linking.openURL (RN-web maps to window.open).",
+    "capture.ts:79-97 saveShot on web triggers a plain anchor download (webDownload) which is what iteration_10 wants — no share dialog. On native it uses MediaLibrary.saveToLibraryAsync — cannot be exercised via web preview but path is correct."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A — frontend-only testing this iteration. Backend regression (lottery) already covered in iter_8 (32/33 pytests).",
+    "frontend": "5/5 scenarios PASS: (A) with-tickets manual, (B) no-tickets manual, (C) empty-WA guard, (D) auto-trigger new tx, (E) ticket-card save/share regression."
+  },
+  "seed_data_creation": "Reused existing seed. Used pre-existing transactions: a20a02be-... (Budi, tickets), a95101ce-... (Budi, no tickets), 5f8b2c8b-... (TEST_UI_Cust_f0e57, empty wa). One new gallon transaction d0ec2a4d-2311-4d06-965f-7e30d1faaa2a was created by the auto-trigger scenario — benign byproduct.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "If future changes touch /app/frontend/app/(sales)/transaction/[id].tsx resendWA or the useEffect autoSendWA path, or /app/frontend/src/whatsapp.ts sendWhatsApp / formatReceipt, re-run the same instrumented E2E: page.add_init_script to spy on window.open, HTMLAnchorElement.prototype.click, navigator.clipboard.writeText and navigator.share; navigator.canShare stubbed to return false. Then login A1/sales123 and hit the 3 pre-existing tx ids above + create a new gallon tx (plus-40492556-3ac2-4c48-bd53-72eea2a557c0 twice, bayar 40000, save-wa-btn). Expected side-effects per scenario are documented in the summary. Note: testID for stepper is 'plus-<pid>' / 'minus-<pid>' (NOT 'qty-plus-<pid>').",
+  "rca_of_issue": "N/A — verification-only iteration."
+}

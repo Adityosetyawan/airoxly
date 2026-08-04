@@ -109,6 +109,13 @@ export function formatReceipt(opts: {
   lines.push("");
   lines.push(`Sisa hutang: ${fmt(opts.new_debt)}`);
   lines.push(`Total pinjam galon: ${opts.new_loans} gln`);
+  if (opts.lottery_tickets && opts.lottery_tickets.length > 0) {
+    lines.push("");
+    lines.push(`🎁 *Kupon Undian${opts.lottery_period_name ? " – " + opts.lottery_period_name : ""}*`);
+    lines.push(`Anda mendapat ${opts.lottery_tickets.length} nomor undian:`);
+    opts.lottery_tickets.forEach((t) => lines.push(`• ${t}`));
+    lines.push("Simpan struk ini sebagai bukti kupon undian.");
+  }
   lines.push("");
   lines.push("Terima kasih 🙏");
   return lines.join("\n");

@@ -1,0 +1,41 @@
+{
+  "summary": "Frontend-only verification of iter_11: 'Kupon Undian' section RESTORED to formatReceipt() (rollback of iter_8 removal). Verified via (1) node unit test /app/backend/tests/test_format_receipt_unit.mjs (26/26 assertions PASS) and (2) Playwright E2E against the live Expo web preview capturing wa.me URLs.\n\n[UNIT — 26/26 PASS] Rebuilt test_format_receipt_unit.mjs (previous version was asserting the OLD absence-of-lottery behavior, would have false-failed). New assertions:\n  WITH tickets → emits '🎁 *Kupon Undian – Undian Test*', 'Anda mendapat 3 nomor undian:', bullets '• OXLY-ABC123|XYZ789|DEF456', trailing 'Simpan struk ini sebagai bukti kupon undian.', and does NOT use old label 'Nomor Undian'.\n  WITHOUT tickets → no 'Kupon Undian', no '🎁', no 'Anda mendapat' line, core lines (Total/Bayar/Sisa hutang/Total pinjam galon/Terima kasih) intact.\n  Empty array [] → treated same as undefined (no section emitted).\n\n[E2E — 4/4 PASS] Login A1/sales123 on https://oxly-crm.preview.emergentagent.com. window.open + anchor.click + navigator.share/clipboard instrumented.\n  Scenario A (tx 20c574d3, Adi, 2 tickets, period TEST_Undian_2bcffe, wa 085868616161): resend-wa-btn label = 'Kirim Nota + Simpan Kartu Undian ke Adi'. Tap produced exactly 1 wa.me open (wa.me/6285868616161?text=…) AND 1 OXLY-Kartu-Adi.png anchor download. Decoded body contains: '🎁 *Kupon Undian – TEST_Undian_2bcffe*', 'Anda mendapat 2 nomor undian:', '• OXLY-L9TPXN', '• OXLY-PJ4DU0', 'Simpan struk ini sebagai bukti kupon undian.', and does NOT contain old label 'Nomor Undian'. Phone sanitize (0858… → 6285…) working.\n  Scenario B (tx a95101ce, Budi, no tickets, cup 150ml): resend-wa-btn label = 'Kirim Nota WA ke Budi'. Tap produced exactly 1 wa.me open, 0 PNG downloads. Decoded body has NO 'Kupon Undian', NO '🎁', NO 'OXLY-' prefix; standard Total/Bayar/Sisa hutang/Terima kasih intact. Regression PASS.\n  Scenario C (save-ticket-card-btn on Adi tx): triggers PNG download only (1 download, 0 wa opens). PASS.\n  Scenario D (share-ticket-card-btn on Adi tx, canShare stubbed false): falls back to PNG download. PASS.\n\n[AUTO-SEND PATH] transaction/new.tsx redirects to /(sales)/transaction/[id]?autoSendWA=1 for ticket-bearing txs, then detail's useEffect calls the SAME resendWA() verified in Scenario A. Auto-trigger useEffect + autoSentRef guard already validated end-to-end in iteration_10 (unchanged in iter_11). Since formatReceipt now emits Kupon Undian for ticket txs and the auto path calls the same formatReceipt with lottery_tickets/lottery_period_name (see [id].tsx:66-67), auto-sent wa.me body will contain the Kupon Undian section transitively. NOTE: no fresh live auto-send test executed because there is currently 0 active lottery period on the backend (a new gallon tx would not generate tickets); the code path is proven equivalent to Scenario A.\n\nConclusion: iter_11 restore is FULLY VERIFIED. 'Kupon Undian' section (correct label, correct format, correct guard on empty/undefined) is present in wa.me text. All regressions clean.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_format_receipt_unit.mjs (rewritten for iter_11)",
+    "/app/test_reports/iteration_10.json (previous — deep-link refactor)",
+    "/app/test_reports/iteration_8.json (previous — removal that iter_11 rolls back)"
+  ],
+  "action_items": [
+    "No action items — feature verified end-to-end. Ready for release.",
+    "Optional (nice to have): seed at least one active lottery period in a future E2E setup so the auto-send-with-tickets path (transaction/new → autoSendWA=1) can be exercised on fresh transactions. Currently 0 active periods → new gallon txs do not mint tickets."
+  ],
+  "critical_code_review_comments": [
+    "whatsapp.ts:112-118 — Correct guard: `if (opts.lottery_tickets && opts.lottery_tickets.length > 0)`. Handles undefined and empty array. Header uses ' – ' em-dash only when period_name provided.",
+    "whatsapp.ts:114 — Label is 'Kupon Undian' (matches user's exact wording, not the older 'Nomor Undian'). Emoji 🎁 present.",
+    "whatsapp.ts:115 — 'Anda mendapat N nomor undian:' correctly uses ticket count.",
+    "whatsapp.ts:116 — Bullet each ticket code with '• ' prefix — matches spec.",
+    "whatsapp.ts:117 — Trailing 'Simpan struk ini sebagai bukti kupon undian.' present.",
+    "[id].tsx:66-67 — resendWA passes lottery_tickets + lottery_period_name into formatReceipt. Verified via decoded wa.me URL.",
+    "new.tsx:150-151 — Same pair passed in the save-only fallback path (used when saved.lottery_tickets is empty, i.e. non-ticket tx). Ticket txs redirect to detail with autoSendWA=1, which then runs the same resendWA. Code path is consistent.",
+    "sendWhatsApp still opens wa.me/{sanitized}?text={encoded} directly (no share sheet). PNG save side-effect for ticket txs preserved from iter_10."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_format_receipt_unit.mjs — rewrote to assert PRESENCE of Kupon Undian block (with/without/empty-array cases). Previous version was asserting the pre-iter_11 absence."
+  ],
+  "success_rate": {
+    "backend": "N/A — frontend-only iteration (no backend changes).",
+    "frontend": "4/4 E2E scenarios PASS + 26/26 unit assertions PASS."
+  },
+  "seed_data_creation": "None — reused pre-existing transactions: 20c574d3-6d37-4159-99a4-b064065040ae (Adi, 2 tickets, TEST_Undian_2bcffe) and a95101ce-7c00-41e9-be9a-851b9d8ad351 (Budi, no tickets). No mutations.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "If whatsapp.ts formatReceipt or the ticket section changes, rerun `node /app/backend/tests/test_format_receipt_unit.mjs` (self-contained, bundles via esbuild with react-native stub). For E2E: instrument window.open + HTMLAnchorElement.prototype.click, login A1/sales123, visit /(sales)/transaction/20c574d3-6d37-4159-99a4-b064065040ae and /(sales)/transaction/a95101ce-7c00-41e9-be9a-851b9d8ad351, tap [data-testid=resend-wa-btn], urllib.parse.unquote the ?text= param and assert presence/absence of 'Kupon Undian'. Note: login placeholder is 'mis. superadmin' (not 'Username'); password is a generic input[type=password]. To exercise the ticket-generating auto-send path on fresh transactions, first POST /api/lottery/periods to seed an active period.",
+  "rca_of_issue": "N/A — verification-only iteration. Iter_11 restored the Kupon Undian block that iter_8 had removed. Cause of the round-trip: user first thought the block duplicated the ticket-card image; after using the flow decided they want the text list too because the image is a separate manual attachment. Current formatReceipt correctly gates the block on lottery_tickets presence."
+}

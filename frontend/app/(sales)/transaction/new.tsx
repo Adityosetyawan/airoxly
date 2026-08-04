@@ -147,6 +147,8 @@ export default function TransactionForm() {
             new_debt: saved.new_debt,
             new_loans: saved.new_loans,
             edited: !!editingTxn,
+            lottery_tickets: saved.lottery_tickets,
+            lottery_period_name: saved.lottery_period_name,
           });
           await sendWhatsApp(customer.wa_number || "", msg);
         } catch (e: any) {

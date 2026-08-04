@@ -63,6 +63,8 @@ export default function TransactionDetail() {
         new_debt: t.new_debt,
         new_loans: t.new_loans,
         edited: t.edited,
+        lottery_tickets: t.lottery_tickets,
+        lottery_period_name: t.lottery_period_name,
       });
 
       // If transaction has lottery tickets, first save the Kartu Undian

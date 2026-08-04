@@ -27,6 +27,8 @@ export default function AdminLayout() {
       <Tabs.Screen name="sales-form" options={{ href: null }} />
       <Tabs.Screen name="route-history" options={{ href: null }} />
       <Tabs.Screen name="winners" options={{ href: null }} />
+      <Tabs.Screen name="customers" options={{ href: null }} />
+      <Tabs.Screen name="customer/[id]" options={{ href: null }} />
     </Tabs>
   );
 }

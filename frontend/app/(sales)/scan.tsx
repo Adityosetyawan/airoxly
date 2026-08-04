@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
@@ -18,6 +18,7 @@ export default function Scan() {
   const handleScanned = async ({ data }: { data: string }) => {
     if (scanned) return;
     setScanned(true);
+    setScanning(false);
     try {
       const c = await api.lookupCustomer(data);
       toast.show(`Ditemukan: ${c.name}`, "success");
@@ -31,16 +32,53 @@ export default function Scan() {
     }
   };
 
+  const openSettings = () => {
+    if (Platform.OS === "web") {
+      Alert.alert(
+        "Izin Kamera",
+        "Aktifkan izin kamera pada pengaturan browser Anda.",
+      );
+      return;
+    }
+    Linking.openSettings();
+  };
+
   const startScan = async () => {
-    if (!perm?.granted) {
-      const r = await requestPerm();
-      if (!r.granted) {
+    if (perm?.granted) {
+      setScanning(true);
+      return;
+    }
+    if (perm && !perm.canAskAgain) {
+      Alert.alert(
+        "Izin Kamera Dibutuhkan",
+        "Kami butuh akses kamera untuk memindai barcode/QR pelanggan. Silakan aktifkan di Pengaturan.",
+        [
+          { text: "Batal", style: "cancel" },
+          { text: "Buka Pengaturan", onPress: openSettings },
+        ],
+      );
+      return;
+    }
+    const r = await requestPerm();
+    if (!r.granted) {
+      if (!r.canAskAgain) {
+        Alert.alert(
+          "Izin Kamera Dibutuhkan",
+          "Aktifkan izin kamera di Pengaturan untuk memindai barcode/QR pelanggan.",
+          [
+            { text: "Batal", style: "cancel" },
+            { text: "Buka Pengaturan", onPress: openSettings },
+          ],
+        );
+      } else {
         toast.show("Butuh izin kamera untuk scan barcode", "error");
-        return;
       }
+      return;
     }
     setScanning(true);
   };
+
+  const permDenied = perm && !perm.granted && !perm.canAskAgain;
 
   return (
     <SafeAreaView style={styles.wrap} edges={["top"]}>
@@ -76,19 +114,39 @@ export default function Scan() {
             Scan barcode/QR yang tertempel pada pelanggan, atau input manual untuk pelanggan baru.
           </Text>
 
+          {permDenied ? (
+            <View style={styles.permWarn}>
+              <Ionicons name="alert-circle" size={18} color="#B45309" />
+              <Text style={styles.permWarnText}>
+                Izin kamera diblokir. Buka Pengaturan untuk mengaktifkan.
+              </Text>
+            </View>
+          ) : null}
+
           <TouchableOpacity onPress={startScan} style={styles.btn} testID="start-scan-btn">
             <Ionicons name="scan" size={20} color="#fff" />
             <Text style={styles.btnText}>Scan Barcode / QR</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => router.push("/(sales)/customer/new")}
-            style={styles.btnGhost}
-            testID="add-manual-btn"
-          >
-            <Ionicons name="person-add-outline" size={20} color={theme.color.brand} />
-            <Text style={styles.btnGhostText}>Tambah Pelanggan Manual</Text>
-          </TouchableOpacity>
+          {permDenied ? (
+            <TouchableOpacity
+              onPress={openSettings}
+              style={styles.btnGhost}
+              testID="open-settings-btn"
+            >
+              <Ionicons name="settings-outline" size={20} color={theme.color.brand} />
+              <Text style={styles.btnGhostText}>Buka Pengaturan</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              onPress={() => router.push("/(sales)/customer/new")}
+              style={styles.btnGhost}
+              testID="add-manual-btn"
+            >
+              <Ionicons name="person-add-outline" size={20} color={theme.color.brand} />
+              <Text style={styles.btnGhostText}>Tambah Pelanggan Manual</Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             onPress={() => router.push("/(sales)/customers")}
@@ -162,4 +220,15 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.9)",
   },
   cancelText: { fontWeight: "600", color: "#000" },
+  permWarn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FEF3C7",
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+    width: "100%",
+  },
+  permWarnText: { flex: 1, fontSize: 12, color: "#B45309", fontWeight: "500" },
 });

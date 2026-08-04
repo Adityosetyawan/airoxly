@@ -543,7 +543,7 @@ async def next_customer_no_for(sales_id: str) -> int:
 
 @api.get("/customers")
 async def list_customers(
-    sort: str = Query("no", pattern="^(no|ranking|last|loans)$"),
+    sort: str = Query("no", pattern="^(no|ranking|last|recent|loans|debt)$"),
     q: Optional[str] = None,
     sales_id: Optional[str] = None,
     user=Depends(get_current_user),
@@ -566,14 +566,38 @@ async def list_customers(
             {"name": {"$regex": q, "$options": "i"}},
             {"barcode_id": {"$regex": q, "$options": "i"}},
         ]
-    sort_map = {
+
+    # Simple direct-sort keys (Mongo can sort in DB)
+    direct_sort_map = {
         "no": [("customer_no", 1)],
-        "ranking": [("total_purchases", -1)],
-        "last": [("last_purchase_date", 1)],
-        "loans": [("gallon_loans", -1)],
+        "ranking": [("total_purchases", -1), ("purchase_count", -1)],
+        "loans": [("gallon_loans", -1), ("total_debt", -1)],
+        "debt": [("total_debt", -1)],
+        "recent": [("last_purchase_date", -1)],
     }
-    cursor = db.customers.find(filt, {"_id": 0}).sort(sort_map[sort])
-    return await cursor.to_list(2000)
+    if sort in direct_sort_map:
+        cursor = db.customers.find(filt, {"_id": 0}).sort(direct_sort_map[sort])
+        items = await cursor.to_list(2000)
+        # For "recent": customers who never purchased (null date) should appear LAST
+        if sort == "recent":
+            has_date = [c for c in items if c.get("last_purchase_date")]
+            no_date = [c for c in items if not c.get("last_purchase_date")]
+            # customer_no ascending for those with no purchase
+            no_date.sort(key=lambda c: c.get("customer_no", 0))
+            items = has_date + no_date
+        return items
+
+    # "last" (oldest last purchase first) needs Python-side sort so we can push
+    # never-purchased customers to the bottom (Mongo sorts nulls first on asc).
+    cursor = db.customers.find(filt, {"_id": 0})
+    items = await cursor.to_list(2000)
+    if sort == "last":
+        has_date = [c for c in items if c.get("last_purchase_date")]
+        no_date = [c for c in items if not c.get("last_purchase_date")]
+        has_date.sort(key=lambda c: c.get("last_purchase_date") or "")
+        no_date.sort(key=lambda c: c.get("customer_no", 0))
+        items = has_date + no_date
+    return items
 
 
 @api.get("/customers/lookup/{barcode_id}")

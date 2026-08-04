@@ -18,8 +18,10 @@ import { api, Customer } from "@/src/api";
 const SORTS = [
   { id: "no", label: "No. Urut", icon: "list-outline" },
   { id: "ranking", label: "Ranking Belanja", icon: "trophy-outline" },
+  { id: "recent", label: "Terbaru Beli", icon: "sparkles-outline" },
   { id: "last", label: "Terlama Beli", icon: "time-outline" },
   { id: "loans", label: "Pinjam Galon", icon: "cube-outline" },
+  { id: "debt", label: "Hutang Terbesar", icon: "cash-outline" },
 ] as const;
 
 export default function Customers() {
@@ -121,7 +123,7 @@ export default function Customers() {
             testID={`customer-${item.id}`}
           >
             <View style={styles.rankBadge}>
-              <Text style={styles.rankText}>{sort === "ranking" ? `#${index + 1}` : `#${item.customer_no}`}</Text>
+              <Text style={styles.rankText}>{sort === "no" ? `#${item.customer_no}` : `#${index + 1}`}</Text>
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.cName}>{item.name}</Text>

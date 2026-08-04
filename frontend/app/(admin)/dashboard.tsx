@@ -66,6 +66,11 @@ export default function AdminDashboard() {
         </View>
 
         <View style={styles.linkRow}>
+          <TouchableOpacity onPress={() => router.push("/(admin)/customers")} style={styles.linkBtnAlt} testID="open-customers-btn">
+            <Ionicons name="people" size={16} color={theme.color.brandPrimary} />
+            <Text style={styles.linkTextAlt}>Kelola Pelanggan</Text>
+            <Ionicons name="chevron-forward" size={16} color={theme.color.muted} />
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => router.push("/(admin)/winners")} style={styles.linkBtn} testID="open-winners-btn">
             <Ionicons name="trophy" size={16} color="#B45309" />
             <Text style={styles.linkText}>Riwayat Pemenang Undian</Text>
@@ -149,4 +154,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#FEF3C7",
   },
   linkText: { flex: 1, fontSize: 13, fontWeight: "600", color: "#B45309" },
+  linkBtnAlt: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+    backgroundColor: theme.color.brandTertiary,
+    marginBottom: 8,
+  },
+  linkTextAlt: { flex: 1, fontSize: 13, fontWeight: "600", color: theme.color.brand },
 });

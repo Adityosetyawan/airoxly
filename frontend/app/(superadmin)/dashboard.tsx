@@ -69,6 +69,7 @@ export default function SuperDashboard() {
         <Text style={styles.section}>Quick Access</Text>
         <View style={styles.actions}>
           <ActBtn icon="people" label="Kelola User" onPress={() => router.push("/(superadmin)/users")} />
+          <ActBtn icon="person" label="Data Pelanggan" onPress={() => router.push("/(superadmin)/customers")} />
           <ActBtn icon="cube" label="Produk & Harga" onPress={() => router.push("/(superadmin)/products")} />
           <ActBtn icon="bar-chart" label="Laporan Global" onPress={() => router.push("/(superadmin)/report")} />
           <ActBtn icon="location" label="Live GPS" onPress={() => router.push("/(superadmin)/live")} />

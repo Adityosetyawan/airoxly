@@ -28,6 +28,8 @@ export default function SuperAdminLayout() {
       <Tabs.Screen name="route-history" options={{ href: null }} />
       <Tabs.Screen name="lottery" options={{ href: null }} />
       <Tabs.Screen name="winners" options={{ href: null }} />
+      <Tabs.Screen name="customers" options={{ href: null }} />
+      <Tabs.Screen name="customer/[id]" options={{ href: null }} />
     </Tabs>
   );
 }

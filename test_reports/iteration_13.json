@@ -1,0 +1,41 @@
+{
+  "summary": "Iter 13 full verification (backend + frontend) of the Aug-2026 session changes: (a) GET /api/customers now accepts sort=recent|debt in addition to no|ranking|last|loans and correctly places customers with null last_purchase_date at the END for both `last` (asc dates first, nulls last) and `recent` (desc dates first, nulls last); (b) new shared CustomersList + CustomerDetailReadonly components exposed to admin & super_admin routes; (c) admin dashboard has 'Kelola Pelanggan' link opening 'Pelanggan Wilayah' scoped to group_letter with a sales filter listing only own-group sales; (d) superadmin dashboard has 'Data Pelanggan' Quick Access opening 'Semua Pelanggan' with a sales filter listing all sales; (e) sales customers screen has 6 chips including 'Terbaru Beli' + 'Hutang Terbesar'; (f) transaction/new sticky button reads 'Kirim WA, Simpan & Kupon'. All verified.\n\n[BACKEND — 18/18 PASS] pytest /app/backend/tests/test_customers_sort.py — all 6 sort values return 200; sort=badvalue returns 422; sort=last places null-date customers strictly AFTER the with-date group and orders with-date ASC; sort=recent places null-date customers strictly AFTER the with-date group and orders with-date DESC; sort=ranking is DESC by total_purchases; sort=debt is DESC by total_debt; sort=loans is DESC by gallon_loans; sort=no is ASC by customer_no; role scoping — sales A1 sees only own customers (created_by==A1.id); adminA sees only group_letter=='A'; adminB sees only group_letter=='B'; super_admin optional sales_id=A1 filter narrows result to only A1's customers and superadmin scope is a superset of adminA's.\n\n[FRONTEND — 4/4 SCENARIOS PASS] Live tested via Playwright on Expo web preview at http://localhost:3000, viewport 390x844.\n  1. superadmin/super123 dashboard shows [data-testid=quick-Data Pelanggan] which opens 'Semua Pelanggan' (title verified). Sales-filter button visible ([sales-filter-btn]); all 6 sort chips ([sort-no|ranking|recent|last|loans|debt]) visible; 68 customer cards rendered (Jumlah Pelanggan: 99 total via infinite scroll). Tapping sort chips does not crash. Tapping first customer opens detail with 'Riwayat' section visible, no red screen, no console errors.\n  2. adminA/admin123 dashboard shows [data-testid=open-customers-btn] labeled 'Kelola Pelanggan' opening 'Pelanggan Wilayah' (title verified). Sales-filter modal lists exactly: 'Semua Sales', 'A1 Sales A1', 'A2 Sales A2', 'A3 Parno' — ONLY wilayah A sales users, confirming group scoping. All 6 sort chips render; 86 customers in wilayah A (matches Jumlah Pelanggan header).\n  3. A1/sales123 dashboard tab bar has role=tab Pelanggan; tapping it navigates to /customers where all 6 sort chips render with correct labels: 'No. Urut', 'Ranking Belanja', 'Terbaru Beli', 'Terlama Beli', 'Pinjam Galon', 'Hutang Terbesar'. 75 customer cards render for sales A1.\n  4. /transaction/new?customer_id=<Budi> renders full form. Sticky bar has [save-only-btn]='Simpan' and [save-wa-btn]='\\uf425\\nKirim WA, Simpan & Kupon' (\\uf425 is the WhatsApp Ionicon glyph). Label matches the requested string exactly. No crashes.\n\n[NOT TESTED per instructions] Actual wa.me deep link opening, MediaLibrary.saveToLibraryAsync, Clipboard.setImageAsync, and camera scanner permission dialogs — all native-only paths.\n\nNo regressions found. Ready for release.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "React Native Web (RN core)", "issue": "Deprecation warnings in console (not blocking): 'shadow*' style props are deprecated (use boxShadow), 'props.pointerEvents is deprecated (use style.pointerEvents)', and 'Animated: useNativeDriver is not supported' on web. All originate from RN internals / expo-router transitions — not from session code. Reference: browser console during login and navigation."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_customers_sort.py — 18 pytest cases (added this iteration)",
+    "/app/test_reports/pytest/iteration_13_customers_sort.xml — JUnit XML output (18 passed)"
+  ],
+  "action_items": [
+    "No functional action items — all requested behavior verified end-to-end.",
+    "(Optional, low priority) Consider migrating RN 'shadow*' style props to 'boxShadow' across the theme to silence RNW deprecation warnings; unrelated to this session's scope."
+  ],
+  "critical_code_review_comments": [
+    "server.py:544-600 — Query regex `^(no|ranking|last|recent|loans|debt)$` correctly restricts sort values; unknown value triggers FastAPI 422 (verified). Good.",
+    "server.py:581-587 — For sort=recent, Mongo already returns nulls LAST when sorted DESC (Mongo places nulls at the bottom of a DESC sort by default), so the explicit Python re-partition is redundant BUT harmless and defensive — will still work correctly across Mongo versions and if last_purchase_date field is absent (missing != null distinction). No fix needed.",
+    "server.py:594-599 — For sort=last (ASC by date), the Python partition is REQUIRED because Mongo places nulls first on ASC; the fix correctly moves them to the bottom and orders no-purchase group by customer_no ASC. Verified with real data.",
+    "server.py:592 — `.to_list(2000)` — hard cap at 2000 documents. Not a concern today (superadmin sees ~99), but worth revisiting once dataset grows; consider pagination.",
+    "CustomersList.tsx:120-140 — showSalesFilter guard correctly hides the sales-filter button when not passed (sales role screen doesn't render it since sales uses a separate simpler screen).",
+    "CustomersList.tsx:198-200 — Rank badge shows `#{customer_no}` when sort===no else `#{index+1}` — subtle but correct UX for ranking sorts.",
+    "(sales)/customers.tsx:18-25 — SORTS array matches backend accepted values 1:1. Any future backend addition must also be reflected here (and in the shared CustomersList SORTS)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_customers_sort.py — NEW pytest file, 18 test cases covering all sort values + role scoping + invalid sort 422."
+  ],
+  "success_rate": {
+    "backend": "18/18 (100%) — all sort options and role-scoping cases pass.",
+    "frontend": "4/4 scenarios (100%) — SA data-pelanggan, adminA kelola-pelanggan (with wilayah-A-only sales filter), sales A1 six chips with correct labels, transaction/new WA button label."
+  },
+  "seed_data_creation": "None. Reused existing seeded customers/sales users (A1, A2, A3=Parno in wilayah A; B1 in wilayah B; ~99 customers spread across sales).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend URL from frontend/.env EXPO_PUBLIC_BACKEND_URL=https://oxly-crm.preview.emergentagent.com. Login: POST /api/auth/login {username, password}. Sort endpoint: GET /api/customers?sort={no|ranking|recent|last|loans|debt}&sales_id=<optional> — 422 on invalid sort. Role scoping is enforced server-side (created_by for sales, group_letter for admin). Frontend routes: superadmin uses /(superadmin)/customers via testID quick-Data Pelanggan on dashboard; admin uses /(admin)/customers via testID open-customers-btn labeled 'Kelola Pelanggan'; sales uses /(sales)/customers via tab-bar (role=tab, position 1 = Pelanggan). Shared testIDs on customer screens: [customer-search], [sales-filter-btn], [sort-{no|ranking|recent|last|loans|debt}], [customer-{id}]. Transaction sticky bar testIDs: [save-only-btn]='Simpan', [save-wa-btn]='Kirim WA, Simpan & Kupon'. WhatsApp send / native gallery / clipboard image cannot be exercised on web preview.",
+  "rca_of_issue": "N/A — no bugs found; verification-only iteration."
+}

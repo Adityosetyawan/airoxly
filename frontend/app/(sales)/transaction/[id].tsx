@@ -10,7 +10,7 @@ import { useAuth } from "@/src/AuthContext";
 import { useToast } from "@/src/components/Toast";
 import { formatReceipt, sendWhatsApp } from "@/src/whatsapp";
 import TicketCard from "@/src/components/TicketCard";
-import { saveShot, shareShot, shareShotWithText } from "@/src/utils/capture";
+import { saveShot, shareShot, sendReceiptToWhatsApp } from "@/src/utils/capture";
 
 export default function TransactionDetail() {
   const { id, autoSendWA } = useLocalSearchParams<{ id: string; autoSendWA?: string }>();
@@ -65,35 +65,40 @@ export default function TransactionDetail() {
         edited: t.edited,
       });
 
-      // If transaction has lottery tickets → send Kartu Undian image WITH the
-      // receipt text as caption in ONE WhatsApp message (via native share sheet).
-      // The image already contains the ticket numbers, so the text does NOT
-      // duplicate them.
+      // If transaction has lottery tickets → open WA chat DIRECTLY to the
+      // customer's saved number with the nota text pre-filled, save the ticket
+      // card to gallery, and copy the image to clipboard so a long-press paste
+      // in WhatsApp attaches it (no share sheet / recipient picker).
       if (t.lottery_tickets && t.lottery_tickets.length > 0) {
         try {
-          const { mode } = await shareShotWithText(
+          const { savedToGallery, imageInClipboard } = await sendReceiptToWhatsApp(
             ticketShotRef,
             "oxly-ticket-card-shot",
             `OXLY-Kartu-${t.customer_name}`,
-            `Nota + Kartu Undian ${t.customer_name}`,
+            t.customer_wa || "",
             msg,
           );
-          if (mode === "combined") {
-            toast.show("Kartu + nota siap dikirim di WhatsApp", "success");
-          } else {
+          if (imageInClipboard) {
             toast.show(
-              "Kartu Undian tersimpan & teks nota tersalin — buka WhatsApp pelanggan, lampirkan kartu & paste caption",
+              "WhatsApp terbuka. Long-press kolom pesan → Tempel untuk lampirkan Kartu Undian",
               "success",
             );
+          } else if (savedToGallery) {
+            toast.show(
+              "WhatsApp terbuka. Kartu Undian tersimpan di galeri — lampirkan dari sana",
+              "success",
+            );
+          } else {
+            toast.show("WhatsApp terbuka dengan nota", "success");
           }
           return;
         } catch (e: any) {
-          // Fall through to text-only wa.me if image capture/share fails
-          toast.show("Kartu gagal disiapkan, kirim teks saja", "error");
+          // Fall through to text-only wa.me if image capture fails
+          toast.show(e?.message || "Gagal siapkan kartu, kirim teks saja", "error");
         }
       }
 
-      // No tickets (or image share failed) → open wa.me directly to customer
+      // No tickets (or image capture failed) → open wa.me directly to customer
       await sendWhatsApp(t.customer_wa || "", msg);
     } catch (e: any) {
       toast.show(e.message || "Gagal", "error");
@@ -107,10 +112,11 @@ export default function TransactionDetail() {
     if (autoSentRef.current || autoSendWA !== "1") return;
     if (!t || !t.lottery_tickets || t.lottery_tickets.length === 0) return;
     autoSentRef.current = true;
-    // small delay so the ViewShot has painted the card (with optional period enrichment)
+    // Delay so the ViewShot has painted the card (with optional period enrichment)
+    // and the base64 image capture has time to finish.
     const timer = setTimeout(() => {
       resendWA();
-    }, 900);
+    }, 1500);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t, autoSendWA]);

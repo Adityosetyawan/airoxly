@@ -1,4 +1,4 @@
-import { Platform } from "react-native";
+import { Platform, Linking } from "react-native";
 import ViewShot, { captureRef } from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
 import * as MediaLibrary from "expo-media-library";
@@ -119,59 +119,99 @@ export async function shareShot(
 }
 
 /**
- * Share both an image (captured PNG of the wrapped view) AND a text message together.
+ * "One-click" WhatsApp receipt flow used when a transaction has a Kartu Undian
+ * to accompany the text nota. Since WhatsApp does NOT allow apps to attach
+ * images programmatically via a deep-link, we approximate a single-tap UX:
  *
- * - Web with navigator.share supporting files+text: single OS share sheet with both.
- * - Web fallback: download PNG + copy text to clipboard + open WhatsApp deep-link.
- * - Native: copy text to clipboard, open native share sheet with the PNG. User pastes the
- *   text as WhatsApp caption. Returns a hint flag so caller can show a toast.
+ *   1. Capture the ticket card as PNG.
+ *   2. Save it to the device gallery (silent).
+ *   3. Copy the image bytes to the OS clipboard so a single long-press paste in
+ *      WhatsApp attaches it.
+ *   4. Open wa.me/<PHONE>?text=<receipt> so WhatsApp opens the chat directly to
+ *      the customer's saved number with the nota text pre-filled — Sales only
+ *      needs to press Send (and optionally paste the image once).
  *
- * Returns:
- *   { mode: "combined" }  → image and text delivered together (best case)
- *   { mode: "image+clipboard" } → image shared, text copied to clipboard
+ * On web, MediaLibrary is unavailable; we download the PNG + copy text to
+ * clipboard + open wa.me instead.
  */
-export async function shareShotWithText(
+export async function sendReceiptToWhatsApp(
   shotRef: ShotRef,
   nativeId: string,
   filename: string,
-  title: string,
-  text: string,
-): Promise<{ mode: "combined" | "image+clipboard" }> {
-  const uriOrData = await captureImage(shotRef, nativeId, filename);
+  phone: string,
+  receiptText: string,
+): Promise<{ savedToGallery: boolean; imageInClipboard: boolean }> {
+  const digits = (phone || "").replace(/[^\d]/g, "");
+  if (!digits) throw new Error("Nomor WA pelanggan kosong");
+  const n = digits.startsWith("0")
+    ? "62" + digits.slice(1)
+    : digits.startsWith("62")
+    ? digits
+    : digits;
+
+  // 1) Capture the image
+  let savedToGallery = false;
+  let imageInClipboard = false;
+
   if (Platform.OS === "web") {
     try {
-      const blob = dataUrlToBlob(uriOrData);
-      const file = new File([blob], filename.endsWith(".png") ? filename : `${filename}.png`, {
-        type: "image/png",
-      });
-      // @ts-ignore
-      if (navigator.canShare && navigator.canShare({ files: [file], text })) {
-        // @ts-ignore
-        await navigator.share({ files: [file], text, title });
-        return { mode: "combined" };
-      }
-    } catch {
-      // fall through
-    }
-    // Fallback: download + clipboard + open wa.me
-    webDownload(uriOrData, filename);
+      const dataUrl = await captureImage(shotRef, nativeId, filename);
+      webDownload(dataUrl, filename);
+      savedToGallery = true;
+    } catch {}
+  } else {
     try {
-      const Clipboard = await import("expo-clipboard");
-      await Clipboard.setStringAsync(text);
-    } catch {
+      // Save to gallery
+      let perm = await MediaLibrary.getPermissionsAsync();
+      if (!perm.granted && perm.canAskAgain) {
+        perm = await MediaLibrary.requestPermissionsAsync();
+      }
+      const uri = await captureRef(shotRef, {
+        format: "png",
+        quality: 1,
+        result: "tmpfile",
+        fileName: filename,
+      });
+      if (perm.granted) {
+        try {
+          await MediaLibrary.saveToLibraryAsync(uri);
+          savedToGallery = true;
+        } catch {}
+      }
+
+      // Copy image to clipboard (base64) — long-press paste in WA sends image
       try {
-        if (typeof navigator !== "undefined" && (navigator as any).clipboard) {
-          await (navigator as any).clipboard.writeText(text);
+        const b64 = await captureRef(shotRef, {
+          format: "png",
+          quality: 1,
+          result: "base64",
+        });
+        const Clipboard = await import("expo-clipboard");
+        if (Clipboard.setImageAsync) {
+          await Clipboard.setImageAsync(b64);
+          imageInClipboard = true;
         }
       } catch {}
-    }
-    return { mode: "image+clipboard" };
+    } catch {}
   }
-  // Native: copy text to clipboard, then open share sheet with the file
-  const Clipboard = await import("expo-clipboard");
-  await Clipboard.setStringAsync(text);
-  const canShare = await Sharing.isAvailableAsync();
-  if (!canShare) throw new Error("Fitur share tidak tersedia di device ini");
-  await Sharing.shareAsync(uriOrData, { mimeType: "image/png", dialogTitle: title });
-  return { mode: "image+clipboard" };
+
+  // Open WhatsApp deep-link directly to customer's number
+  const encoded = encodeURIComponent(receiptText);
+  const url = `https://wa.me/${n}?text=${encoded}`;
+
+  if (Platform.OS === "web") {
+    if (typeof window !== "undefined") window.open(url, "_blank");
+    // Also copy text as a safety net so user can paste if the deep link
+    // strips formatting in browsers.
+    try {
+      const Clipboard = await import("expo-clipboard");
+      await Clipboard.setStringAsync(receiptText);
+    } catch {}
+    return { savedToGallery, imageInClipboard };
+  }
+
+  const supported = await Linking.canOpenURL(url);
+  if (!supported) throw new Error("Tidak bisa membuka WhatsApp");
+  await Linking.openURL(url);
+  return { savedToGallery, imageInClipboard };
 }

@@ -101,3 +101,83 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+## user_problem_statement:
+"Setelah selesai mengisi data Transaksi pembelian, sekali klik 'kirim WA, simpan sekaligus kupon kartu undian' langsung terkirim ke no WA pelanggan seperti contoh gambar." + earlier scope for Customer sorting/ranking and Admin/SuperAdmin customer views.
+
+## Session Scope (Aug 2026):
+1. Backend sort: added "recent" & "debt" sort options for /api/customers; fixed "last" sort to push never-purchased customers to bottom.
+2. Sales customers.tsx: added "Terbaru Beli" & "Hutang Terbesar" sort chips.
+3. New shared CustomersList + CustomerDetailReadonly components.
+4. New Admin route /(admin)/customers + customer/[id] (scoped by group_letter) with sales-filter dropdown.
+5. New SuperAdmin route /(superadmin)/customers + customer/[id] (all sales) with sales-filter dropdown.
+6. Improved scanner permission UX: proper Alert with "Buka Pengaturan" via Linking.openSettings when canAskAgain=false.
+7. WhatsApp receipt+ticket flow reworked: new sendReceiptToWhatsApp util → saves ticket image to gallery, copies image bytes to clipboard, opens wa.me deep link directly to customer's saved number with nota pre-filled. No share sheet, no contact picker.
+8. Button relabeled "Kirim WA, Simpan & Kupon" on transaction form.
+
+## backend:
+  - task: "GET /api/customers with new sort options (recent, debt) + null-safe last sort"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Regex extended to include recent|debt; last sort now moves customers with null last_purchase_date to the bottom (was showing them first because Mongo sorts null ascending). recent sort pushes null-date customers to end. debt sort by total_debt desc."
+
+## frontend:
+  - task: "Admin customer list + detail (group-filtered) with sales filter"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(admin)/customers.tsx, /app/frontend/app/(admin)/customer/[id].tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+  - task: "SuperAdmin customer list + detail (all sales) with sales filter"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(superadmin)/customers.tsx, /app/frontend/app/(superadmin)/customer/[id].tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+  - task: "Sales customers sort chips: added Terbaru Beli & Hutang Terbesar"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(sales)/customers.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+  - task: "One-tap WA receipt+ticket: wa.me deep link + gallery save + image to clipboard"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/utils/capture.ts, /app/frontend/app/(sales)/transaction/[id].tsx, /app/frontend/app/(sales)/transaction/new.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "New sendReceiptToWhatsApp util replaces shareShotWithText. Note: full WA send (image auto-attach) CANNOT be tested in web preview or Expo Go — needs a real device build. Backend-side and non-native flow can be validated (wa.me deep link opens; text prefill works).  MediaLibrary + Clipboard.setImageAsync only functional on native."
+
+## metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 13
+  run_ui: true
+
+## test_plan:
+  current_focus:
+    - "GET /api/customers with new sort options (recent, debt) + null-safe last sort"
+    - "Admin customer list + detail with sales filter"
+    - "SuperAdmin customer list + detail with sales filter"
+    - "Sales customers sort chips update"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+## agent_communication:
+    -agent: "main"
+    -message: "Backend: only /api/customers endpoint signature changed (sort pattern regex + Python post-sort for last/recent). Please verify: (1) sort=no|ranking|recent|last|loans|debt all return 200 with correct ordering, (2) sort=last places customers with null last_purchase_date at the end and orders remaining ascending, (3) sort=recent places customers with a purchase first (descending by date) and null-date customers last, (4) admin role scope still respects group_letter filter, (5) sales role only sees own customers, (6) super_admin optional sales_id filter still works. Frontend: verify Admin dashboard has a new 'Kelola Pelanggan' link that opens Pelanggan Wilayah scoped to their group. SuperAdmin dashboard has 'Data Pelanggan' Quick Access opening Semua Pelanggan. Both should have a working sales-filter dropdown and 6 sort chips. Do NOT attempt to test the WhatsApp/clipboard/gallery-save flow — it only works on native builds. Just verify the transaction detail page still renders, the button label reads 'Kirim WA, Simpan & Kupon' on new transaction form, and no crashes."

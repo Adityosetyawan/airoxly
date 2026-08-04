@@ -305,7 +305,7 @@ export default function TransactionForm() {
             testID="save-wa-btn"
           >
             <Ionicons name="logo-whatsapp" size={20} color="#fff" />
-            <Text style={styles.saveWAText}>{saving ? "Menyimpan…" : "Kirim WA & Simpan"}</Text>
+            <Text style={styles.saveWAText}>{saving ? "Menyimpan…" : "Kirim WA, Simpan & Kupon"}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

@@ -10,7 +10,7 @@ import { useAuth } from "@/src/AuthContext";
 import { useToast } from "@/src/components/Toast";
 import { formatReceipt, sendWhatsApp } from "@/src/whatsapp";
 import TicketCard from "@/src/components/TicketCard";
-import { saveShot, shareShot } from "@/src/utils/capture";
+import { saveShot, shareShot, shareShotWithText } from "@/src/utils/capture";
 
 export default function TransactionDetail() {
   const { id, autoSendWA } = useLocalSearchParams<{ id: string; autoSendWA?: string }>();
@@ -63,29 +63,37 @@ export default function TransactionDetail() {
         new_debt: t.new_debt,
         new_loans: t.new_loans,
         edited: t.edited,
-        lottery_tickets: t.lottery_tickets,
-        lottery_period_name: t.lottery_period_name,
       });
 
-      // If transaction has lottery tickets, first save the Kartu Undian
-      // as PNG (gallery on native, download on web) so the user can attach
-      // it as a follow-up message. Then open WhatsApp directly to the
-      // customer's chat with the text pre-filled — no "pilih penerima" step.
+      // If transaction has lottery tickets → send Kartu Undian image WITH the
+      // receipt text as caption in ONE WhatsApp message (via native share sheet).
+      // The image already contains the ticket numbers, so the text does NOT
+      // duplicate them.
       if (t.lottery_tickets && t.lottery_tickets.length > 0) {
         try {
-          await saveShot(ticketShotRef, "oxly-ticket-card-shot", `OXLY-Kartu-${t.customer_name}`);
-          toast.show(
-            Platform.OS === "web"
-              ? "Kartu Undian terunduh — lampirkan di chat WhatsApp setelah teks terkirim"
-              : "Kartu Undian tersimpan di galeri — lampirkan di chat WhatsApp",
-            "success",
+          const { mode } = await shareShotWithText(
+            ticketShotRef,
+            "oxly-ticket-card-shot",
+            `OXLY-Kartu-${t.customer_name}`,
+            `Nota + Kartu Undian ${t.customer_name}`,
+            msg,
           );
-        } catch {
-          // continue even if save fails
+          if (mode === "combined") {
+            toast.show("Kartu + nota siap dikirim di WhatsApp", "success");
+          } else {
+            toast.show(
+              "Kartu Undian tersimpan & teks nota tersalin — buka WhatsApp pelanggan, lampirkan kartu & paste caption",
+              "success",
+            );
+          }
+          return;
+        } catch (e: any) {
+          // Fall through to text-only wa.me if image capture/share fails
+          toast.show("Kartu gagal disiapkan, kirim teks saja", "error");
         }
       }
 
-      // Direct to customer chat with text pre-filled
+      // No tickets (or image share failed) → open wa.me directly to customer
       await sendWhatsApp(t.customer_wa || "", msg);
     } catch (e: any) {
       toast.show(e.message || "Gagal", "error");
@@ -242,10 +250,10 @@ export default function TransactionDetail() {
           <Text style={styles.waText}>
             {waBusy
               ? "Menyiapkan…"
+              : t.lottery_tickets && t.lottery_tickets.length > 0
+              ? `Kirim Kartu + Nota ke WhatsApp`
               : t.customer_wa
-              ? t.lottery_tickets && t.lottery_tickets.length > 0
-                ? `Kirim Nota + Simpan Kartu Undian ke ${t.customer_name}`
-                : `Kirim Nota WA ke ${t.customer_name}`
+              ? `Kirim Nota WA ke ${t.customer_name}`
               : "Nomor WA pelanggan kosong"}
           </Text>
         </TouchableOpacity>

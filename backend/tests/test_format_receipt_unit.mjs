@@ -1,12 +1,22 @@
-// Unit test for formatReceipt() — verifies (iter_11 / restored behavior):
-// WITH lottery_tickets:
-//   - "🎁 *Kupon Undian – {period_name}*" header line is emitted
-//   - "Anda mendapat N nomor undian:" line
-//   - Each ticket code on its own bullet line "• OXLY-XXXXXX"
-//   - "Simpan struk ini sebagai bukti kupon undian." trailing line
-// WITHOUT lottery_tickets (empty / undefined):
-//   - No "Kupon Undian" section, no 🎁 emoji, no ticket-code leakage
-// Core lines (Pembelian, Total, Bayar, Sisa hutang, Total pinjam galon, Terima kasih) always remain.
+// Unit test for formatReceipt() — iter_12 (REVERT of iter_11).
+//
+// User wants image (Kartu Undian) + text nota sent together in ONE WhatsApp
+// message via native share sheet. Since the ticket numbers are already IN the
+// image, the text MUST NOT duplicate them. This is a selective revert of
+// iter_11 (which had added a "🎁 *Kupon Undian*" section back).
+//
+// Assertions:
+//   WITH lottery_tickets (non-empty):
+//     - NO "Kupon Undian" section
+//     - NO "🎁" emoji
+//     - NO "Nomor Undian" (legacy) either
+//     - NO ticket-code leakage (no "OXLY-ABC123", etc.)
+//     - NO "Anda mendapat" line
+//     - NO "Simpan struk ini sebagai bukti kupon undian." trailer
+//     - Core lines still present: Pembelian, Total, Bayar, Sisa hutang,
+//       Total pinjam galon, Terima kasih, Pinjam galon, customer header.
+//   WITHOUT lottery_tickets / EMPTY array:
+//     - Same behavior — no ticket section, core lines present.
 import { execSync } from "node:child_process";
 
 const bundlePath = "/tmp/whatsapp_bundle.mjs";
@@ -21,7 +31,7 @@ execSync(
 const mod = await import(bundlePath);
 const { formatReceipt } = mod;
 
-// ----- CASE 1: WITH tickets -----
+// ----- CASE 1: WITH tickets (should still NOT include lottery section) -----
 const withTickets = formatReceipt({
   storeName: "Air OXLY",
   salesCode: "A1",
@@ -42,7 +52,7 @@ const withTickets = formatReceipt({
   lottery_tickets: ["OXLY-ABC123", "OXLY-XYZ789", "OXLY-DEF456"],
   lottery_period_name: "Undian Test",
 });
-console.log("---RECEIPT WITH TICKETS---");
+console.log("---RECEIPT WITH TICKETS (iter_12: MUST NOT contain lottery text)---");
 console.log(withTickets);
 console.log("---END---");
 
@@ -89,17 +99,17 @@ const emptyTickets = formatReceipt({
 });
 
 const checks = {
-  // WITH-tickets assertions
-  "[with] Has '🎁' emoji": withTickets.includes("🎁"),
-  "[with] Has 'Kupon Undian' label (not 'Nomor Undian')": withTickets.includes("Kupon Undian"),
-  "[with] Uses period name 'Undian Test'": withTickets.includes("Undian Test"),
-  "[with] Header contains 'Kupon Undian – Undian Test'": withTickets.includes("Kupon Undian – Undian Test"),
-  "[with] Has 'Anda mendapat 3 nomor undian:'": withTickets.includes("Anda mendapat 3 nomor undian:"),
-  "[with] Has '• OXLY-ABC123'": withTickets.includes("• OXLY-ABC123"),
-  "[with] Has '• OXLY-XYZ789'": withTickets.includes("• OXLY-XYZ789"),
-  "[with] Has '• OXLY-DEF456'": withTickets.includes("• OXLY-DEF456"),
-  "[with] Has 'Simpan struk ini sebagai bukti kupon undian.'": withTickets.includes("Simpan struk ini sebagai bukti kupon undian."),
-  "[with] Does NOT use old 'Nomor Undian' label": !withTickets.includes("Nomor Undian"),
+  // WITH-tickets assertions (iter_12: NO lottery text anywhere)
+  "[with] Does NOT have 'Kupon Undian' label": !withTickets.includes("Kupon Undian"),
+  "[with] Does NOT have legacy 'Nomor Undian' label": !withTickets.includes("Nomor Undian"),
+  "[with] Does NOT have '🎁' emoji": !withTickets.includes("🎁"),
+  "[with] Does NOT have 'Anda mendapat' line": !withTickets.includes("Anda mendapat"),
+  "[with] Does NOT contain ticket code OXLY-ABC123": !withTickets.includes("OXLY-ABC123"),
+  "[with] Does NOT contain ticket code OXLY-XYZ789": !withTickets.includes("OXLY-XYZ789"),
+  "[with] Does NOT contain ticket code OXLY-DEF456": !withTickets.includes("OXLY-DEF456"),
+  "[with] Does NOT contain 'Simpan struk ini sebagai bukti kupon undian.'": !withTickets.includes("Simpan struk ini sebagai bukti kupon undian."),
+  "[with] Does NOT contain period name 'Undian Test'": !withTickets.includes("Undian Test"),
+  // Core lines must still be present
   "[with] Has '*Pembelian:*'": withTickets.includes("*Pembelian:*"),
   "[with] Has 'Total: Rp 60.000'": /Total: Rp\s?60\.000/.test(withTickets),
   "[with] Has 'Bayar: Rp 60.000'": /Bayar: Rp\s?60\.000/.test(withTickets),
@@ -108,6 +118,8 @@ const checks = {
   "[with] Has 'Terima kasih 🙏'": withTickets.includes("Terima kasih 🙏"),
   "[with] Has 'Pinjam galon: 1 gln'": withTickets.includes("Pinjam galon: 1 gln"),
   "[with] Has customer 'Budi (No.12)'": withTickets.includes("Budi (No.12)"),
+  "[with] Has '*Air OXLY*' store header": withTickets.includes("*Air OXLY*"),
+  "[with] Has 'Sales: A1'": withTickets.includes("Sales: A1"),
 
   // WITHOUT-tickets assertions
   "[no-tickets] NO 'Kupon Undian' section": !noTickets.includes("Kupon Undian"),
@@ -120,6 +132,7 @@ const checks = {
   // EMPTY-array assertions (should behave same as WITHOUT)
   "[empty-arr] NO 'Kupon Undian' section": !emptyTickets.includes("Kupon Undian"),
   "[empty-arr] NO '🎁' lottery emoji": !emptyTickets.includes("🎁"),
+  "[empty-arr] Has 'Terima kasih 🙏'": emptyTickets.includes("Terima kasih 🙏"),
 };
 
 let ok = 0, fail = 0;

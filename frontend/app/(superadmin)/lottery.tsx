@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   Alert,
   Modal,
@@ -15,9 +15,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
+import ViewShot from "react-native-view-shot";
 import { theme, rp } from "@/src/theme";
 import { api } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
+import PromoPoster from "@/src/components/PromoPoster";
+import { saveShot, shareShot } from "@/src/utils/capture";
+import { sendWhatsApp } from "@/src/whatsapp";
 
 function todayISO(): string {
   const d = new Date();
@@ -47,6 +51,8 @@ type Period = {
   drawn_at?: string | null;
   ticket_count?: number;
   winners?: any[];
+  prize_description?: string | null;
+  description?: string | null;
 };
 
 export default function LotteryManagement() {
@@ -63,9 +69,14 @@ export default function LotteryManagement() {
     end_date: plusYearISO(365),
     winner_count: "1",
     is_active: true,
+    prize_description: "",
+    description: "",
   });
   const [busy, setBusy] = useState(false);
   const [detailPeriod, setDetailPeriod] = useState<Period | null>(null);
+  const [posterOpen, setPosterOpen] = useState(false);
+  const [posterBusy, setPosterBusy] = useState<null | "save" | "share">(null);
+  const posterShotRef = useRef<ViewShot>(null);
 
   const load = useCallback(async () => {
     try {
@@ -87,7 +98,15 @@ export default function LotteryManagement() {
 
   const openNew = () => {
     setEditing(null);
-    setForm({ name: "", start_date: todayISO(), end_date: plusYearISO(365), winner_count: "1", is_active: true });
+    setForm({
+      name: "",
+      start_date: todayISO(),
+      end_date: plusYearISO(365),
+      winner_count: "1",
+      is_active: true,
+      prize_description: "",
+      description: "",
+    });
     setModalOpen("new");
   };
 
@@ -103,6 +122,8 @@ export default function LotteryManagement() {
       end_date: p.end_date,
       winner_count: String(p.winner_count),
       is_active: p.is_active,
+      prize_description: p.prize_description || "",
+      description: p.description || "",
     });
     setModalOpen("edit");
   };
@@ -130,6 +151,8 @@ export default function LotteryManagement() {
           end_date: form.end_date,
           winner_count: wc,
           is_active: form.is_active,
+          prize_description: form.prize_description.trim(),
+          description: form.description.trim(),
         });
         toast.show("Periode diperbarui", "success");
       } else {
@@ -139,6 +162,8 @@ export default function LotteryManagement() {
           end_date: form.end_date,
           winner_count: wc,
           is_active: form.is_active,
+          prize_description: form.prize_description.trim() || undefined,
+          description: form.description.trim() || undefined,
         });
         toast.show("Periode dibuat", "success");
       }
@@ -215,9 +240,14 @@ export default function LotteryManagement() {
           <Ionicons name="chevron-back" size={24} color={theme.color.onSurface} />
         </TouchableOpacity>
         <Text style={styles.title}>Undian Berhadiah</Text>
-        <TouchableOpacity onPress={openNew} style={styles.addBtn} testID="add-period-btn">
-          <Ionicons name="add" size={22} color={theme.color.brand} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", gap: 4 }}>
+          <TouchableOpacity onPress={() => router.push("/(superadmin)/winners")} style={styles.addBtn} testID="open-winners-btn">
+            <Ionicons name="trophy" size={20} color="#B45309" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={openNew} style={styles.addBtn} testID="add-period-btn">
+            <Ionicons name="add" size={22} color={theme.color.brand} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -248,6 +278,14 @@ export default function LotteryManagement() {
                 <Text style={styles.activeStatLbl}>Peserta</Text>
               </View>
             </View>
+            <TouchableOpacity
+              onPress={() => setPosterOpen(true)}
+              style={styles.posterBtn}
+              testID="open-poster-btn"
+            >
+              <Ionicons name="megaphone" size={16} color={theme.color.brand} />
+              <Text style={styles.posterBtnText}>Buka Poster Promosi</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -399,6 +437,25 @@ export default function LotteryManagement() {
                 keyboardType="numeric"
                 testID="period-winners-input"
               />
+              <Text style={styles.lbl}>Hadiah (opsional)</Text>
+              <TextInput
+                value={form.prize_description}
+                onChangeText={(v) => setForm({ ...form, prize_description: v })}
+                placeholder="Motor Beat, TV LED, iPhone 15"
+                placeholderTextColor={theme.color.muted}
+                style={styles.input}
+                testID="period-prize-input"
+              />
+              <Text style={styles.lbl}>Deskripsi (opsional)</Text>
+              <TextInput
+                value={form.description}
+                onChangeText={(v) => setForm({ ...form, description: v })}
+                placeholder="Info tambahan untuk poster promosi"
+                placeholderTextColor={theme.color.muted}
+                style={[styles.input, { minHeight: 60, textAlignVertical: "top" }]}
+                multiline
+                testID="period-desc-input"
+              />
               <View style={styles.switchRow}>
                 <Text style={styles.lbl}>Set sebagai periode aktif</Text>
                 <Switch
@@ -453,12 +510,95 @@ export default function LotteryManagement() {
                     <Text style={styles.winSub}>#{w.customer_no} · Sales {w.sales_code}</Text>
                     <Text style={styles.winTicket}>{w.ticket_code}</Text>
                   </View>
+                  {w.customer_wa ? (
+                    <TouchableOpacity
+                      onPress={() => {
+                        const msg = `🎉 Selamat ${w.customer_name}!\n\nAnda memenangkan Undian ${detailPeriod?.name} sebagai Juara #${w.rank} dengan nomor undian *${w.ticket_code}*.${detailPeriod?.prize_description ? `\n\n🏆 Hadiah: ${detailPeriod.prize_description}` : ""}\n\nSilakan hubungi kami untuk info klaim hadiah.\n\nSalam,\nTim Air OXLY`;
+                        sendWhatsApp(w.customer_wa, msg);
+                      }}
+                      style={styles.waBtn}
+                      testID={`wa-winner-${w.rank}`}
+                    >
+                      <Ionicons name="logo-whatsapp" size={16} color="#fff" />
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               ))}
             </ScrollView>
             <View style={styles.modalActions}>
               <TouchableOpacity onPress={() => setDetailPeriod(null)} style={[styles.modalSave, { flex: 1 }]} testID="close-winners-btn">
                 <Text style={styles.modalSaveText}>Tutup</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Promo Poster Modal */}
+      <Modal visible={posterOpen} animationType="slide" transparent onRequestClose={() => setPosterOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalWrap, { padding: 12 }]}>
+            <Text style={styles.modalTitle}>Poster Promosi Undian</Text>
+            <ScrollView style={{ maxHeight: 500 }} contentContainerStyle={{ alignItems: "center", padding: 4 }}>
+              {active && (
+                <View nativeID="oxly-poster-shot">
+                  <ViewShot ref={posterShotRef} options={{ format: "png", quality: 1 }}>
+                    <PromoPoster
+                      periodName={active.name}
+                      startDate={active.start_date}
+                      endDate={active.end_date}
+                      winnerCount={active.winner_count}
+                      prizeDescription={active.prize_description}
+                      description={active.description}
+                    />
+                  </ViewShot>
+                </View>
+              )}
+            </ScrollView>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                onPress={async () => {
+                  setPosterBusy("save");
+                  try {
+                    await saveShot(posterShotRef, "oxly-poster-shot", `OXLY-Poster-Undian`);
+                    toast.show(Platform.OS === "web" ? "Poster diunduh" : "Poster tersimpan di galeri", "success");
+                  } catch (e: any) {
+                    toast.show(e?.message || "Gagal simpan", "error");
+                  } finally {
+                    setPosterBusy(null);
+                  }
+                }}
+                disabled={posterBusy !== null}
+                style={[styles.modalCancel, posterBusy !== null && { opacity: 0.6 }]}
+                testID="save-poster-btn"
+              >
+                <Ionicons name="download-outline" size={16} color={theme.color.brand} />
+                <Text style={[styles.modalCancelText, { color: theme.color.brand, marginLeft: 6 }]}>
+                  {posterBusy === "save" ? "Menyimpan…" : "Simpan"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={async () => {
+                  setPosterBusy("share");
+                  try {
+                    await shareShot(posterShotRef, "oxly-poster-shot", `OXLY-Poster-Undian`, "Poster Undian Air OXLY");
+                  } catch (e: any) {
+                    toast.show(e?.message || "Gagal share", "error");
+                  } finally {
+                    setPosterBusy(null);
+                  }
+                }}
+                disabled={posterBusy !== null}
+                style={[styles.modalSave, posterBusy !== null && { opacity: 0.6 }]}
+                testID="share-poster-btn"
+              >
+                <Ionicons name="share-social" size={16} color="#fff" />
+                <Text style={[styles.modalSaveText, { marginLeft: 6 }]}>
+                  {posterBusy === "share" ? "Menyiapkan…" : "Share"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setPosterOpen(false)} style={styles.modalCancel} testID="close-poster-btn">
+                <Text style={styles.modalCancelText}>Tutup</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -509,6 +649,26 @@ const styles = StyleSheet.create({
   activeStat: { flex: 1, alignItems: "center" },
   activeStatVal: { color: "#fff", fontSize: 22, fontWeight: "700" },
   activeStatLbl: { color: "#D1FAE5", fontSize: 10, marginTop: 2 },
+  posterBtn: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: "#fff",
+  },
+  posterBtnText: { color: theme.color.brand, fontWeight: "700", fontSize: 13 },
+  waBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#25D366",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 4,
+  },
   noActive: {
     alignItems: "center",
     padding: 24,

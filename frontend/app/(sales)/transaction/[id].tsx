@@ -1,13 +1,16 @@
-import React, { useCallback, useState } from "react";
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useCallback, useRef, useState } from "react";
+import { Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import ViewShot from "react-native-view-shot";
 import { theme, rp } from "@/src/theme";
 import { api, Transaction } from "@/src/api";
 import { useAuth } from "@/src/AuthContext";
 import { useToast } from "@/src/components/Toast";
 import { formatReceipt, sendWhatsApp } from "@/src/whatsapp";
+import TicketCard from "@/src/components/TicketCard";
+import { saveShot, shareShot } from "@/src/utils/capture";
 
 export default function TransactionDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -15,11 +18,22 @@ export default function TransactionDetail() {
   const { user } = useAuth();
   const toast = useToast();
   const [t, setT] = useState<Transaction | null>(null);
+  const [period, setPeriod] = useState<any | null>(null);
+  const [ticketBusy, setTicketBusy] = useState<null | "save" | "share">(null);
+  const ticketShotRef = useRef<ViewShot>(null);
 
   const load = useCallback(async () => {
     try {
       const found = await api.getTransaction(id!);
       setT(found);
+      if (found.lottery_tickets && found.lottery_tickets.length > 0) {
+        // Fetch period info to enrich the ticket card
+        try {
+          const periods = await api.listLotteryPeriods();
+          const p = periods.find((pp) => pp.name === found.lottery_period_name);
+          setPeriod(p || null);
+        } catch {}
+      }
     } catch (e: any) {
       toast.show(e.message || "Gagal", "error");
     }
@@ -118,24 +132,63 @@ export default function TransactionDetail() {
 
         {t.lottery_tickets && t.lottery_tickets.length > 0 && (
           <>
-            <Text style={styles.section}>
-              🎁 Nomor Undian ({t.lottery_tickets.length})
-            </Text>
-            <View style={styles.lotteryCard}>
-              {t.lottery_period_name && (
-                <Text style={styles.lotteryPeriod}>{t.lottery_period_name}</Text>
-              )}
-              <View style={styles.ticketsWrap}>
-                {t.lottery_tickets.map((code, idx) => (
-                  <View key={idx} style={styles.ticket} testID={`ticket-${idx}`}>
-                    <Ionicons name="ticket" size={12} color={theme.color.brand} />
-                    <Text style={styles.ticketCode}>{code}</Text>
-                  </View>
-                ))}
-              </View>
-              <Text style={styles.lotteryHint}>
-                Setiap 1 galon = 1 nomor undian. Nomor ini otomatis diundi sesuai periode.
-              </Text>
+            <Text style={styles.section}>🎁 Kartu Undian ({t.lottery_tickets.length})</Text>
+            <View style={styles.cardWrap} nativeID="oxly-ticket-card-shot">
+              <ViewShot ref={ticketShotRef} options={{ format: "png", quality: 1 }}>
+                <TicketCard
+                  customerName={t.customer_name}
+                  customerNo={t.customer_no}
+                  salesCode={t.sales_code || user?.username}
+                  periodName={t.lottery_period_name || period?.name || "Undian Air OXLY"}
+                  periodEnd={period?.end_date}
+                  prizeDescription={period?.prize_description}
+                  tickets={t.lottery_tickets}
+                  txDate={t.date}
+                />
+              </ViewShot>
+            </View>
+            <View style={styles.ticketActionsRow}>
+              <TouchableOpacity
+                onPress={async () => {
+                  setTicketBusy("save");
+                  try {
+                    await saveShot(ticketShotRef, "oxly-ticket-card-shot", `OXLY-Kartu-${t.customer_name}`);
+                    toast.show(Platform.OS === "web" ? "Kartu diunduh" : "Kartu tersimpan di galeri", "success");
+                  } catch (e: any) {
+                    toast.show(e?.message || "Gagal simpan", "error");
+                  } finally {
+                    setTicketBusy(null);
+                  }
+                }}
+                disabled={ticketBusy !== null}
+                style={[styles.ticketBtnGhost, ticketBusy !== null && { opacity: 0.6 }]}
+                testID="save-ticket-card-btn"
+              >
+                <Ionicons name="download-outline" size={16} color={theme.color.brand} />
+                <Text style={styles.ticketBtnGhostText}>
+                  {ticketBusy === "save" ? "Menyimpan…" : "Simpan Kartu"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={async () => {
+                  setTicketBusy("share");
+                  try {
+                    await shareShot(ticketShotRef, "oxly-ticket-card-shot", `OXLY-Kartu-${t.customer_name}`, `Kartu Undian ${t.customer_name}`);
+                  } catch (e: any) {
+                    toast.show(e?.message || "Gagal share", "error");
+                  } finally {
+                    setTicketBusy(null);
+                  }
+                }}
+                disabled={ticketBusy !== null}
+                style={[styles.ticketBtnShare, ticketBusy !== null && { opacity: 0.6 }]}
+                testID="share-ticket-card-btn"
+              >
+                <Ionicons name="share-social" size={16} color="#fff" />
+                <Text style={styles.ticketBtnShareText}>
+                  {ticketBusy === "share" ? "Menyiapkan…" : "Share ke WA"}
+                </Text>
+              </TouchableOpacity>
             </View>
           </>
         )}
@@ -214,6 +267,35 @@ const styles = StyleSheet.create({
   editText: { color: theme.color.brand, fontWeight: "600" },
   del: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: theme.color.error, marginTop: 8 },
   delText: { color: theme.color.error, fontWeight: "600" },
+  cardWrap: { alignItems: "center", marginBottom: 6 },
+  ticketActionsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 4,
+    justifyContent: "flex-end",
+    marginBottom: 12,
+  },
+  ticketBtnGhost: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.color.brandPrimary,
+  },
+  ticketBtnGhostText: { color: theme.color.brand, fontWeight: "700", fontSize: 12 },
+  ticketBtnShare: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#25D366",
+  },
+  ticketBtnShareText: { color: "#fff", fontWeight: "700", fontSize: 12 },
   lotteryCard: {
     borderWidth: 1,
     borderColor: theme.color.brandPrimary,

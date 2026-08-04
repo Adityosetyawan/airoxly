@@ -259,10 +259,12 @@ export const api = {
     end_date: string;
     winner_count: number;
     is_active: boolean;
+    prize_description?: string;
+    description?: string;
   }) => req<any>("/lottery/periods", { method: "POST", body: JSON.stringify(body) }),
   updateLotteryPeriod: (
     id: string,
-    body: Partial<{ name: string; start_date: string; end_date: string; winner_count: number; is_active: boolean }>,
+    body: Partial<{ name: string; start_date: string; end_date: string; winner_count: number; is_active: boolean; prize_description: string; description: string }>,
   ) => req<any>(`/lottery/periods/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   activateLotteryPeriod: (id: string) =>
     req<any>(`/lottery/periods/${id}/activate`, { method: "POST" }),
@@ -280,6 +282,8 @@ export const api = {
   },
   lotteryStats: (period_id?: string) =>
     req<any>(`/lottery/stats${period_id ? "?period_id=" + period_id : ""}`),
+  listAllWinners: (limit = 200) =>
+    req<any[]>(`/lottery/winners?limit=${limit}`),
 };
 
 export async function getSavedUser(): Promise<User | null> {

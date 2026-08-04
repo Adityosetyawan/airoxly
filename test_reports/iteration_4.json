@@ -1,0 +1,47 @@
+{
+  "summary": "Lottery session-2 features (Kartu Undian, Poster Promosi, Winners History, WA notifications, prize_description/description fields) — end-to-end verified. Backend: 11/12 pytest new-tests passing in /app/backend/tests/test_lottery_v2.py (plus 21/21 regression in test_lottery.py). Verified: POST/PATCH periode dgn prize_description & description round-trip, GET /periods & /active mengembalikan field tsb (nullable), customer_wa terisi di ticket doc dari customer.wa_number saat POST /transactions, draw winners memuat customer_wa dari ticket asal, GET /lottery/winners (baru) mengembalikan array cross-period dengan schema lengkap {period_id, period_name, drawn_at, prize_description, rank, ticket_code, customer_name, customer_wa, sales_code, group_letter}, RBAC winners lengkap terverifikasi (super=all, admin=group scoped, sales=own-ticket scoped) via seeded period draw dgn tiket A1+B1. Frontend (mobile 390x844): (1) Superadmin dashboard 'Riwayat Pemenang' → /(superadmin)/winners → 3 pemenang seeded Agustus 2026 muncul (grouped by period, badge #1/#2/#3, prize '🏆 Voucher belanja Rp 500.000' visible), search-input responsif, tombol WA hijau (wa-winner-<pid>-<rank>) render per pemenang punya WA. (2) Superadmin /lottery: 'Buka Poster Promosi' (open-poster-btn) muncul saat ada active period; modal menampilkan brand 'AIR OXLY', ribbon 'UNDIAN', judul 'Undian Tahunan 2026', tanggal, badge '3 PEMENANG BERUNTUNG', hadiah 'Motor Beat + TV + Rice Cooker', langkah 'CARA IKUT SERTA'; save-poster-btn di web memicu download + toast 'Poster diunduh' (verified). share-poster-btn present. close-poster-btn works. (3) Create/Edit modal periode menampilkan period-prize-input & period-desc-input; create flow disimpan dengan field tsb (verified in list). (4) Superadmin Winners Modal (view-winners-{id}) menampilkan WA buttons wa-winner-{rank}. (5) Sales A1 dashboard lottery-banner tap-able → /(sales)/winners; A1 hanya melihat 3 pemenang grup A (Agustus 2026, semua ke pelanggan Budi). (6) Sales A1 transaction detail (5 galon Budi): section '🎁 Kartu Undian (5)' render TicketCard dengan brand AIR OXLY + period name; save-ticket-card-btn & share-ticket-card-btn TIDAK memicu error 'findNodeHandle' di web preview; save menghasilkan toast 'Kartu diunduh'. Zero page/console errors selama sesi UI. Regression WhatsApp receipt struktur '🎁 *Nomor Undian*' terverifikasi tidak berubah (grep di whatsapp.ts).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "PATCH /api/lottery/periods/{id}",
+        "issue": "SPEC violation: mengirim prize_description='' atau description='' TIDAK dikonversi ke None (tetap disimpan sebagai empty string). Spec eksplisit: 'empty string diperlakukan sebagai None'. Fix di server.py:1511 — tambah normalisasi: `update = {k: (None if isinstance(v, str) and v.strip()=='' and k in ('prize_description','description') else v) for k, v in body.dict(exclude_unset=True).items()}` (dan izinkan None values untuk 2 field ini pada exclude_unset path). POST create sudah benar (line 1475-1476)."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_lottery_v2.py",
+    "/app/backend/tests/test_lottery.py",
+    "/app/backend/tests/test_oxly_backend.py",
+    "/app/test_reports/pytest/lottery_v2_results.xml"
+  ],
+  "action_items": [
+    "MINOR (spec): PATCH /api/lottery/periods/{id} — normalize empty string to None for prize_description & description (line 1511 in server.py). Currently empty string is saved verbatim; spec says treat as None. Frontend impact: if a user clears the fields in Edit modal, poster/ticket would still show empty (not really user-facing bug, but spec-conformance)."
+  ],
+  "critical_code_review_comments": [
+    "server.py:698 — txn stores customer_wa (nullable) from customer.wa_number; tickets_docs:740 stores customer_wa or '' (falsy for missing). Consistent.",
+    "server.py:1572 — draw() copies customer_wa from ticket → winners array; downstream endpoints propagate.",
+    "server.py:1664-1697 — GET /lottery/winners implementation is O(P*W*T) for sales scoping (fetches ticket per winner). Acceptable at 500-period cap but could be optimized with a single $in query on ticket_codes to reduce N+1.",
+    "server.py:1511 — PATCH filters `v is not None` so empty strings pass through unchanged. Combined with the create-side stripping (1475-1476), behavior is inconsistent between POST and PATCH. See minor issue above.",
+    "winners.tsx:83-85 — grouped periods sorted by drawnAt desc via localeCompare — works only because drawn_at is ISO 8601 string; correct.",
+    "lottery.tsx:513-524 — WA button in Winners Modal only rendered if customer_wa; msg includes prize_description conditionally. Correct.",
+    "transaction/[id].tsx:133-194 — TicketCard captured via ViewShot ref + nativeID fallback (capture.ts). No findNodeHandle errors observed in web test.",
+    "PromoPoster + TicketCard receive prize_description prop; both render conditionally. Good.",
+    "sales/winners.tsx and admin/winners.tsx are default re-exports from superadmin/winners.tsx — single source of truth. Good."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_lottery_v2.py (new)"
+  ],
+  "success_rate": {"backend": "11/12 (91.7%) — 1 spec violation on PATCH empty-string→None", "frontend": "100% on all 6 UI flows (superadmin winners, poster modal + save, create modal prize/desc, winners modal WA buttons, sales lottery-banner→winners RBAC, sales txn ticket-card save/share)"},
+  "seed_data_creation": "During tests: ephemeral periods TEST_V2_* and TEST_UI_PZDS created and cleaned up. Reactivated seeded period 'Undian Tahunan 2026' with prize_description='Motor Beat + TV + Rice Cooker' and description text — left active for further UI use. Leftover from prior iterations: TEST_Undian_ac5824 (2 tiket, cannot auto-delete by design) still present; not blocking.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend tests must be run with -n0 (single worker) because only one lottery period can be active globally. Run: `EXPO_PUBLIC_BACKEND_URL=https://oxly-crm.preview.emergentagent.com pytest /app/backend/tests/test_lottery_v2.py -n0 -v`. Login: superadmin/super123, adminA/admin123, A1/sales123 (group A). Key testIDs verified: search-input, wa-winner-<period_id>-<rank> (winners screen), wa-winner-<rank> (winners modal in lottery.tsx), open-poster-btn, save-poster-btn, share-poster-btn, close-poster-btn, period-prize-input, period-desc-input, add-period-btn, save-modal-btn, cancel-modal-btn, view-winners-<id>, close-winners-btn, back-btn, lottery-banner, save-ticket-card-btn, share-ticket-card-btn. Poster modal requires an active period (else 'Buka Poster Promosi' button is hidden). Seeded 'Undian Bulan Agustus 2026' has 5 tickets + 3 winners drawn, all sales A1 group A → used to verify sales RBAC on /winners.",
+  "rca_of_issue": "PATCH empty-string-to-None: In server.py:1511 the update dict is built with `if v is not None` filter, which lets empty strings pass through. POST create at 1475-1476 explicitly does `(body.prize_description or '').strip() or None` — different logic. Fix: apply the same normalization in PATCH for prize_description and description keys, and stop filtering None values for these two nullable-by-design fields."
+}

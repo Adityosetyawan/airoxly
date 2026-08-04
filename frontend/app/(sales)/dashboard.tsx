@@ -125,20 +125,25 @@ export default function SalesDashboard() {
             </View>
 
             {lottery && (
-              <View style={styles.lotteryBanner} testID="lottery-banner">
+              <TouchableOpacity
+                onPress={() => router.push("/(sales)/winners")}
+                activeOpacity={0.8}
+                style={styles.lotteryBanner}
+                testID="lottery-banner"
+              >
                 <View style={styles.lotteryIcon}>
                   <Ionicons name="gift" size={20} color="#fff" />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.lotteryTitle}>{lottery.name}</Text>
                   <Text style={styles.lotterySub}>
-                    {lotteryCount} tiket dari grup Anda · Setiap 1 galon = 1 tiket
+                    {lotteryCount} tiket dari grup Anda · Tap untuk lihat pemenang
                   </Text>
                 </View>
                 <View style={styles.lotteryChip}>
                   <Text style={styles.lotteryChipText}>AKTIF</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             )}
 
             {/* ACTIONS */}

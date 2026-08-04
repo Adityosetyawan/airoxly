@@ -65,6 +65,14 @@ export default function AdminDashboard() {
           <MiniCard label="Hutang Terbentuk" value={"Rp " + rp(report?.totals?.total_hutang || 0)} icon="alert-circle" color={theme.color.error} />
         </View>
 
+        <View style={styles.linkRow}>
+          <TouchableOpacity onPress={() => router.push("/(admin)/winners")} style={styles.linkBtn} testID="open-winners-btn">
+            <Ionicons name="trophy" size={16} color="#B45309" />
+            <Text style={styles.linkText}>Riwayat Pemenang Undian</Text>
+            <Ionicons name="chevron-forward" size={16} color={theme.color.muted} />
+          </TouchableOpacity>
+        </View>
+
         <Text style={styles.section}>Rangkuman Per Sales (Hari Ini)</Text>
         {(report?.groups || []).map((g: any) => (
           <TouchableOpacity
@@ -129,4 +137,16 @@ const styles = StyleSheet.create({
   gSub: { fontSize: 11, color: theme.color.muted, marginTop: 2 },
   gDebt: { fontSize: 11, color: theme.color.error, marginTop: 2 },
   empty: { textAlign: "center", color: theme.color.muted, padding: 24 },
+  linkRow: { marginTop: 12 },
+  linkBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+    backgroundColor: "#FEF3C7",
+  },
+  linkText: { flex: 1, fontSize: 13, fontWeight: "600", color: "#B45309" },
 });

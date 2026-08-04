@@ -27,6 +27,7 @@ export default function SuperAdminLayout() {
       <Tabs.Screen name="user-form" options={{ href: null }} />
       <Tabs.Screen name="route-history" options={{ href: null }} />
       <Tabs.Screen name="lottery" options={{ href: null }} />
+      <Tabs.Screen name="winners" options={{ href: null }} />
     </Tabs>
   );
 }

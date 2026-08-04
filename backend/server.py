@@ -175,6 +175,8 @@ class LotteryPeriodCreate(BaseModel):
     end_date: str
     winner_count: int = 1
     is_active: bool = False
+    prize_description: Optional[str] = None
+    description: Optional[str] = None
 
 
 class LotteryPeriodUpdate(BaseModel):
@@ -183,6 +185,8 @@ class LotteryPeriodUpdate(BaseModel):
     end_date: Optional[str] = None
     winner_count: Optional[int] = None
     is_active: Optional[bool] = None
+    prize_description: Optional[str] = None
+    description: Optional[str] = None
 
 
 class ExpenseCreate(BaseModel):
@@ -733,6 +737,7 @@ async def create_transaction(body: TransactionCreate, user=Depends(require_roles
                     "customer_id": customer["id"],
                     "customer_name": customer.get("name"),
                     "customer_no": customer.get("customer_no"),
+                    "customer_wa": customer.get("wa_number") or "",
                     "transaction_id": txn_id,
                     "created_at": now_utc().isoformat(),
                 })
@@ -1467,6 +1472,8 @@ async def create_lottery_period(body: LotteryPeriodCreate, user=Depends(require_
         "end_date": body.end_date,
         "winner_count": int(body.winner_count),
         "is_active": bool(body.is_active),
+        "prize_description": (body.prize_description or "").strip() or None,
+        "description": (body.description or "").strip() or None,
         "winners": [],
         "drawn_at": None,
         "created_by": user["id"],
@@ -1562,6 +1569,7 @@ async def draw_lottery(pid: str, user=Depends(require_roles("super_admin"))):
             "customer_id": t.get("customer_id"),
             "customer_name": t.get("customer_name"),
             "customer_no": t.get("customer_no"),
+            "customer_wa": t.get("customer_wa") or "",
             "sales_code": t.get("sales_code"),
             "group_letter": t.get("group_letter"),
         })
@@ -1651,6 +1659,42 @@ async def lottery_stats(period_id: Optional[str] = None, user=Depends(get_curren
         "top_customers": [{"customer_id": t["_id"], "customer_name": t["customer_name"], "customer_no": t["customer_no"], "sales_code": t["sales_code"], "count": t["count"]} for t in top_customers],
         "per_sales": [{"sales_id": t["_id"], "sales_code": t["sales_code"], "count": t["count"]} for t in per_sales],
     }
+
+
+@api.get("/lottery/winners")
+async def list_all_winners(limit: int = 200, user=Depends(get_current_user)):
+    """Cross-period list of winners. Role-scoped: sales/admin filtered by group."""
+    q: dict = {"drawn_at": {"$ne": None}, "winners": {"$exists": True, "$not": {"$size": 0}}}
+    periods = await db.lottery_periods.find(q, {"_id": 0}).sort("drawn_at", -1).limit(500).to_list(500)
+    role = user["role"]
+    group = user.get("group_letter")
+    sales_id = user["id"] if role == "sales" else None
+    out = []
+    for p in periods:
+        for w in p.get("winners", []):
+            if role == "sales":
+                # need to check the ticket belongs to this sales
+                t = await db.lottery_tickets.find_one(
+                    {"ticket_code": w["ticket_code"]},
+                    {"_id": 0, "sales_id": 1, "group_letter": 1},
+                )
+                if not t or t.get("sales_id") != sales_id:
+                    continue
+            elif role == "admin":
+                if w.get("group_letter") != group:
+                    continue
+            out.append({
+                "period_id": p["id"],
+                "period_name": p["name"],
+                "drawn_at": p["drawn_at"],
+                "prize_description": p.get("prize_description"),
+                **w,
+            })
+            if len(out) >= limit:
+                break
+        if len(out) >= limit:
+            break
+    return out
 
 
 app.include_router(api)

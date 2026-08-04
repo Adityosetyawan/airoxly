@@ -1,5 +1,7 @@
 import React, { useCallback, useState } from "react";
 import {
+  Alert,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -13,8 +15,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { theme } from "@/src/theme";
 import { api } from "@/src/api";
+import { useAuth } from "@/src/AuthContext";
 import { useToast } from "@/src/components/Toast";
-import { sendWhatsApp } from "@/src/whatsapp";
+import { sendWhatsApp, broadcastWhatsApp } from "@/src/whatsapp";
 
 type Winner = {
   period_id: string;
@@ -34,6 +37,8 @@ type Winner = {
 export default function WinnersHistory() {
   const router = useRouter();
   const toast = useToast();
+  const { user } = useAuth();
+  const canBroadcast = user?.role === "super_admin" || user?.role === "admin";
   const [winners, setWinners] = useState<Winner[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
@@ -93,6 +98,34 @@ export default function WinnersHistory() {
     sendWhatsApp(w.customer_wa, msg);
   };
 
+  const broadcastGroup = async (periodName: string, items: Winner[], prize?: string | null) => {
+    const eligible = items.filter((w) => w.customer_wa);
+    if (eligible.length === 0) {
+      toast.show("Tidak ada pemenang dengan nomor WhatsApp", "error");
+      return;
+    }
+    const confirm = Platform.OS === "web"
+      ? window.confirm(`Broadcast WA ke ${eligible.length} pemenang periode "${periodName}"? WhatsApp akan terbuka bergantian.`)
+      : await new Promise<boolean>((res) => {
+          Alert.alert(
+            "Broadcast WA",
+            `Kirim ucapan ke ${eligible.length} pemenang periode "${periodName}" secara berurutan?`,
+            [
+              { text: "Batal", style: "cancel", onPress: () => res(false) },
+              { text: "Kirim", onPress: () => res(true) },
+            ],
+          );
+        });
+    if (!confirm) return;
+    const recipients = eligible.map((w) => ({
+      phone: w.customer_wa || "",
+      label: w.customer_name,
+      message: `🎉 Selamat ${w.customer_name}!\n\nAnda memenangkan Undian *${periodName}* sebagai Juara #${w.rank} dengan nomor undian *${w.ticket_code}*.${prize ? `\n\n🏆 Hadiah: ${prize}` : ""}\n\nSilakan hubungi kami untuk info klaim hadiah.\n\nSalam,\nTim Air OXLY`,
+    }));
+    const r = await broadcastWhatsApp(recipients);
+    toast.show(`Broadcast: ${r.sent} terkirim · ${r.skipped} tanpa WA · ${r.failed} gagal`, r.failed > 0 ? "error" : "success");
+  };
+
   return (
     <SafeAreaView style={styles.wrap} edges={["top"]}>
       <View style={styles.header}>
@@ -135,55 +168,71 @@ export default function WinnersHistory() {
           </View>
         )}
 
-        {groupList.map(([pid, g]) => (
-          <View key={pid} style={styles.section}>
-            <View style={styles.periodHead}>
-              <Ionicons name="trophy" size={16} color="#B45309" />
-              <Text style={styles.periodName}>{g.periodName}</Text>
-              <Text style={styles.periodDate}>
-                {new Date(g.drawnAt).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
-              </Text>
-            </View>
-            {g.prize ? <Text style={styles.prize}>🏆 {g.prize}</Text> : null}
+        {groupList.map(([pid, g]) => {
+          const eligibleCount = g.items.filter((w) => w.customer_wa).length;
+          return (
+            <View key={pid} style={styles.section}>
+              <View style={styles.periodHead}>
+                <Ionicons name="trophy" size={16} color="#B45309" />
+                <Text style={styles.periodName}>{g.periodName}</Text>
+                <Text style={styles.periodDate}>
+                  {new Date(g.drawnAt).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                </Text>
+              </View>
+              {g.prize ? <Text style={styles.prize}>🏆 {g.prize}</Text> : null}
 
-            {g.items
-              .sort((a, b) => a.rank - b.rank)
-              .map((w) => (
-                <View key={w.ticket_code} style={styles.row}>
-                  <View
-                    style={[
-                      styles.rankBadge,
-                      w.rank === 1 && { backgroundColor: "#F59E0B" },
-                      w.rank === 2 && { backgroundColor: "#9CA3AF" },
-                      w.rank === 3 && { backgroundColor: "#B45309" },
-                    ]}
-                  >
-                    <Text style={styles.rankText}>#{w.rank}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.name}>{w.customer_name}</Text>
-                    <Text style={styles.sub}>
-                      {w.customer_no != null ? `No. ${w.customer_no} · ` : ""}Sales {w.sales_code || "-"}
-                    </Text>
-                    <Text style={styles.ticket}>{w.ticket_code}</Text>
-                  </View>
-                  {w.customer_wa ? (
-                    <TouchableOpacity
-                      onPress={() => sendWA(w)}
-                      style={styles.waBtn}
-                      testID={`wa-winner-${w.period_id}-${w.rank}`}
+              {canBroadcast && eligibleCount > 0 && (
+                <TouchableOpacity
+                  onPress={() => broadcastGroup(g.periodName, g.items, g.prize)}
+                  style={styles.broadcastBtn}
+                  testID={`broadcast-${pid}`}
+                >
+                  <Ionicons name="megaphone" size={14} color="#fff" />
+                  <Text style={styles.broadcastText}>
+                    Broadcast WA ke {eligibleCount} Pemenang
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {g.items
+                .sort((a, b) => a.rank - b.rank)
+                .map((w) => (
+                  <View key={w.ticket_code} style={styles.row}>
+                    <View
+                      style={[
+                        styles.rankBadge,
+                        w.rank === 1 && { backgroundColor: "#F59E0B" },
+                        w.rank === 2 && { backgroundColor: "#9CA3AF" },
+                        w.rank === 3 && { backgroundColor: "#B45309" },
+                      ]}
                     >
-                      <Ionicons name="logo-whatsapp" size={16} color="#fff" />
-                    </TouchableOpacity>
-                  ) : (
-                    <View style={[styles.waBtn, { backgroundColor: theme.color.border }]}>
-                      <Ionicons name="ban-outline" size={14} color={theme.color.muted} />
+                      <Text style={styles.rankText}>#{w.rank}</Text>
                     </View>
-                  )}
-                </View>
-              ))}
-          </View>
-        ))}
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.name}>{w.customer_name}</Text>
+                      <Text style={styles.sub}>
+                        {w.customer_no != null ? `No. ${w.customer_no} · ` : ""}Sales {w.sales_code || "-"}
+                      </Text>
+                      <Text style={styles.ticket}>{w.ticket_code}</Text>
+                    </View>
+                    {w.customer_wa ? (
+                      <TouchableOpacity
+                        onPress={() => sendWA(w)}
+                        style={styles.waBtn}
+                        testID={`wa-winner-${w.period_id}-${w.rank}`}
+                      >
+                        <Ionicons name="logo-whatsapp" size={16} color="#fff" />
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={[styles.waBtn, { backgroundColor: theme.color.border }]}>
+                        <Ionicons name="ban-outline" size={14} color={theme.color.muted} />
+                      </View>
+                    )}
+                  </View>
+                ))}
+            </View>
+          );
+        })}
       </ScrollView>
     </SafeAreaView>
   );
@@ -253,4 +302,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  broadcastBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: "#25D366",
+    marginBottom: 8,
+  },
+  broadcastText: { color: "#fff", fontWeight: "700", fontSize: 12 },
 });

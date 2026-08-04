@@ -21,7 +21,7 @@ import { api } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
 import PromoPoster from "@/src/components/PromoPoster";
 import { saveShot, shareShot } from "@/src/utils/capture";
-import { sendWhatsApp } from "@/src/whatsapp";
+import { sendWhatsApp, broadcastWhatsApp } from "@/src/whatsapp";
 
 function todayISO(): string {
   const d = new Date();
@@ -492,7 +492,41 @@ export default function LotteryManagement() {
             <Text style={styles.winPeriodSub}>
               Diundi: {detailPeriod?.drawn_at ? new Date(detailPeriod.drawn_at).toLocaleString("id-ID") : "-"}
             </Text>
-            <ScrollView style={{ maxHeight: 400 }} contentContainerStyle={{ padding: 4 }}>
+            {(detailPeriod?.winners || []).filter((w: any) => w.customer_wa).length > 0 && (
+              <TouchableOpacity
+                onPress={async () => {
+                  const eligible = (detailPeriod!.winners || []).filter((w: any) => w.customer_wa);
+                  const confirm = Platform.OS === "web"
+                    ? window.confirm(`Broadcast WA ke ${eligible.length} pemenang? WhatsApp akan terbuka bergantian.`)
+                    : await new Promise<boolean>((res) => {
+                        Alert.alert(
+                          "Broadcast WA",
+                          `Kirim ke ${eligible.length} pemenang secara berurutan?`,
+                          [
+                            { text: "Batal", style: "cancel", onPress: () => res(false) },
+                            { text: "Kirim", onPress: () => res(true) },
+                          ],
+                        );
+                      });
+                  if (!confirm) return;
+                  const recipients = eligible.map((w: any) => ({
+                    phone: w.customer_wa,
+                    label: w.customer_name,
+                    message: `🎉 Selamat ${w.customer_name}!\n\nAnda memenangkan Undian *${detailPeriod!.name}* sebagai Juara #${w.rank} dengan nomor undian *${w.ticket_code}*.${detailPeriod!.prize_description ? `\n\n🏆 Hadiah: ${detailPeriod!.prize_description}` : ""}\n\nSilakan hubungi kami untuk info klaim hadiah.\n\nSalam,\nTim Air OXLY`,
+                  }));
+                  const r = await broadcastWhatsApp(recipients);
+                  toast.show(`Broadcast: ${r.sent} terkirim · ${r.skipped} tanpa WA · ${r.failed} gagal`, r.failed > 0 ? "error" : "success");
+                }}
+                style={styles.broadcastBtn}
+                testID="broadcast-winners-btn"
+              >
+                <Ionicons name="megaphone" size={16} color="#fff" />
+                <Text style={styles.broadcastBtnText}>
+                  Broadcast WA ke {(detailPeriod!.winners || []).filter((w: any) => w.customer_wa).length} Pemenang
+                </Text>
+              </TouchableOpacity>
+            )}
+            <ScrollView style={{ maxHeight: 360 }} contentContainerStyle={{ padding: 4 }}>
               {(detailPeriod?.winners || []).map((w: any) => (
                 <View key={w.ticket_code} style={styles.winRow}>
                   <View
@@ -669,6 +703,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginLeft: 4,
   },
+  broadcastBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: "#25D366",
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  broadcastBtnText: { color: "#fff", fontWeight: "700", fontSize: 13 },
   noActive: {
     alignItems: "center",
     padding: 24,

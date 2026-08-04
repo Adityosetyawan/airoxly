@@ -19,6 +19,56 @@ export async function sendWhatsApp(phone: string, message: string) {
   await Linking.openURL(url);
 }
 
+/**
+ * Broadcast a personalized WhatsApp message to multiple recipients.
+ *
+ * - On web: opens each recipient in a new tab via window.open()
+ *   (allowed because triggered from a single user gesture; some browsers may block
+ *   additional tabs after the first — user must allow pop-ups).
+ * - On native: opens WA sheets sequentially with a delay so the OS can queue them.
+ *
+ * Returns counts: { sent, skipped, failed }.
+ */
+export async function broadcastWhatsApp(
+  recipients: { phone: string; message: string; label?: string }[],
+): Promise<{ sent: number; skipped: number; failed: number }> {
+  let sent = 0;
+  let skipped = 0;
+  let failed = 0;
+  for (let i = 0; i < recipients.length; i++) {
+    const r = recipients[i];
+    const n = sanitize(r.phone);
+    if (!n) {
+      skipped += 1;
+      continue;
+    }
+    const encoded = encodeURIComponent(r.message);
+    const url = `https://wa.me/${n}?text=${encoded}`;
+    try {
+      if (Platform.OS === "web") {
+        // Open each in a new tab. Browsers typically allow the first pop-up;
+        // subsequent ones may require user permission.
+        const w = typeof window !== "undefined" ? window.open(url, "_blank") : null;
+        if (!w) failed += 1;
+        else sent += 1;
+      } else {
+        const supported = await Linking.canOpenURL(url);
+        if (!supported) {
+          failed += 1;
+        } else {
+          await Linking.openURL(url);
+          sent += 1;
+        }
+      }
+    } catch {
+      failed += 1;
+    }
+    // Small delay so devices/browsers don't drop subsequent opens
+    await new Promise((res) => setTimeout(res, 400));
+  }
+  return { sent, skipped, failed };
+}
+
 export function formatReceipt(opts: {
   storeName?: string;
   salesCode?: string;

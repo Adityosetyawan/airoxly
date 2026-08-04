@@ -1,13 +1,16 @@
-import React, { useCallback, useState } from "react";
-import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useCallback, useRef, useState } from "react";
+import { FlatList, Modal, Platform, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
+import ViewShot from "react-native-view-shot";
 import { theme, rp } from "@/src/theme";
 import { api, Expense, Transaction } from "@/src/api";
 import { useAuth } from "@/src/AuthContext";
 import { ExpenseModal } from "@/src/components/ExpenseModal";
 import { useToast } from "@/src/components/Toast";
+import PromoPoster from "@/src/components/PromoPoster";
+import { saveShot, shareShot } from "@/src/utils/capture";
 
 const CAT_ICONS: Record<string, any> = {
   BBM: "car-outline",
@@ -26,6 +29,9 @@ export default function SalesDashboard() {
   const [lotteryCount, setLotteryCount] = useState<number>(0);
   const [refreshing, setRefreshing] = useState(false);
   const [expenseModal, setExpenseModal] = useState(false);
+  const [posterOpen, setPosterOpen] = useState(false);
+  const [posterBusy, setPosterBusy] = useState<null | "save" | "share">(null);
+  const posterShotRef = useRef<ViewShot>(null);
   const today = new Date().toISOString().slice(0, 10);
 
   const load = useCallback(async () => {
@@ -125,25 +131,31 @@ export default function SalesDashboard() {
             </View>
 
             {lottery && (
-              <TouchableOpacity
-                onPress={() => router.push("/(sales)/winners")}
-                activeOpacity={0.8}
-                style={styles.lotteryBanner}
-                testID="lottery-banner"
-              >
-                <View style={styles.lotteryIcon}>
-                  <Ionicons name="gift" size={20} color="#fff" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.lotteryTitle}>{lottery.name}</Text>
-                  <Text style={styles.lotterySub}>
-                    {lotteryCount} tiket dari grup Anda · Tap untuk lihat pemenang
-                  </Text>
-                </View>
-                <View style={styles.lotteryChip}>
-                  <Text style={styles.lotteryChipText}>AKTIF</Text>
-                </View>
-              </TouchableOpacity>
+              <View style={styles.lotteryBanner} testID="lottery-banner">
+                <TouchableOpacity
+                  onPress={() => router.push("/(sales)/winners")}
+                  activeOpacity={0.7}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}
+                >
+                  <View style={styles.lotteryIcon}>
+                    <Ionicons name="gift" size={20} color="#fff" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.lotteryTitle}>{lottery.name}</Text>
+                    <Text style={styles.lotterySub}>
+                      {lotteryCount} tiket dari grup Anda · Tap untuk pemenang
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setPosterOpen(true)}
+                  style={styles.posterChip}
+                  testID="open-poster-btn"
+                >
+                  <Ionicons name="megaphone" size={12} color={theme.color.brand} />
+                  <Text style={styles.posterChipText}>Poster</Text>
+                </TouchableOpacity>
+              </View>
             )}
 
             {/* ACTIONS */}
@@ -241,6 +253,76 @@ export default function SalesDashboard() {
         onClose={() => setExpenseModal(false)}
         onSaved={() => { setExpenseModal(false); load(); }}
       />
+
+      {/* Promo Poster Modal (Sales) */}
+      <Modal visible={posterOpen} animationType="slide" transparent onRequestClose={() => setPosterOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalWrap}>
+            <Text style={styles.modalTitle}>Poster Promosi Undian</Text>
+            <ScrollView style={{ maxHeight: 500 }} contentContainerStyle={{ alignItems: "center", padding: 4 }}>
+              {lottery && (
+                <View nativeID="oxly-sales-poster-shot">
+                  <ViewShot ref={posterShotRef} options={{ format: "png", quality: 1 }}>
+                    <PromoPoster
+                      periodName={lottery.name}
+                      startDate={lottery.start_date}
+                      endDate={lottery.end_date}
+                      winnerCount={lottery.winner_count}
+                      prizeDescription={lottery.prize_description}
+                      description={lottery.description}
+                    />
+                  </ViewShot>
+                </View>
+              )}
+            </ScrollView>
+            <Text style={styles.modalHint}>
+              Bagikan poster ke pelanggan/media sosial untuk memperbanyak peserta undian.
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                onPress={async () => {
+                  setPosterBusy("save");
+                  try {
+                    await saveShot(posterShotRef, "oxly-sales-poster-shot", "OXLY-Poster-Undian");
+                    toast.show(Platform.OS === "web" ? "Poster diunduh" : "Poster tersimpan di galeri", "success");
+                  } catch (e: any) {
+                    toast.show(e?.message || "Gagal simpan", "error");
+                  } finally {
+                    setPosterBusy(null);
+                  }
+                }}
+                disabled={posterBusy !== null}
+                style={[styles.modalGhost, posterBusy !== null && { opacity: 0.6 }]}
+                testID="save-sales-poster-btn"
+              >
+                <Ionicons name="download-outline" size={16} color={theme.color.brand} />
+                <Text style={styles.modalGhostText}>{posterBusy === "save" ? "…" : "Simpan"}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={async () => {
+                  setPosterBusy("share");
+                  try {
+                    await shareShot(posterShotRef, "oxly-sales-poster-shot", "OXLY-Poster-Undian", "Poster Undian Air OXLY");
+                  } catch (e: any) {
+                    toast.show(e?.message || "Gagal share", "error");
+                  } finally {
+                    setPosterBusy(null);
+                  }
+                }}
+                disabled={posterBusy !== null}
+                style={[styles.modalPrimary, posterBusy !== null && { opacity: 0.6 }]}
+                testID="share-sales-poster-btn"
+              >
+                <Ionicons name="share-social" size={16} color="#fff" />
+                <Text style={styles.modalPrimaryText}>{posterBusy === "share" ? "…" : "Share"}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setPosterOpen(false)} style={styles.modalGhost} testID="close-sales-poster-btn">
+                <Text style={styles.modalGhostText}>Tutup</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -318,6 +400,61 @@ const styles = StyleSheet.create({
     backgroundColor: theme.color.brandPrimary,
   },
   lotteryChipText: { color: "#fff", fontSize: 9, fontWeight: "700", letterSpacing: 0.5 },
+  posterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: theme.color.brandPrimary,
+  },
+  posterChipText: { color: theme.color.brand, fontSize: 11, fontWeight: "700" },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    padding: 16,
+  },
+  modalWrap: {
+    backgroundColor: theme.color.surface,
+    borderRadius: 16,
+    padding: 12,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: theme.color.onSurface,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  modalHint: { fontSize: 11, color: theme.color.muted, textAlign: "center", marginTop: 8, marginHorizontal: 12 },
+  modalActions: { flexDirection: "row", gap: 8, marginTop: 12 },
+  modalGhost: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+  },
+  modalGhostText: { color: theme.color.brand, fontWeight: "600" },
+  modalPrimary: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: theme.color.brandPrimary,
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+  },
+  modalPrimaryText: { color: "#fff", fontWeight: "700" },
   mini: { flex: 1, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: theme.color.border },
   miniLabel: { fontSize: 11, color: theme.color.muted },
   miniValue: { fontSize: 13, fontWeight: "600", color: theme.color.onSurface, marginTop: 2 },

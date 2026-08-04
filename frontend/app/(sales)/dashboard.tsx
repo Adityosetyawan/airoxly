@@ -22,20 +22,26 @@ export default function SalesDashboard() {
   const [stats, setStats] = useState<any>(null);
   const [txns, setTxns] = useState<Transaction[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [lottery, setLottery] = useState<any | null>(null);
+  const [lotteryCount, setLotteryCount] = useState<number>(0);
   const [refreshing, setRefreshing] = useState(false);
   const [expenseModal, setExpenseModal] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
 
   const load = useCallback(async () => {
     try {
-      const [s, t, e] = await Promise.all([
+      const [s, t, e, lp, ls] = await Promise.all([
         api.overview(),
         api.listTransactions({ date_from: today, date_to: today }),
         api.listExpenses({ date_from: today, date_to: today }),
+        api.activeLotteryPeriod(),
+        api.lotteryStats().catch(() => null),
       ]);
       setStats(s);
       setTxns(t);
       setExpenses(e);
+      setLottery(lp);
+      setLotteryCount(ls?.total_tickets || 0);
     } catch {}
   }, [today]);
 
@@ -117,6 +123,23 @@ export default function SalesDashboard() {
               <MiniStat label="Nilai Jual" value={"Rp " + rp(stats?.today_total || 0)} />
               <MiniStat label="Pelanggan" value={String(stats?.total_customers || 0)} />
             </View>
+
+            {lottery && (
+              <View style={styles.lotteryBanner} testID="lottery-banner">
+                <View style={styles.lotteryIcon}>
+                  <Ionicons name="gift" size={20} color="#fff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.lotteryTitle}>{lottery.name}</Text>
+                  <Text style={styles.lotterySub}>
+                    {lotteryCount} tiket dari grup Anda · Setiap 1 galon = 1 tiket
+                  </Text>
+                </View>
+                <View style={styles.lotteryChip}>
+                  <Text style={styles.lotteryChipText}>AKTIF</Text>
+                </View>
+              </View>
+            )}
 
             {/* ACTIONS */}
             <View style={styles.actions}>
@@ -262,6 +285,34 @@ const styles = StyleSheet.create({
   kpiValue: { fontSize: 14, fontWeight: "700", color: theme.color.onSurface, letterSpacing: -0.3 },
   kpiUnit: { fontSize: 11, color: theme.color.muted, fontWeight: "400" },
   miniRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
+  lotteryBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: theme.color.brandTertiary,
+    borderWidth: 1,
+    borderColor: theme.color.brandPrimary,
+    marginBottom: 16,
+  },
+  lotteryIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.color.brandPrimary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lotteryTitle: { fontSize: 13, fontWeight: "700", color: theme.color.brand },
+  lotterySub: { fontSize: 11, color: theme.color.onBrandTertiary, marginTop: 2 },
+  lotteryChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: theme.color.brandPrimary,
+  },
+  lotteryChipText: { color: "#fff", fontSize: 9, fontWeight: "700", letterSpacing: 0.5 },
   mini: { flex: 1, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: theme.color.border },
   miniLabel: { fontSize: 11, color: theme.color.muted },
   miniValue: { fontSize: 13, fontWeight: "600", color: theme.color.onSurface, marginTop: 2 },

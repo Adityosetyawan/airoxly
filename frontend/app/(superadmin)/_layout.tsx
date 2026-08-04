@@ -26,6 +26,7 @@ export default function SuperAdminLayout() {
       <Tabs.Screen name="live" options={{ title: "GPS", tabBarIcon: ({ color, size }) => <Ionicons name="location-outline" size={size} color={color} /> }} />
       <Tabs.Screen name="user-form" options={{ href: null }} />
       <Tabs.Screen name="route-history" options={{ href: null }} />
+      <Tabs.Screen name="lottery" options={{ href: null }} />
     </Tabs>
   );
 }

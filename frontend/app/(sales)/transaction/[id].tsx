@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
@@ -45,6 +45,8 @@ export default function TransactionDetail() {
         new_debt: t.new_debt,
         new_loans: t.new_loans,
         edited: t.edited,
+        lottery_tickets: t.lottery_tickets,
+        lottery_period_name: t.lottery_period_name,
       });
       await sendWhatsApp(t.customer_wa || "", msg);
     } catch (e: any) {
@@ -113,6 +115,30 @@ export default function TransactionDetail() {
           <Row label="Pinjam Sebelum" value={t.prev_loans + " gln"} />
           <Row label="Total Pinjam Galon" value={t.new_loans + " gln"} bold />
         </View>
+
+        {t.lottery_tickets && t.lottery_tickets.length > 0 && (
+          <>
+            <Text style={styles.section}>
+              🎁 Nomor Undian ({t.lottery_tickets.length})
+            </Text>
+            <View style={styles.lotteryCard}>
+              {t.lottery_period_name && (
+                <Text style={styles.lotteryPeriod}>{t.lottery_period_name}</Text>
+              )}
+              <View style={styles.ticketsWrap}>
+                {t.lottery_tickets.map((code, idx) => (
+                  <View key={idx} style={styles.ticket} testID={`ticket-${idx}`}>
+                    <Ionicons name="ticket" size={12} color={theme.color.brand} />
+                    <Text style={styles.ticketCode}>{code}</Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={styles.lotteryHint}>
+                Setiap 1 galon = 1 nomor undian. Nomor ini otomatis diundi sesuai periode.
+              </Text>
+            </View>
+          </>
+        )}
 
         <TouchableOpacity onPress={resendWA} style={styles.wa} testID="resend-wa-btn">
           <Ionicons name="logo-whatsapp" size={20} color="#fff" />
@@ -188,4 +214,50 @@ const styles = StyleSheet.create({
   editText: { color: theme.color.brand, fontWeight: "600" },
   del: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: theme.color.error, marginTop: 8 },
   delText: { color: theme.color.error, fontWeight: "600" },
+  lotteryCard: {
+    borderWidth: 1,
+    borderColor: theme.color.brandPrimary,
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: theme.color.brandTertiary,
+  },
+  lotteryPeriod: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: theme.color.brand,
+    marginBottom: 10,
+    textAlign: "center",
+    letterSpacing: 0.3,
+  },
+  ticketsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    justifyContent: "center",
+  },
+  ticket: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: theme.color.brandPrimary,
+  },
+  ticketCode: {
+    fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }),
+    fontSize: 12,
+    fontWeight: "700",
+    color: theme.color.brand,
+    letterSpacing: 0.5,
+  },
+  lotteryHint: {
+    fontSize: 11,
+    color: theme.color.brand,
+    marginTop: 10,
+    textAlign: "center",
+    fontStyle: "italic",
+  },
 });

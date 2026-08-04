@@ -1,0 +1,37 @@
+{
+  "summary": "Undian Berhadiah (Lottery) feature — end-to-end backend + frontend + WhatsApp receipt formatting all VERIFIED PASSING. Backend: 21/21 pytest tests green in /app/backend/tests/test_lottery.py covering period CRUD, RBAC (super_admin only create/patch/activate/delete/draw; sales/admin get 403), date/winner_count validation, auto-ticket generation on transaction (unit='gln' excl 'Kosong'), non-gallon/empty-gallon items produce 0 tickets, no-active-period produces 0 tickets, DELETE transaction cascades to tickets, random draw picks N winners with correct schema {period_id, drawn_at, winner_count, total_tickets, winners[{rank, ticket_code, customer_name,...}]}, period becomes inactive+drawn_at set and cannot be re-drawn/edited, GET /lottery/tickets filters by role (sales sees own, admin sees own group, super sees all), and GET /lottery/stats returns {period,total_tickets,top_customers,per_sales}. Ticket format matches ^OXLY-[A-Z0-9]{6}$ and codes are unique. Frontend (mobile viewport 390x844): superadmin dashboard → 'Undian Berhadiah' navigates to /lottery, add-period-btn opens modal, all form testIDs (period-name/start/end/winners-input + save-modal-btn) present, new period appears in list with correct badge, activate/edit/delete buttons render with period-{id} testIDs. Sales A1 dashboard: testID='lottery-banner' displays active period name + 'N tiket dari grup Anda · Setiap 1 galon = 1 tiket' + AKTIF chip. Sales transaction detail: for txn with 3 gallon → renders section '🎁 Nomor Undian (3)' with 3 chip testIDs ticket-0/1/2 containing OXLY-XXXXXX codes and period name. WhatsApp receipt: unit tests confirm formatReceipt() adds '🎁 *Nomor Undian – <period>*' + count line + '• OXLY-XXX' per ticket + hint line ONLY when lottery_tickets is non-empty (empty/undefined → no block).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_lottery.py",
+    "/app/backend/tests/test_oxly_backend.py",
+    "/app/test_reports/pytest/lottery_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: The pre-existing seeded period 'Undian Tahunan 2026' had is_active=false (DRAFT) when UI was first opened; also its date range is 2026-01-01..2026-12-31 which does include today (2026-08-04). If main agent's intent is that this seed period should be active by default at first login, verify seed logic re-activates it if no other active period exists. Not a functional bug, just a seed convention note.",
+    "OPTIONAL: Backend tests must be run serially (-n0) because only one active period is allowed globally — parallel workers race on activation state. Consider adding a pytest marker or serial fixture. Not blocking."
+  ],
+  "critical_code_review_comments": [
+    "server.py:721 — active-period guard correctly checks start_date <= today <= end_date AND not drawn_at; if today is outside range no tickets are generated even when is_active=true (confirmed via manual test — expected behavior).",
+    "server.py:1533-1541 — DELETE period rejects when ticket_count>0 (400). Good safety. But there is no endpoint to bulk-delete/reset tickets, so a period that ever received tickets can never be removed unless drawn or transactions manually purged. Acceptable trade-off.",
+    "server.py:1437 — ticket code = 'OXLY-' + 6 chars from secrets.choice(ascii_uppercase+digits). Space is 36^6≈2.2B — extremely low collision risk, and _gen_unique_ticket_code retries up to 30x with UUID fallback. Solid.",
+    "server.py:715-719 — galon_qty excludes items whose name contains 'Kosong' AND requires unit=='gln'. Matches spec choice #1.",
+    "server.py:903-904 — DELETE /api/transactions/{id} also does db.lottery_tickets.delete_many({'transaction_id': txn_id}). Cascade verified in tests.",
+    "PATCH /lottery/periods excludes drawn periods (400) — good. But note that if is_active=false is passed via PATCH, _deactivate_all is NOT called (only when is_active becomes truthy). Fine.",
+    "lottery.tsx has SafeAreaView from react-native-safe-area-context (not deprecated). No expo-av / expo-barcode-scanner / expo-background-fetch usages found — clean.",
+    "whatsapp.ts formatReceipt: lottery block only emitted when lottery_tickets && length>0. Confirmed. Period name optional — header falls back to '🎁 *Nomor Undian*'."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_lottery.py (new)"
+  ],
+  "success_rate": {"backend": "21/21 (100%)", "frontend": "100% on all 3 lottery flows (superadmin management, sales banner, transaction detail chips) + WhatsApp receipt unit tests 10/10"},
+  "seed_data_creation": "During UI test: created TEST_UI_Undian_1312 (period, 2027 dates) — cleaned up post-run. Created TEST_UI_Now_<hex> (period covering today) + test customer + txn with 3 tickets to verify banner+chip display — cleaned up. TEST_Undian_ac5824 leftover from parallel pytest runs has 2 tickets and cannot auto-delete (returns 400 as designed); main agent may leave it or purge tickets manually.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run backend lottery tests serially: `EXPO_PUBLIC_BACKEND_URL=https://oxly-crm.preview.emergentagent.com pytest /app/backend/tests/test_lottery.py -n0`. Only one lottery period can be active globally — parallel workers cause race failures. For UI, active period must have date range that covers today (2026-08-04) for tickets to auto-generate; the seeded 'Undian Tahunan 2026' (2026-01-01..2026-12-31) qualifies but was found inactive during this run — may need reactivation. Verified testIDs: add-period-btn, period-{id}, period-name-input, period-start-input, period-end-input, period-winners-input, save-modal-btn, cancel-modal-btn, activate-{id}, draw-{id}, edit-{id}, delete-{id}, view-winners-{id}, close-winners-btn, lottery-banner, ticket-0/1/2. Login inputs have no testIDs — first input=username, second=password, submit via text 'Masuk'."
+}

@@ -9,6 +9,9 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Literal, Any
 import uuid
+import random
+import secrets
+import string
 from datetime import datetime, timezone, timedelta
 import calendar
 import jwt
@@ -164,6 +167,22 @@ class TransactionEdit(BaseModel):
 class LocationPing(BaseModel):
     lat: float
     lng: float
+
+
+class LotteryPeriodCreate(BaseModel):
+    name: str
+    start_date: str  # YYYY-MM-DD
+    end_date: str
+    winner_count: int = 1
+    is_active: bool = False
+
+
+class LotteryPeriodUpdate(BaseModel):
+    name: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    winner_count: Optional[int] = None
+    is_active: Optional[bool] = None
 
 
 class ExpenseCreate(BaseModel):
@@ -690,7 +709,37 @@ async def create_transaction(body: TransactionCreate, user=Depends(require_roles
         "date_only": now_utc().strftime("%Y-%m-%d"),
         "edited": False,
         "edit_count": 0,
+        "lottery_tickets": [],
     }
+    # Auto-generate lottery tickets for gallon-water purchases (excludes empty gallon returns)
+    galon_qty = sum(
+        int(it.qty) for it in body.items
+        if it.unit == "gln" and "Kosong" not in (it.product_name or "")
+    )
+    if galon_qty > 0:
+        period = await db.lottery_periods.find_one({"is_active": True})
+        if period and period.get("start_date", "") <= txn["date_only"] <= period.get("end_date", "9999-12-31") and not period.get("drawn_at"):
+            tickets_docs = []
+            for _ in range(galon_qty):
+                code = await _gen_unique_ticket_code()
+                tickets_docs.append({
+                    "id": str(uuid.uuid4()),
+                    "ticket_code": code,
+                    "period_id": period["id"],
+                    "period_name": period.get("name"),
+                    "sales_id": user["id"],
+                    "sales_code": user.get("sales_code") or user.get("username"),
+                    "group_letter": customer.get("group_letter"),
+                    "customer_id": customer["id"],
+                    "customer_name": customer.get("name"),
+                    "customer_no": customer.get("customer_no"),
+                    "transaction_id": txn_id,
+                    "created_at": now_utc().isoformat(),
+                })
+            await db.lottery_tickets.insert_many(tickets_docs)
+            txn["lottery_tickets"] = [t["ticket_code"] for t in tickets_docs]
+            txn["lottery_period_name"] = period.get("name")
+
     await db.transactions.insert_one(txn)
     await db.customers.update_one(
         {"id": body.customer_id},
@@ -851,6 +900,8 @@ async def delete_txn(txn_id: str, user=Depends(require_roles("super_admin"))):
         },
     )
     await db.transactions.delete_one({"id": txn_id})
+    # Also cleanup lottery tickets linked to this transaction
+    await db.lottery_tickets.delete_many({"transaction_id": txn_id})
     return {"ok": True}
 
 
@@ -1375,6 +1426,230 @@ async def overview(user=Depends(get_current_user)):
         "today_gln_sold": today_gln,
         "today_expenses": today_expenses,
         "today_deposit": today_deposit,
+    }
+
+
+# ============================================================
+# LOTTERY / UNDIAN
+# ============================================================
+def _gen_ticket_code() -> str:
+    """Generate a random OXLY-XXXXXX ticket code (6 uppercase alphanumeric chars)."""
+    return "OXLY-" + "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
+
+
+async def _gen_unique_ticket_code() -> str:
+    """Generate a ticket code guaranteed unique in db.lottery_tickets."""
+    for _ in range(10):
+        code = _gen_ticket_code()
+        exists = await db.lottery_tickets.find_one({"ticket_code": code}, {"_id": 1})
+        if not exists:
+            return code
+    # Fallback: append uuid tail if collisions keep happening
+    return "OXLY-" + uuid.uuid4().hex[:8].upper()
+
+
+async def _deactivate_all_periods():
+    await db.lottery_periods.update_many({}, {"$set": {"is_active": False}})
+
+
+@api.post("/lottery/periods")
+async def create_lottery_period(body: LotteryPeriodCreate, user=Depends(require_roles("super_admin"))):
+    if body.start_date > body.end_date:
+        raise HTTPException(400, "Tanggal mulai harus sebelum tanggal selesai")
+    if body.winner_count < 1:
+        raise HTTPException(400, "Jumlah pemenang minimal 1")
+    if body.is_active:
+        await _deactivate_all_periods()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": body.name.strip(),
+        "start_date": body.start_date,
+        "end_date": body.end_date,
+        "winner_count": int(body.winner_count),
+        "is_active": bool(body.is_active),
+        "winners": [],
+        "drawn_at": None,
+        "created_by": user["id"],
+        "created_at": now_utc().isoformat(),
+    }
+    await db.lottery_periods.insert_one(doc)
+    return strip_id(doc)
+
+
+@api.get("/lottery/periods")
+async def list_lottery_periods(user=Depends(get_current_user)):
+    items = await db.lottery_periods.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    # Attach ticket count for each period
+    for it in items:
+        it["ticket_count"] = await db.lottery_tickets.count_documents({"period_id": it["id"]})
+    return items
+
+
+@api.get("/lottery/periods/active")
+async def get_active_period(user=Depends(get_current_user)):
+    period = await db.lottery_periods.find_one({"is_active": True}, {"_id": 0})
+    if not period:
+        return None
+    period["ticket_count"] = await db.lottery_tickets.count_documents({"period_id": period["id"]})
+    return period
+
+
+@api.patch("/lottery/periods/{pid}")
+async def update_lottery_period(pid: str, body: LotteryPeriodUpdate, user=Depends(require_roles("super_admin"))):
+    period = await db.lottery_periods.find_one({"id": pid})
+    if not period:
+        raise HTTPException(404, "Periode tidak ditemukan")
+    if period.get("drawn_at"):
+        raise HTTPException(400, "Periode sudah diundi, tidak bisa diubah")
+    update = {k: v for k, v in body.dict(exclude_unset=True).items() if v is not None}
+    if "winner_count" in update and int(update["winner_count"]) < 1:
+        raise HTTPException(400, "Jumlah pemenang minimal 1")
+    if "start_date" in update or "end_date" in update:
+        start = update.get("start_date", period["start_date"])
+        end = update.get("end_date", period["end_date"])
+        if start > end:
+            raise HTTPException(400, "Tanggal mulai harus sebelum tanggal selesai")
+    if update.get("is_active"):
+        await _deactivate_all_periods()
+    await db.lottery_periods.update_one({"id": pid}, {"$set": update})
+    doc = await db.lottery_periods.find_one({"id": pid}, {"_id": 0})
+    doc["ticket_count"] = await db.lottery_tickets.count_documents({"period_id": pid})
+    return doc
+
+
+@api.post("/lottery/periods/{pid}/activate")
+async def activate_period(pid: str, user=Depends(require_roles("super_admin"))):
+    period = await db.lottery_periods.find_one({"id": pid})
+    if not period:
+        raise HTTPException(404, "Periode tidak ditemukan")
+    if period.get("drawn_at"):
+        raise HTTPException(400, "Periode sudah diundi")
+    await _deactivate_all_periods()
+    await db.lottery_periods.update_one({"id": pid}, {"$set": {"is_active": True}})
+    doc = await db.lottery_periods.find_one({"id": pid}, {"_id": 0})
+    return doc
+
+
+@api.delete("/lottery/periods/{pid}")
+async def delete_lottery_period(pid: str, user=Depends(require_roles("super_admin"))):
+    period = await db.lottery_periods.find_one({"id": pid})
+    if not period:
+        raise HTTPException(404, "Periode tidak ditemukan")
+    ticket_count = await db.lottery_tickets.count_documents({"period_id": pid})
+    if ticket_count > 0:
+        raise HTTPException(400, f"Tidak bisa hapus. Periode ini punya {ticket_count} tiket. Batalkan/undian dulu.")
+    await db.lottery_periods.delete_one({"id": pid})
+    return {"ok": True}
+
+
+@api.post("/lottery/periods/{pid}/draw")
+async def draw_lottery(pid: str, user=Depends(require_roles("super_admin"))):
+    period = await db.lottery_periods.find_one({"id": pid})
+    if not period:
+        raise HTTPException(404, "Periode tidak ditemukan")
+    if period.get("drawn_at"):
+        raise HTTPException(400, "Periode sudah diundi sebelumnya")
+    tickets = await db.lottery_tickets.find({"period_id": pid}, {"_id": 0}).to_list(100000)
+    if not tickets:
+        raise HTTPException(400, "Belum ada tiket di periode ini")
+    winner_count = min(int(period.get("winner_count", 1)), len(tickets))
+    picked = random.sample(tickets, winner_count)
+    winners = []
+    for i, t in enumerate(picked):
+        winners.append({
+            "rank": i + 1,
+            "ticket_code": t["ticket_code"],
+            "customer_id": t.get("customer_id"),
+            "customer_name": t.get("customer_name"),
+            "customer_no": t.get("customer_no"),
+            "sales_code": t.get("sales_code"),
+            "group_letter": t.get("group_letter"),
+        })
+    drawn_at = now_utc().isoformat()
+    await db.lottery_periods.update_one(
+        {"id": pid},
+        {"$set": {"winners": winners, "drawn_at": drawn_at, "is_active": False}},
+    )
+    return {
+        "period_id": pid,
+        "drawn_at": drawn_at,
+        "winner_count": winner_count,
+        "total_tickets": len(tickets),
+        "winners": winners,
+    }
+
+
+@api.get("/lottery/tickets")
+async def list_lottery_tickets(
+    period_id: Optional[str] = None,
+    sales_id: Optional[str] = None,
+    customer_id: Optional[str] = None,
+    limit: int = 500,
+    user=Depends(get_current_user),
+):
+    q: dict = {}
+    if period_id:
+        q["period_id"] = period_id
+    if user["role"] == "sales":
+        q["sales_id"] = user["id"]
+    elif user["role"] == "admin":
+        q["group_letter"] = user.get("group_letter")
+        if sales_id:
+            q["sales_id"] = sales_id
+    else:  # super_admin
+        if sales_id:
+            q["sales_id"] = sales_id
+    if customer_id:
+        q["customer_id"] = customer_id
+    limit = max(1, min(int(limit), 5000))
+    items = await db.lottery_tickets.find(q, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    return items
+
+
+@api.get("/lottery/stats")
+async def lottery_stats(period_id: Optional[str] = None, user=Depends(get_current_user)):
+    if period_id:
+        pid = period_id
+    else:
+        active = await db.lottery_periods.find_one({"is_active": True}, {"_id": 0})
+        if not active:
+            return {"period": None, "total_tickets": 0, "top_customers": [], "per_sales": []}
+        pid = active["id"]
+    period = await db.lottery_periods.find_one({"id": pid}, {"_id": 0})
+    if not period:
+        return {"period": None, "total_tickets": 0, "top_customers": [], "per_sales": []}
+    q: dict = {"period_id": pid}
+    if user["role"] == "sales":
+        q["sales_id"] = user["id"]
+    elif user["role"] == "admin":
+        q["group_letter"] = user.get("group_letter")
+    total = await db.lottery_tickets.count_documents(q)
+    top_customers = await db.lottery_tickets.aggregate([
+        {"$match": q},
+        {"$group": {
+            "_id": "$customer_id",
+            "customer_name": {"$first": "$customer_name"},
+            "customer_no": {"$first": "$customer_no"},
+            "sales_code": {"$first": "$sales_code"},
+            "count": {"$sum": 1},
+        }},
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+    ]).to_list(10)
+    per_sales = await db.lottery_tickets.aggregate([
+        {"$match": q},
+        {"$group": {
+            "_id": "$sales_id",
+            "sales_code": {"$first": "$sales_code"},
+            "count": {"$sum": 1},
+        }},
+        {"$sort": {"count": -1}},
+    ]).to_list(200)
+    return {
+        "period": period,
+        "total_tickets": total,
+        "top_customers": [{"customer_id": t["_id"], "customer_name": t["customer_name"], "customer_no": t["customer_no"], "sales_code": t["sales_code"], "count": t["count"]} for t in top_customers],
+        "per_sales": [{"sales_id": t["_id"], "sales_code": t["sales_code"], "count": t["count"]} for t in per_sales],
     }
 
 

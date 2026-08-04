@@ -81,6 +81,8 @@ export type Transaction = {
   date_only: string;
   edited: boolean;
   edit_count: number;
+  lottery_tickets?: string[];
+  lottery_period_name?: string;
 };
 
 export type Expense = {
@@ -247,6 +249,37 @@ export const api = {
 
   // Stats
   overview: () => req<any>("/stats/overview"),
+
+  // Lottery / Undian
+  listLotteryPeriods: () => req<any[]>("/lottery/periods"),
+  activeLotteryPeriod: () => req<any | null>("/lottery/periods/active"),
+  createLotteryPeriod: (body: {
+    name: string;
+    start_date: string;
+    end_date: string;
+    winner_count: number;
+    is_active: boolean;
+  }) => req<any>("/lottery/periods", { method: "POST", body: JSON.stringify(body) }),
+  updateLotteryPeriod: (
+    id: string,
+    body: Partial<{ name: string; start_date: string; end_date: string; winner_count: number; is_active: boolean }>,
+  ) => req<any>(`/lottery/periods/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  activateLotteryPeriod: (id: string) =>
+    req<any>(`/lottery/periods/${id}/activate`, { method: "POST" }),
+  deleteLotteryPeriod: (id: string) =>
+    req<{ ok: boolean }>(`/lottery/periods/${id}`, { method: "DELETE" }),
+  drawLottery: (id: string) => req<any>(`/lottery/periods/${id}/draw`, { method: "POST" }),
+  listLotteryTickets: (params: { period_id?: string; sales_id?: string; customer_id?: string; limit?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (params.period_id) q.set("period_id", params.period_id);
+    if (params.sales_id) q.set("sales_id", params.sales_id);
+    if (params.customer_id) q.set("customer_id", params.customer_id);
+    if (params.limit) q.set("limit", String(params.limit));
+    const s = q.toString();
+    return req<any[]>(`/lottery/tickets${s ? "?" + s : ""}`);
+  },
+  lotteryStats: (period_id?: string) =>
+    req<any>(`/lottery/stats${period_id ? "?period_id=" + period_id : ""}`),
 };
 
 export async function getSavedUser(): Promise<User | null> {

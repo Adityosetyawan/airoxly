@@ -34,6 +34,8 @@ export function formatReceipt(opts: {
   new_debt: number;
   new_loans: number;
   edited?: boolean;
+  lottery_tickets?: string[];
+  lottery_period_name?: string;
 }) {
   const fmt = (n: number) =>
     "Rp " + new Intl.NumberFormat("id-ID").format(Math.round(n || 0));
@@ -57,6 +59,13 @@ export function formatReceipt(opts: {
   lines.push("");
   lines.push(`Sisa hutang: ${fmt(opts.new_debt)}`);
   lines.push(`Total pinjam galon: ${opts.new_loans} gln`);
+  if (opts.lottery_tickets && opts.lottery_tickets.length > 0) {
+    lines.push("");
+    lines.push(`🎁 *Nomor Undian${opts.lottery_period_name ? " – " + opts.lottery_period_name : ""}*`);
+    lines.push(`Anda dapat ${opts.lottery_tickets.length} nomor undian:`);
+    opts.lottery_tickets.forEach((t) => lines.push(`• ${t}`));
+    lines.push("Simpan struk ini untuk verifikasi pemenang.");
+  }
   lines.push("");
   lines.push("Terima kasih 🙏");
   return lines.join("\n");

@@ -1508,7 +1508,16 @@ async def update_lottery_period(pid: str, body: LotteryPeriodUpdate, user=Depend
         raise HTTPException(404, "Periode tidak ditemukan")
     if period.get("drawn_at"):
         raise HTTPException(400, "Periode sudah diundi, tidak bisa diubah")
-    update = {k: v for k, v in body.dict(exclude_unset=True).items() if v is not None}
+    # Build update dict; treat empty string on nullable text fields as null
+    raw = body.dict(exclude_unset=True)
+    update: dict = {}
+    for k, v in raw.items():
+        if v is None:
+            continue
+        if k in ("prize_description", "description"):
+            update[k] = (v.strip() if isinstance(v, str) else v) or None
+        else:
+            update[k] = v
     if "winner_count" in update and int(update["winner_count"]) < 1:
         raise HTTPException(400, "Jumlah pemenang minimal 1")
     if "start_date" in update or "end_date" in update:

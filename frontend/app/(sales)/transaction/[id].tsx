@@ -20,7 +20,7 @@ export default function TransactionDetail() {
   const [t, setT] = useState<Transaction | null>(null);
   const [period, setPeriod] = useState<any | null>(null);
   const [ticketBusy, setTicketBusy] = useState<null | "save" | "share">(null);
-  const [autoSent, setAutoSent] = useState(false);
+  const autoSentRef = useRef(false);
   const ticketShotRef = useRef<ViewShot>(null);
 
   const load = useCallback(async () => {
@@ -100,16 +100,16 @@ export default function TransactionDetail() {
 
   // Auto-trigger WA send when navigated with autoSendWA=1 (after new transaction with tickets)
   useEffect(() => {
-    if (autoSent || autoSendWA !== "1") return;
+    if (autoSentRef.current || autoSendWA !== "1") return;
     if (!t || !t.lottery_tickets || t.lottery_tickets.length === 0) return;
-    setAutoSent(true);
+    autoSentRef.current = true;
     // small delay so the ViewShot has painted the card (with optional period enrichment)
     const timer = setTimeout(() => {
       resendWA();
     }, 900);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t, autoSendWA, autoSent]);
+  }, [t, autoSendWA]);
 
   if (!t) {
     return (

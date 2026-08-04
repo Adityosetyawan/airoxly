@@ -1,0 +1,35 @@
+{
+  "summary": "Frontend-only E2E verification of iteration_8 auto-trigger fix in /app/frontend/app/(sales)/transaction/[id].tsx. Change under test: useState(autoSent) replaced with useRef(autoSentRef); useEffect deps trimmed to [t, autoSendWA]. \n\nRESULT: FIX VERIFIED — auto-trigger NOW FIRES.\n\n[E2E — GALLON PATH, auto-trigger] Mobile viewport 390x844, login A1/sales123, navigated to /transaction/new?customer_id=<Budi 7d3b65bf-...>, tapped plus twice on Air Galon 19L (product 40492556-3ac2-4c48-bd53-72eea2a557c0), filled bayar-input=40000, tapped save-wa-btn. URL redirected to /transaction/{id}?autoSendWA=1 ✓. After ~900ms delay + html-to-image capture time, instrumented side-effects observed via page.add_init_script: 1 navigator.clipboard.writeText call AND 1 HTMLAnchorElement.click with download='OXLY-Nota-Budi.png'. This matches the web fallback path in shareShotWithText (image download + clipboard) since navigator.canShare(files) is not supported in headless Chromium. Auto-trigger successfully invoked resendWA without user interaction.\n\n[Clipboard content check] Auto-triggered clipboard payload contains: '*Air OXLY*', 'Sales: A1', 'Pelanggan: Budi (No.1)', '*Pembelian:*', '• Air Galon 19L — 2 gln × Rp 20.000 = Rp 40.000', 'Total: Rp 40.000', 'Bayar: Rp 40.000', 'Sisa hutang: Rp 0', 'Total pinjam galon: 2 gln', 'Terima kasih 🙏'. Verified: NO 'Nomor Undian' text, NO ticket codes — matches formatReceipt no-lottery-text refactor from iter_8.\n\n[Manual resend-wa-btn regression] After auto-fire, side-effect counters reset and manual tap on resend-wa-btn → 1 clipboard write + 1 anchor download. Still works (autoSentRef guards only the automatic path, not manual).\n\n[NON-GALLON REGRESSION] New transaction with Cup 150ml (unit=box), tap Kirim WA & Simpan → URL redirected to /transaction/{id} WITHOUT '?autoSendWA=1' ✓. Exactly 1 window.open to https://wa.me/6281234567890?text=... containing 'Pembelian:' and NO 'Nomor Undian'. 0 clipboard writes, 0 downloads — correct text-only path via sendWhatsApp deep-link.\n\n[TicketCard rendering] Detail page renders TicketCard inside ViewShot (nativeID='oxly-ticket-card-shot') with 2 tickets visible (Kartu Undian (2)). All 3 testIDs present: save-ticket-card-btn, share-ticket-card-btn, resend-wa-btn.\n\nCONCLUSION: The useRef fix is correct. The iter_8 bug is FULLY RESOLVED. No new regressions.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_8.json (previous — bug documented, fix verified in this iteration)",
+    "/app/backend/tests/test_format_receipt_unit.mjs (formatReceipt regression from iter_8 still valid)"
+  ],
+  "action_items": [
+    "No action items — auto-trigger fix verified working end-to-end. Feature complete."
+  ],
+  "critical_code_review_comments": [
+    "[id].tsx:23 — `const autoSentRef = useRef(false);` correctly replaces state. No re-render on flip.",
+    "[id].tsx:102-112 — useEffect deps [t, autoSendWA] no longer includes the sent-flag. `if (autoSentRef.current || autoSendWA !== '1') return;` guard is idempotent. `autoSentRef.current = true;` set synchronously before setTimeout, so any incidental re-run (e.g., if `t` refetches on focus) is guarded. Cleanup clearTimeout is retained but safe because deps do not change during the 900ms window in normal usage.",
+    "[id].tsx:107-109 — 900ms delay before calling resendWA() is sufficient for ViewShot / html-to-image to paint the ticket card. Empirically verified: capture succeeds first time in web.",
+    "[id].tsx:47-99 — resendWA branches on lottery_tickets.length > 0 correctly. For gallon path (with tickets), calls shareShotWithText → on web falls back to download+clipboard (verified). For non-gallon (via new.tsx doSave path) uses sendWhatsApp → wa.me deep link (verified).",
+    "new.tsx:127-133 — Redirect to /transaction/[id]?autoSendWA=1 when saved.lottery_tickets.length > 0. Verified live.",
+    "new.tsx:134-155 — Non-gallon fallback still uses sendWhatsApp for text-only. Verified live."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A — frontend-only testing this iteration (backend regression already covered in iter_8: 32/33 lottery pytests, 1 known parallel flake)",
+    "frontend": "7/7 checks PASS: (1) redirect autoSendWA=1, (2) auto clipboard write, (3) auto PNG download 'OXLY-Nota-Budi.png', (4) clipboard has receipt fields, (5) clipboard has NO 'Nomor Undian', (6) manual resend-wa-btn still works, (7) non-gallon uses wa.me text-only"
+  },
+  "seed_data_creation": "Reused existing seed from iter_8. Active period: TEST_Undian_2bcffe (id 5864a8db-ba88-4e05-9acf-e87f9c93ecc2). Customer: Budi (id 7d3b65bf-2ce7-4d9c-84e1-52a1607d6f2b, WA +6281234567890). Two new gallon transactions were created during test (a20a02be-...) and one non-gallon (a95101ce-...); these are byproducts of the E2E test flow and do not affect other tests.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iter_8 auto-trigger bug is CLOSED. If future changes touch /app/frontend/app/(sales)/transaction/[id].tsx useEffect at lines 102-112 or the shareShotWithText/capture utils, re-run the same E2E: instrument navigator.clipboard.writeText, HTMLAnchorElement.click, window.open, navigator.share via page.add_init_script BEFORE navigation; then A1 login → /transaction/new?customer_id=<Budi> → +2 Air Galon 19L → bayar 40000 → tap save-wa-btn → wait 6s → assert clipboard.length>=1 AND anchor download containing 'OXLY-Nota' AND URL contains autoSendWA=1. For non-gallon regression: same flow with Cup 150ml → assert 1 wa.me window.open, 0 clip/dl, no autoSendWA in URL.",
+  "rca_of_issue": "N/A — verification-only iteration. Iter_8's RCA (setAutoSent state flip + cleanup clearTimeout race) is resolved by switching to useRef so that setting the flag does NOT trigger a re-render or effect re-run, therefore the pending 900ms timer is not cancelled. Fix behavior confirmed live."
+}

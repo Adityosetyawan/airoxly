@@ -1,0 +1,58 @@
+{
+  "summary": "Verified session's changes on both backend (regression) and frontend (auto WA image+text after gallon txn, formatReceipt no-lottery, non-gallon regression, ticket-card buttons regression).\n\nBACKEND REGRESSION (pytest test_lottery.py + test_lottery_v2.py, with configured -n 2 --dist loadscope): 32/33 PASSED. The 1 failure (test_lottery.py::TestPeriodCRUD::test_activate_deactivates_others) is a known pre-existing parallel-execution isolation flake (documented in iteration_7 which had 2 flaky; now only 1 — NOT WORSE). Backend code was not touched this session. No lottery regressions.\n\nformatReceipt UNIT TEST (Node + esbuild bundle of whatsapp.ts): 11/11 PASS. Verified: (a) even when called with lottery_tickets=[OXLY-ABC123, OXLY-XYZ789, OXLY-DEF456], the output contains NO 'Nomor Undian', NO '🎁' emoji, NO ticket codes. (b) All required lines present: '*Pembelian:*', 'Total: Rp 60.000', 'Bayar: Rp 60.000', 'Sisa hutang:', 'Total pinjam galon:', 'Terima kasih 🙏', 'Pinjam galon: 1 gln', 'Budi (No.12)'.\n\nFRONTEND E2E (mobile viewport 390x844, A1 sales, customer Budi with WA +6281234567890, active lottery period ensured):\n\n[GALLON PATH — new.tsx redirect] After tap 'Kirim WA & Simpan' on 2-gallon txn → URL correctly redirected to /transaction/{id}?autoSendWA=1 ✓. Detail page rendered TicketCard, all 3 testIDs present (save-ticket-card-btn, share-ticket-card-btn, resend-wa-btn) ✓.\n\n[GALLON PATH — auto-trigger] ❌ BUG FOUND — the useEffect auto-trigger at [id].tsx:102-112 DOES NOT FIRE. After 8.5s wait post-redirect: 0 clipboard writes, 0 window.open calls, 0 download anchor.clicks. Manual clicking of same 'resend-wa-btn' immediately after → succeeds (1 clipboard write, 1 PNG download via html-to-image). RCA below.\n\n[MANUAL resend-wa-btn regression] Works correctly — captures 1 clipboard write with formatted receipt text AND 1 PNG download 'OXLY-Nota-Budi.png'. clipboard text does NOT contain 'Nomor Undian' ✓.\n\n[Simpan Kartu regression] save-ticket-card-btn → 1 download 'OXLY-Kartu-Budi.png' (data:image/png;base64 anchor click) ✓.\n\n[Share Kartu regression] share-ticket-card-btn → 1 download (shareShot web path uses download fallback) ✓.\n\n[NON-GALLON REGRESSION] After tap 'Kirim WA & Simpan' on Cup 150ml (unit=box) transaction → URL does NOT contain 'autoSendWA' ✓, 1 window.open call to https://wa.me/6281234567890?text=... (text-only path via sendWhatsApp) ✓, 0 clipboard writes / 0 downloads (correct: text-only). The wa.me deep-link message contains 'Pembelian:' but does NOT contain 'Nomor Undian' ✓.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "backend/tests/test_lottery.py::TestPeriodCRUD::test_activate_deactivates_others", "issue": "Pre-existing parallel-run isolation flake (already documented in iteration_7). Two workers each create an active period; the 'activate deactivates others' assertion sees the OTHER worker's newly-created active period instead of the one under test. Not a product bug. Run serially (pytest -n 0) to reproduce PASS. Suggestion: assertion should re-fetch by id and check drawn/active on the specific p2, not use /active endpoint globally."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "transaction/[id].tsx auto-trigger useEffect",
+        "issue": "Auto-send WA (image + text) after new-transaction redirect NEVER FIRES. RCA: setAutoSent(true) on line 105 changes state → effect re-runs → cleanup clearTimeout(timer) on line 110 cancels the 900ms timer BEFORE it can invoke resendWA(). Deps [t, autoSendWA, autoSent] means the state change immediately re-runs the effect. Reference: /app/frontend/app/(sales)/transaction/[id].tsx:102-112. Impact: HIGH — the core feature of this session (auto-send Kartu Undian image + nota text after gallon txn) is broken end-to-end. User taps 'Kirim WA & Simpan' → lands on detail page → nothing happens automatically. They must manually tap 'Kirim Nota + Kartu Undian ke WA' to trigger the flow.",
+        "testID": "resend-wa-btn (target of the auto-trigger)",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "New gallon transaction → auto image+text WA broadcast",
+        "issue": "Redirect from new.tsx to [id].tsx?autoSendWA=1 works correctly, but the auto-trigger in [id].tsx never invokes resendWA due to timer cancellation on autoSent state flip. Manual button click still works, so only the automatic path is broken.",
+        "affected_testIDs": ["save-wa-btn", "resend-wa-btn"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_lottery.py",
+    "/app/backend/tests/test_lottery_v2.py",
+    "/app/backend/tests/test_format_receipt_unit.mjs",
+    "/app/test_reports/pytest/iteration_8_lottery.xml"
+  ],
+  "action_items": [
+    "FIX AUTO-TRIGGER (HIGH): In /app/frontend/app/(sales)/transaction/[id].tsx lines 102-112, the useEffect's setAutoSent(true) fires immediately + cleanup cancels the timer. Two viable fixes: (A) Remove `autoSent` from the deps array and add eslint-disable — since it's only used as a guard; (B) Use a useRef instead of state: `const autoSentRef = useRef(false); if (autoSentRef.current) return; autoSentRef.current = true; setTimeout(...)` without the cleanup canceling it (or keep cleanup but don't include a state-toggling dep). Option (B) is cleaner. Also consider moving setAutoSent(true) INTO the setTimeout callback so the initial timer isn't cancelled by its own state flip.",
+    "(Optional, non-blocking) Same pre-existing flaky lottery test noted in iter_7 (test_activate_deactivates_others). Refactor assertion to query the specific period by id rather than /lottery/periods/active, since parallel workers may activate different periods."
+  ],
+  "critical_code_review_comments": [
+    "whatsapp.ts:formatReceipt — Correctly refactored: no more '🎁 Nomor Undian' section. Ticket codes are ONLY rendered via the visual TicketCard (ViewShot). Unit-tested 11/11 PASS.",
+    "new.tsx:127-133 — Redirect logic when saved.lottery_tickets.length > 0 works correctly. router.replace with autoSendWA=1 lands on detail page. Verified live: URL becomes .../transaction/<id>?autoSendWA=1.",
+    "new.tsx:134-155 — Text-only path (no lottery_tickets, e.g., Cup/Box products) still uses sendWhatsApp deep-link. Verified live: single wa.me window.open triggered, no clipboard/download side-effects.",
+    "[id].tsx:47-99 — resendWA correctly branches on t.lottery_tickets.length > 0 to call shareShotWithText (returns {mode: 'image+clipboard'} on web → downloads PNG + clipboard.writeText) vs text-only sendWhatsApp. Manually verified both branches.",
+    "[id].tsx:102-112 — ⚠️ BUG: state-based auto-trigger guard cancels its own timer. See action_items #1.",
+    "TicketCard rendering inside ViewShot with nativeID='oxly-ticket-card-shot' at [id].tsx:179-192 works — screenshot confirms the Air OXLY Kartu Undian card is rendered on detail page with ticket codes visible."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_format_receipt_unit.mjs (new — Node esbuild unit test for formatReceipt)"
+  ],
+  "success_rate": {
+    "backend": "32/33 (97%) — 1 pre-existing parallel-execution flake (not regression)",
+    "frontend": "9/10 primary checks: gallon-redirect OK, non-gallon-text-only OK, formatReceipt no-lottery OK, manual resend OK, save-kartu OK, share-kartu OK, testIDs present OK, non-gallon wa.me text OK, formatReceipt unit 11/11 OK, BUT auto-trigger FAIL"
+  },
+  "seed_data_creation": "Activated one existing inactive period (TEST_Undian_2bcffe) via POST /api/lottery/periods/{id}/activate as superadmin so new gallon transactions could mint tickets. No new documents created.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The auto-trigger bug is due to React useEffect + state + cleanup interaction. Recommended fix: use `useRef` for the sent-flag instead of state, then the effect can guard without triggering re-render/cleanup cycle. Reproduce steps for retest: (1) Ensure an active lottery period exists (POST /api/lottery/periods/<id>/activate as superadmin). (2) Login A1. (3) Navigate to /(sales)/transaction/new?customer_id=<Budi id 7d3b65bf-2ce7-4d9c-84e1-52a1607d6f2b>. (4) Tap plus button for Air Galon 19L twice, fill bayar-input with 40000, tap save-wa-btn. (5) Assert URL becomes .../transaction/<id>?autoSendWA=1. (6) With window.open + navigator.clipboard.writeText + document.createElement('a').click all instrumented via page.add_init_script, wait 4-5 seconds and assert: at least 1 clipboard write containing 'Terima kasih' AND no 'Nomor Undian'; at least 1 anchor.click with download='OXLY-Nota-Budi.png'. Currently BOTH are 0 — will be non-zero after fix. Also re-run test_format_receipt_unit.mjs and the two lottery pytest files as regression.",
+  "rca_of_issue": "BUG: transaction/[id].tsx auto-trigger useEffect self-cancels its own setTimeout.\n\nOffending code (lines 102-112):\n  useEffect(() => {\n    if (autoSent || autoSendWA !== \"1\") return;\n    if (!t || !t.lottery_tickets || t.lottery_tickets.length === 0) return;\n    setAutoSent(true);                                   // (1) triggers re-render + effect re-run\n    const timer = setTimeout(() => { resendWA(); }, 900); // (2) scheduled\n    return () => clearTimeout(timer);                    // (3) cleanup will run on next effect invocation\n  }, [t, autoSendWA, autoSent]);\n\nSequence: (1) sets autoSent=true → (2) creates timer → effect finishes → autoSent state changes → React re-runs effect (deps changed) → cleanup (3) fires FIRST → clearTimeout(timer) → the pending 900ms timer is destroyed before it can fire → new effect run hits the `if (autoSent) return;` guard and does nothing. Net result: resendWA() is never invoked.\n\nSuggested fix (main agent):\n  const autoSentRef = useRef(false);\n  useEffect(() => {\n    if (autoSentRef.current || autoSendWA !== \"1\") return;\n    if (!t || !t.lottery_tickets || t.lottery_tickets.length === 0) return;\n    autoSentRef.current = true;\n    const timer = setTimeout(() => { resendWA(); }, 900);\n    return () => clearTimeout(timer);\n  }, [t, autoSendWA]);\n\nUsing a ref avoids the state-flip re-render cycle. The cleanup is still safe because the effect only re-runs when t or autoSendWA changes (t doesn't change during the 900ms; autoSendWA is stable) — so cleanup won't fire mid-timer in normal usage."
+}

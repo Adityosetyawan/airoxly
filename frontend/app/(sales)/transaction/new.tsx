@@ -122,6 +122,15 @@ export default function TransactionForm() {
       }
 
       if (sendWA) {
+        // If transaction has lottery tickets, redirect to detail with autoSendWA flag
+        // so the detail page (which has the TicketCard rendered) can send image+text together.
+        if (saved.lottery_tickets && saved.lottery_tickets.length > 0) {
+          router.replace({
+            pathname: "/(sales)/transaction/[id]",
+            params: { id: saved.id, autoSendWA: "1" },
+          });
+          return;
+        }
         try {
           const msg = formatReceipt({
             storeName: "Air OXLY",
@@ -138,13 +147,8 @@ export default function TransactionForm() {
             new_debt: saved.new_debt,
             new_loans: saved.new_loans,
             edited: !!editingTxn,
-            lottery_tickets: saved.lottery_tickets,
-            lottery_period_name: saved.lottery_period_name,
           });
           await sendWhatsApp(customer.wa_number || "", msg);
-          if (saved.lottery_tickets && saved.lottery_tickets.length > 0) {
-            toast.show("Buka Detail Transaksi → tekan 'Kirim Nota + Kartu Undian' untuk kirim visual kartu juga", "info");
-          }
         } catch (e: any) {
           toast.show(e.message || "Gagal buka WhatsApp", "error");
         }

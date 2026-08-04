@@ -166,6 +166,20 @@
   created_by: "main_agent"
   version: "1.0"
   test_sequence: 13
+
+## Follow-up (same session):
+User requested: "Sertakan no undian pada WA bukti Transaksi. Dan pada kupon undian otomatis sudah didownload. Apabila mau dikirim ke pelanggan langsung klik WA lagi."
+
+Changes:
+1. `formatReceipt` (whatsapp.ts) now renders lottery ticket numbers inside the receipt text under a "🎁 Kupon Undian" section.
+2. `sendReceiptToWhatsApp` simplified: no longer copies image to clipboard. Only saves to gallery + opens wa.me with pre-filled text (which already contains ticket numbers).
+3. Two clearly separated actions on the transaction detail page:
+   - Primary: "Kirim Nota WA (+ Nomor Undian)" — text nota with ticket numbers
+   - Secondary (green): "Kirim Kartu Undian ke WA" — opens share sheet to send just the ticket card image
+4. Toast updated: "Nota terkirim. Kartu Undian tersimpan di galeri — klik 'Kirim Kartu Undian' untuk kirim gambarnya"
+
+Manually verified in web preview: transaction detail loaded with ticket card + both buttons visible; button labels correct. wa.me deep link opens with encoded text including "OXLY-XXXXXX". Sharing/save gallery flows require native device.
+
   run_ui: true
 
 ## test_plan:

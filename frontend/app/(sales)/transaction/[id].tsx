@@ -65,35 +65,28 @@ export default function TransactionDetail() {
         edited: t.edited,
       });
 
-      // If transaction has lottery tickets → open WA chat DIRECTLY to the
-      // customer's saved number with the nota text pre-filled, save the ticket
-      // card to gallery, and copy the image to clipboard so a long-press paste
-      // in WhatsApp attaches it (no share sheet / recipient picker).
+      // If transaction has lottery tickets → save Kartu Undian to gallery
+      // (silent) and open wa.me directly to customer with receipt text
+      // (which now already includes the ticket numbers).
       if (t.lottery_tickets && t.lottery_tickets.length > 0) {
         try {
-          const { savedToGallery, imageInClipboard } = await sendReceiptToWhatsApp(
+          const { savedToGallery } = await sendReceiptToWhatsApp(
             ticketShotRef,
             "oxly-ticket-card-shot",
             `OXLY-Kartu-${t.customer_name}`,
             t.customer_wa || "",
             msg,
           );
-          if (imageInClipboard) {
+          if (savedToGallery) {
             toast.show(
-              "WhatsApp terbuka. Long-press kolom pesan → Tempel untuk lampirkan Kartu Undian",
-              "success",
-            );
-          } else if (savedToGallery) {
-            toast.show(
-              "WhatsApp terbuka. Kartu Undian tersimpan di galeri — lampirkan dari sana",
+              "Nota terkirim. Kartu Undian tersimpan di galeri — klik ‘Kirim Kartu Undian’ untuk kirim gambarnya",
               "success",
             );
           } else {
-            toast.show("WhatsApp terbuka dengan nota", "success");
+            toast.show("WhatsApp terbuka dengan nota + nomor undian", "success");
           }
           return;
         } catch (e: any) {
-          // Fall through to text-only wa.me if image capture fails
           toast.show(e?.message || "Gagal siapkan kartu, kirim teks saja", "error");
         }
       }
@@ -237,9 +230,9 @@ export default function TransactionDetail() {
                 style={[styles.ticketBtnShare, ticketBusy !== null && { opacity: 0.6 }]}
                 testID="share-ticket-card-btn"
               >
-                <Ionicons name="share-social" size={16} color="#fff" />
+                <Ionicons name="logo-whatsapp" size={16} color="#fff" />
                 <Text style={styles.ticketBtnShareText}>
-                  {ticketBusy === "share" ? "Menyiapkan…" : "Share ke WA"}
+                  {ticketBusy === "share" ? "Menyiapkan…" : "Kirim Kartu Undian ke WA"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -257,7 +250,7 @@ export default function TransactionDetail() {
             {waBusy
               ? "Menyiapkan…"
               : t.lottery_tickets && t.lottery_tickets.length > 0
-              ? `Kirim Kartu + Nota ke WhatsApp`
+              ? `Kirim Nota WA (+ Nomor Undian)`
               : t.customer_wa
               ? `Kirim Nota WA ke ${t.customer_name}`
               : "Nomor WA pelanggan kosong"}

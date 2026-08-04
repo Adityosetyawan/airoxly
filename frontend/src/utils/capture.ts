@@ -119,20 +119,21 @@ export async function shareShot(
 }
 
 /**
- * "One-click" WhatsApp receipt flow used when a transaction has a Kartu Undian
- * to accompany the text nota. Since WhatsApp does NOT allow apps to attach
- * images programmatically via a deep-link, we approximate a single-tap UX:
+ * Simplified WhatsApp receipt flow used when a transaction has a Kartu Undian.
  *
- *   1. Capture the ticket card as PNG.
- *   2. Save it to the device gallery (silent).
- *   3. Copy the image bytes to the OS clipboard so a single long-press paste in
- *      WhatsApp attaches it.
- *   4. Open wa.me/<PHONE>?text=<receipt> so WhatsApp opens the chat directly to
- *      the customer's saved number with the nota text pre-filled — Sales only
- *      needs to press Send (and optionally paste the image once).
+ * The receipt text now already contains the lottery ticket numbers, so we do
+ * NOT need to force the image into the same WA message. Instead we:
  *
- * On web, MediaLibrary is unavailable; we download the PNG + copy text to
- * clipboard + open wa.me instead.
+ *   1. Capture the Kartu Undian PNG and save it to the device gallery (silent).
+ *   2. Open wa.me/<PHONE>?text=<receipt> directly to the customer's saved
+ *      number — Sales only needs to press Send.
+ *
+ * The saved image sits in the gallery. If Sales wants to ALSO send the visual
+ * ticket card, they can tap the separate "Kirim Kartu Undian" button which
+ * opens the native share sheet on just the image.
+ *
+ * On web, MediaLibrary is unavailable; we trigger a browser download so the
+ * PNG lands in the user's Downloads folder, then open wa.me.
  */
 export async function sendReceiptToWhatsApp(
   shotRef: ShotRef,
@@ -140,7 +141,7 @@ export async function sendReceiptToWhatsApp(
   filename: string,
   phone: string,
   receiptText: string,
-): Promise<{ savedToGallery: boolean; imageInClipboard: boolean }> {
+): Promise<{ savedToGallery: boolean }> {
   const digits = (phone || "").replace(/[^\d]/g, "");
   if (!digits) throw new Error("Nomor WA pelanggan kosong");
   const n = digits.startsWith("0")
@@ -149,9 +150,7 @@ export async function sendReceiptToWhatsApp(
     ? digits
     : digits;
 
-  // 1) Capture the image
   let savedToGallery = false;
-  let imageInClipboard = false;
 
   if (Platform.OS === "web") {
     try {
@@ -161,7 +160,6 @@ export async function sendReceiptToWhatsApp(
     } catch {}
   } else {
     try {
-      // Save to gallery
       let perm = await MediaLibrary.getPermissionsAsync();
       if (!perm.granted && perm.canAskAgain) {
         perm = await MediaLibrary.requestPermissionsAsync();
@@ -178,40 +176,20 @@ export async function sendReceiptToWhatsApp(
           savedToGallery = true;
         } catch {}
       }
-
-      // Copy image to clipboard (base64) — long-press paste in WA sends image
-      try {
-        const b64 = await captureRef(shotRef, {
-          format: "png",
-          quality: 1,
-          result: "base64",
-        });
-        const Clipboard = await import("expo-clipboard");
-        if (Clipboard.setImageAsync) {
-          await Clipboard.setImageAsync(b64);
-          imageInClipboard = true;
-        }
-      } catch {}
     } catch {}
   }
 
-  // Open WhatsApp deep-link directly to customer's number
+  // Open WhatsApp deep-link directly to customer's number with pre-filled text
   const encoded = encodeURIComponent(receiptText);
   const url = `https://wa.me/${n}?text=${encoded}`;
 
   if (Platform.OS === "web") {
     if (typeof window !== "undefined") window.open(url, "_blank");
-    // Also copy text as a safety net so user can paste if the deep link
-    // strips formatting in browsers.
-    try {
-      const Clipboard = await import("expo-clipboard");
-      await Clipboard.setStringAsync(receiptText);
-    } catch {}
-    return { savedToGallery, imageInClipboard };
+    return { savedToGallery };
   }
 
   const supported = await Linking.canOpenURL(url);
   if (!supported) throw new Error("Tidak bisa membuka WhatsApp");
   await Linking.openURL(url);
-  return { savedToGallery, imageInClipboard };
+  return { savedToGallery };
 }

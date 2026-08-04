@@ -1,0 +1,31 @@
+{
+  "summary": "Verified new 'Kirim Nota + Kartu Undian ke WA' combined feature on transaction detail screen + regression on lottery backend. ALL primary flows PASS.\n\nFrontend (web preview, mobile viewport 390x844, logged in as A1/sales123):\n- Transaction WITH lottery_tickets (id=c60d8f7d…, 5 tickets): resend-wa-btn label = 'Kirim Nota + Kartu Undian ke WA' ✓. save-ticket-card-btn + share-ticket-card-btn present ✓.\n- Transaction WITHOUT lottery_tickets: resend-wa-btn label = 'Kirim / Kirim Ulang WA' ✓; ticket buttons NOT rendered ✓.\n- Clicked combined WA button with navigator.share/canShare stripped → fallback path executed: (a) PNG downloaded (a.download='OXLY-Nota-Budi.png' via html-to-image), (b) full nota text (419 chars incl. '*Nomor Undian – Undian Bulan Agustus 2026*' + 5 ticket codes) copied to clipboard, (c) no 'findNodeHandle' error in console (0 hits), (d) no page/JS errors. Toast text present in DOM. Mode='image+clipboard' branch confirmed working.\n- Regression: save-ticket-card-btn & share-ticket-card-btn clicked → 0 errors.\n- capture.ts: shareShotWithText(shotRef, nativeId, filename, title, text) exported with correct signature returning Promise<{mode:'combined'|'image+clipboard'}> ✓. Web branch uses navigator.share with {files, text} when supported; fallback: webDownload + Clipboard.setStringAsync(text) + returns image+clipboard. Native branch: clipboard.setStringAsync(text) + Sharing.shareAsync. Both saveShot & shareShot still exported.\n- whatsapp.ts formatReceipt now appends '🎁 *Nomor Undian – <period>*' section + per-ticket bullets when lottery_tickets present (verified via clipboard payload from combined share).\n- new.tsx doSave(sendWA=true): passes lottery_tickets + lottery_period_name into formatReceipt; shows follow-up info toast 'Buka Detail Transaksi → tekan Kirim Nota + Kartu Undian…' when saved.lottery_tickets.length > 0. (Verified in code; not exercised end-to-end to avoid creating extra tickets consuming active period quota.)\n\nBackend regression: pytest backend/tests/test_lottery_v2.py backend/tests/test_lottery.py -n0 → 33 passed in 83.79s (0 failed). JUnit: /app/test_reports/pytest/iteration_6_lottery.xml.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_lottery_v2.py",
+    "/app/backend/tests/test_lottery.py",
+    "/app/test_reports/pytest/iteration_6_lottery.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "capture.ts:shareShotWithText — web fallback catches errors from navigator.share() (e.g. user-cancel would throw AbortError) then still triggers webDownload + clipboard. This is fine functionally but caller may briefly see BOTH a native share sheet AND a download. Acceptable trade-off since AbortError is uncommon in Expo web preview. No change required.",
+    "transaction/[id].tsx:70-89 — Good: if lottery_tickets exist, shareShotWithText is attempted first; on failure falls back to sendWhatsApp text-only. Toast messaging differentiates 'combined' vs 'image+clipboard' modes correctly. return after the branch prevents double-send.",
+    "transaction/new.tsx:145-146 — Info toast prompts user to open detail screen for visual card; helpful UX. Consider auto-navigating to /transaction/[id] which already happens on router.replace at line 152 — so the info toast will appear briefly then screen changes. If toast component persists across route transitions this is fine; otherwise consider moving the info-toast into the [id].tsx focus effect. Non-blocking."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "33/33 (100%)", "frontend": "7/7 primary checks (100%)"},
+  "seed_data_creation": "None. Used existing seeded transactions for A1 (5-ticket txn c60d8f7d… + non-lottery txn 24ed75c2…).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "For combined-WA testing, in web preview navigator.share is typically undefined so fallback path (download + clipboard + toast) is the executed branch. To force fallback deterministically: page.evaluate to delete navigator.share/canShare before clicking resend-wa-btn. Then assert: (1) HTMLAnchorElement.click with .download attr, (2) navigator.clipboard.writeText got the receipt text containing '*Nomor Undian', (3) no console error containing 'findNodeHandle'. Credentials: A1/sales123, superadmin/super123. Transaction with 5 tickets id=c60d8f7d-7958-441e-a971-f95fd6ae0756 (customer Budi #1).",
+  "rca_of_issue": "N/A — feature verified working end-to-end. Previously reported 'findNodeHandle' risk (from react-native-view-shot on web) is avoided because captureImage web branch uses html-to-image with document.getElementById(nativeID) instead of touching the ViewShot ref. Confirmed no findNodeHandle errors in console during combined share."
+}

@@ -117,3 +117,61 @@ export async function shareShot(
   if (!canShare) throw new Error("Fitur share tidak tersedia di device ini");
   await Sharing.shareAsync(uriOrData, { mimeType: "image/png", dialogTitle: title });
 }
+
+/**
+ * Share both an image (captured PNG of the wrapped view) AND a text message together.
+ *
+ * - Web with navigator.share supporting files+text: single OS share sheet with both.
+ * - Web fallback: download PNG + copy text to clipboard + open WhatsApp deep-link.
+ * - Native: copy text to clipboard, open native share sheet with the PNG. User pastes the
+ *   text as WhatsApp caption. Returns a hint flag so caller can show a toast.
+ *
+ * Returns:
+ *   { mode: "combined" }  → image and text delivered together (best case)
+ *   { mode: "image+clipboard" } → image shared, text copied to clipboard
+ */
+export async function shareShotWithText(
+  shotRef: ShotRef,
+  nativeId: string,
+  filename: string,
+  title: string,
+  text: string,
+): Promise<{ mode: "combined" | "image+clipboard" }> {
+  const uriOrData = await captureImage(shotRef, nativeId, filename);
+  if (Platform.OS === "web") {
+    try {
+      const blob = dataUrlToBlob(uriOrData);
+      const file = new File([blob], filename.endsWith(".png") ? filename : `${filename}.png`, {
+        type: "image/png",
+      });
+      // @ts-ignore
+      if (navigator.canShare && navigator.canShare({ files: [file], text })) {
+        // @ts-ignore
+        await navigator.share({ files: [file], text, title });
+        return { mode: "combined" };
+      }
+    } catch {
+      // fall through
+    }
+    // Fallback: download + clipboard + open wa.me
+    webDownload(uriOrData, filename);
+    try {
+      const Clipboard = await import("expo-clipboard");
+      await Clipboard.setStringAsync(text);
+    } catch {
+      try {
+        if (typeof navigator !== "undefined" && (navigator as any).clipboard) {
+          await (navigator as any).clipboard.writeText(text);
+        }
+      } catch {}
+    }
+    return { mode: "image+clipboard" };
+  }
+  // Native: copy text to clipboard, then open share sheet with the file
+  const Clipboard = await import("expo-clipboard");
+  await Clipboard.setStringAsync(text);
+  const canShare = await Sharing.isAvailableAsync();
+  if (!canShare) throw new Error("Fitur share tidak tersedia di device ini");
+  await Sharing.shareAsync(uriOrData, { mimeType: "image/png", dialogTitle: title });
+  return { mode: "image+clipboard" };
+}

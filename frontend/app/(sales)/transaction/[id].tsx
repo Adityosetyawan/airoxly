@@ -10,7 +10,7 @@ import { useAuth } from "@/src/AuthContext";
 import { useToast } from "@/src/components/Toast";
 import { formatReceipt, sendWhatsApp } from "@/src/whatsapp";
 import TicketCard from "@/src/components/TicketCard";
-import { saveShot, shareShot } from "@/src/utils/capture";
+import { saveShot, shareShot, shareShotWithText } from "@/src/utils/capture";
 
 export default function TransactionDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -41,8 +41,11 @@ export default function TransactionDetail() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  const [waBusy, setWaBusy] = useState(false);
+
   const resendWA = async () => {
     if (!t) return;
+    setWaBusy(true);
     try {
       const msg = formatReceipt({
         storeName: "Air OXLY",
@@ -62,9 +65,35 @@ export default function TransactionDetail() {
         lottery_tickets: t.lottery_tickets,
         lottery_period_name: t.lottery_period_name,
       });
+
+      // If transaction has lottery tickets, send image + text together
+      if (t.lottery_tickets && t.lottery_tickets.length > 0) {
+        try {
+          const { mode } = await shareShotWithText(
+            ticketShotRef,
+            "oxly-ticket-card-shot",
+            `OXLY-Nota-${t.customer_name}`,
+            `Nota ${t.customer_name}`,
+            msg,
+          );
+          if (mode === "image+clipboard") {
+            toast.show("Kartu Undian siap dikirim. Teks nota sudah disalin — paste sebagai caption di WhatsApp.", "success");
+          } else {
+            toast.show("Nota + Kartu Undian dikirim", "success");
+          }
+          return;
+        } catch (e: any) {
+          // Fall through to text-only if capture fails
+          toast.show("Kartu gagal disiapkan, kirim teks saja", "error");
+        }
+      }
+
+      // No tickets → just send text WA deep-link
       await sendWhatsApp(t.customer_wa || "", msg);
     } catch (e: any) {
       toast.show(e.message || "Gagal", "error");
+    } finally {
+      setWaBusy(false);
     }
   };
 
@@ -193,9 +222,20 @@ export default function TransactionDetail() {
           </>
         )}
 
-        <TouchableOpacity onPress={resendWA} style={styles.wa} testID="resend-wa-btn">
+        <TouchableOpacity
+          onPress={resendWA}
+          disabled={waBusy}
+          style={[styles.wa, waBusy && { opacity: 0.6 }]}
+          testID="resend-wa-btn"
+        >
           <Ionicons name="logo-whatsapp" size={20} color="#fff" />
-          <Text style={styles.waText}>Kirim / Kirim Ulang WA</Text>
+          <Text style={styles.waText}>
+            {waBusy
+              ? "Menyiapkan…"
+              : t.lottery_tickets && t.lottery_tickets.length > 0
+              ? "Kirim Nota + Kartu Undian ke WA"
+              : "Kirim / Kirim Ulang WA"}
+          </Text>
         </TouchableOpacity>
 
         {canEdit && (

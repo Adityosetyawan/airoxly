@@ -65,25 +65,25 @@ export default function TransactionDetail() {
         edited: t.edited,
       });
 
-      // If transaction has lottery tickets → save Kartu Undian to gallery
-      // (silent) and open wa.me directly to customer with receipt text
-      // (which now already includes the ticket numbers).
+      // If transaction has lottery tickets → send Kartu Undian image WITH the
+      // receipt text (which already includes ticket numbers) in ONE WhatsApp
+      // message via the native share sheet.
       if (t.lottery_tickets && t.lottery_tickets.length > 0) {
         try {
-          const { savedToGallery } = await sendReceiptToWhatsApp(
+          const { mode } = await sendReceiptToWhatsApp(
             ticketShotRef,
             "oxly-ticket-card-shot",
             `OXLY-Kartu-${t.customer_name}`,
             t.customer_wa || "",
             msg,
           );
-          if (savedToGallery) {
+          if (mode === "combined") {
+            toast.show("Kartu + nota siap dikirim di WhatsApp", "success");
+          } else {
             toast.show(
-              "Nota terkirim. Kartu Undian tersimpan di galeri — klik ‘Kirim Kartu Undian’ untuk kirim gambarnya",
+              "Share sheet terbuka — pilih WhatsApp & pelanggan. Caption sudah tersalin, tinggal tempel.",
               "success",
             );
-          } else {
-            toast.show("WhatsApp terbuka dengan nota + nomor undian", "success");
           }
           return;
         } catch (e: any) {
@@ -250,7 +250,7 @@ export default function TransactionDetail() {
             {waBusy
               ? "Menyiapkan…"
               : t.lottery_tickets && t.lottery_tickets.length > 0
-              ? `Kirim Nota WA (+ Nomor Undian)`
+              ? `Kirim Nota + Kartu Undian ke WhatsApp`
               : t.customer_wa
               ? `Kirim Nota WA ke ${t.customer_name}`
               : "Nomor WA pelanggan kosong"}

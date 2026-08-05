@@ -1,4 +1,4 @@
-import { Platform, Linking } from "react-native";
+import { Platform } from "react-native";
 import ViewShot, { captureRef } from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
 import * as MediaLibrary from "expo-media-library";
@@ -119,77 +119,88 @@ export async function shareShot(
 }
 
 /**
- * Simplified WhatsApp receipt flow used when a transaction has a Kartu Undian.
+ * Combined WhatsApp receipt flow used when a transaction has a Kartu Undian.
  *
- * The receipt text now already contains the lottery ticket numbers, so we do
- * NOT need to force the image into the same WA message. Instead we:
+ * This restores the earlier UX the user preferred: one tap sends BOTH the
+ * ticket card image AND the receipt text as caption in a SINGLE WhatsApp
+ * message.
  *
- *   1. Capture the Kartu Undian PNG and save it to the device gallery (silent).
- *   2. Open wa.me/<PHONE>?text=<receipt> directly to the customer's saved
- *      number — Sales only needs to press Send.
+ * Because WhatsApp does not accept caption text via the wa.me deep-link when an
+ * image is attached, we use the OS share sheet:
  *
- * The saved image sits in the gallery. If Sales wants to ALSO send the visual
- * ticket card, they can tap the separate "Kirim Kartu Undian" button which
- * opens the native share sheet on just the image.
+ *   Native (iOS/Android)
+ *     1. Capture the Kartu Undian PNG.
+ *     2. Copy the receipt text to the OS clipboard (so it can be pasted as
+ *        WhatsApp caption if the share intent does not carry it — some Android
+ *        launchers strip Intent.EXTRA_TEXT when a file is attached).
+ *     3. Open Sharing.shareAsync(imageUri) — user picks WhatsApp + contact.
+ *     4. WhatsApp opens with the image + caption text field. The text is
+ *        already in the clipboard so pasting is one long-press.
+ *     5. Bonus: also save the PNG to the gallery silently as a backup.
  *
- * On web, MediaLibrary is unavailable; we trigger a browser download so the
- * PNG lands in the user's Downloads folder, then open wa.me.
+ *   Web
+ *     - Uses navigator.share({files, text, title}) when supported so BOTH the
+ *       image and text arrive in a single share sheet.
+ *     - Fallback: download PNG + copy text to clipboard + open wa.me deep-link.
  */
 export async function sendReceiptToWhatsApp(
   shotRef: ShotRef,
   nativeId: string,
   filename: string,
-  phone: string,
+  _phone: string,
   receiptText: string,
-): Promise<{ savedToGallery: boolean }> {
-  const digits = (phone || "").replace(/[^\d]/g, "");
-  if (!digits) throw new Error("Nomor WA pelanggan kosong");
-  const n = digits.startsWith("0")
-    ? "62" + digits.slice(1)
-    : digits.startsWith("62")
-    ? digits
-    : digits;
-
-  let savedToGallery = false;
+): Promise<{ mode: "combined" | "image+clipboard" }> {
+  const uriOrData = await captureImage(shotRef, nativeId, filename);
 
   if (Platform.OS === "web") {
     try {
-      const dataUrl = await captureImage(shotRef, nativeId, filename);
-      webDownload(dataUrl, filename);
-      savedToGallery = true;
-    } catch {}
-  } else {
+      const blob = dataUrlToBlob(uriOrData);
+      const file = new File(
+        [blob],
+        filename.endsWith(".png") ? filename : `${filename}.png`,
+        { type: "image/png" },
+      );
+      // @ts-ignore
+      if (navigator.canShare && navigator.canShare({ files: [file], text: receiptText })) {
+        // @ts-ignore
+        await navigator.share({ files: [file], text: receiptText, title: "Nota + Kartu Undian" });
+        return { mode: "combined" };
+      }
+    } catch {
+      // fall through to download + clipboard + wa.me
+    }
+    webDownload(uriOrData, filename);
     try {
-      let perm = await MediaLibrary.getPermissionsAsync();
-      if (!perm.granted && perm.canAskAgain) {
-        perm = await MediaLibrary.requestPermissionsAsync();
-      }
-      const uri = await captureRef(shotRef, {
-        format: "png",
-        quality: 1,
-        result: "tmpfile",
-        fileName: filename,
-      });
-      if (perm.granted) {
-        try {
-          await MediaLibrary.saveToLibraryAsync(uri);
-          savedToGallery = true;
-        } catch {}
-      }
-    } catch {}
+      const Clipboard = await import("expo-clipboard");
+      await Clipboard.setStringAsync(receiptText);
+    } catch {
+      try {
+        if (typeof navigator !== "undefined" && (navigator as any).clipboard) {
+          await (navigator as any).clipboard.writeText(receiptText);
+        }
+      } catch {}
+    }
+    return { mode: "image+clipboard" };
   }
 
-  // Open WhatsApp deep-link directly to customer's number with pre-filled text
-  const encoded = encodeURIComponent(receiptText);
-  const url = `https://wa.me/${n}?text=${encoded}`;
+  // Native: save copy to gallery in the background, put text on clipboard,
+  // then open share sheet with the image so WA can attach both.
+  try {
+    const perm = await MediaLibrary.getPermissionsAsync();
+    if (perm.granted) {
+      MediaLibrary.saveToLibraryAsync(uriOrData).catch(() => {});
+    }
+  } catch {}
 
-  if (Platform.OS === "web") {
-    if (typeof window !== "undefined") window.open(url, "_blank");
-    return { savedToGallery };
-  }
+  const Clipboard = await import("expo-clipboard");
+  await Clipboard.setStringAsync(receiptText);
 
-  const supported = await Linking.canOpenURL(url);
-  if (!supported) throw new Error("Tidak bisa membuka WhatsApp");
-  await Linking.openURL(url);
-  return { savedToGallery };
+  const canShare = await Sharing.isAvailableAsync();
+  if (!canShare) throw new Error("Fitur share tidak tersedia di device ini");
+  await Sharing.shareAsync(uriOrData, {
+    mimeType: "image/png",
+    dialogTitle: "Kirim Nota + Kartu Undian",
+    UTI: "public.png",
+  });
+  return { mode: "image+clipboard" };
 }

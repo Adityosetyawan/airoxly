@@ -195,3 +195,18 @@ Manually verified in web preview: transaction detail loaded with ticket card + b
 ## agent_communication:
     -agent: "main"
     -message: "Backend: only /api/customers endpoint signature changed (sort pattern regex + Python post-sort for last/recent). Please verify: (1) sort=no|ranking|recent|last|loans|debt all return 200 with correct ordering, (2) sort=last places customers with null last_purchase_date at the end and orders remaining ascending, (3) sort=recent places customers with a purchase first (descending by date) and null-date customers last, (4) admin role scope still respects group_letter filter, (5) sales role only sees own customers, (6) super_admin optional sales_id filter still works. Frontend: verify Admin dashboard has a new 'Kelola Pelanggan' link that opens Pelanggan Wilayah scoped to their group. SuperAdmin dashboard has 'Data Pelanggan' Quick Access opening Semua Pelanggan. Both should have a working sales-filter dropdown and 6 sort chips. Do NOT attempt to test the WhatsApp/clipboard/gallery-save flow — it only works on native builds. Just verify the transaction detail page still renders, the button label reads 'Kirim WA, Simpan & Kupon' on new transaction form, and no crashes."
+
+
+## Follow-up 2 (same session):
+User asked to revert to the earlier combined flow: "Tampilkan no kupon undian pada nota penjualan yang dikirim langsung ke WA pelanggan dan pada klik WA dan kupon penjualan bisa langsung dikirim nota penjualan dan gambar kupon undiannya tanpa harus di dowload terlebih dahulu."
+
+Changes:
+1. Ticket numbers stay in `formatReceipt` output (as done in follow-up 1).
+2. `sendReceiptToWhatsApp` reworked back to the combined share-sheet flow:
+   - Native: capture PNG → copy receipt text to clipboard → open native share sheet with the image (Sharing.shareAsync). User picks WA + contact → WA opens with image; caption text already on clipboard, one long-press paste. Background: image also silent-saved to gallery if MediaLibrary permission is already granted.
+   - Web: navigator.share({files, text}) when supported → one sheet with both. Fallback: download PNG + copy text to clipboard + open wa.me.
+3. Toast: "Kartu + nota siap dikirim di WhatsApp" (combined) or "Share sheet terbuka — pilih WhatsApp & pelanggan. Caption sudah tersalin, tinggal tempel" (fallback).
+4. Main resend button label now reads "Kirim Nota + Kartu Undian ke WhatsApp".
+5. The separate "Kirim Kartu Undian ke WA" button is kept as an optional image-only action.
+
+Manually verified: button label correct in UI; main flow now goes through Sharing.shareAsync (native) / navigator.share (web) instead of wa.me deep-link. Full delivery still requires a native device (share sheet not available in web preview beyond navigator.share).

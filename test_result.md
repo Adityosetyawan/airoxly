@@ -249,3 +249,88 @@ Live-verified in web preview by intercepting window.open. Firing the button on t
 
 which opens WhatsApp directly to the customer's saved number with the full receipt (including ticket numbers) pre-filled.
 
+
+## Session 14: Emergent-managed Google Sign-in
+
+### user_problem_statement:
+"Add the Emergent managed Google sign-in integration to my app."
+
+### Approach (auto-decided per user's "skip clarification"):
+- Google Sign-in added as an ADDITIONAL login method alongside existing username+password JWT flow (which remains the default).
+- Google email is mapped to existing user records via a new optional `google_email` field on the user document. If the Google account's email matches either `google_email` OR `username` exactly, sign-in succeeds; otherwise → 401 with a clear "please contact Super Admin" message.
+- No new users are auto-created — this preserves the strict RBAC model (Sales code / group_letter assigned by Super Admin).
+
+### Backend Changes (`/app/backend/server.py`)
+1. Added `httpx` import.
+2. New fields on User models: `google_email` (unique+sparse index), `picture`.
+3. `get_current_user` now accepts EITHER a JWT token (username+password login) OR a session_token prefixed with `emg_` (Google login). Session tokens are looked up in `user_sessions` collection with timezone-aware expiry checking.
+4. New endpoint `POST /api/auth/session` — exchanges Emergent one-time `session_id` for a 7-day `session_token`. Never returns duplicates on repeat sign-ins (upsert by email).
+5. New endpoint `POST /api/auth/logout` — revokes server-side `emg_` sessions (JWT is stateless).
+6. `POST /users` and `PATCH /users/{id}` now accept `google_email` with uniqueness guard.
+7. MongoDB indexes: `users.google_email` (unique+sparse), `user_sessions.session_token` (unique), `user_sessions.user_id`, `user_sessions.expires_at` (TTL, expireAfterSeconds=0).
+
+### Frontend Changes
+1. `/app/frontend/src/googleAuth.ts` (NEW): platform-aware flow. Web uses `window.location.href` with `origin + '/'` redirect; native uses `WebBrowser.openAuthSessionAsync` + a pre-registered `Linking` URL listener + `Linking.getInitialURL()` triple-fallback for extracting `session_id` from the hash fragment via raw-string regex (per playbook — never `Linking.parse().queryParams`). De-dup guard via in-memory `Set<string>` of used session_ids.
+2. `/app/frontend/src/AuthContext.tsx`: bootstrap now processes any `session_id` in the URL FIRST (web) or from `getInitialURL()` (native cold-start) before touching the saved JWT. Added `loginWithGoogle` method.
+3. `/app/frontend/src/api.ts`: new `api.googleSession(session_id)` — POSTs to `/api/auth/session` and stores returned `session_token` under the same TOKEN_KEY (Bearer usage is transparent). `api.logout` now also calls `POST /api/auth/logout` best-effort.
+4. `/app/frontend/app/login.tsx`: added divider + "Masuk dengan Google" button with hint about email whitelist.
+5. `/app/frontend/app/(superadmin)/user-form.tsx`: added "Email Google" field so Super Admin can whitelist a Google email on existing users.
+6. `/app/frontend/app.json`: `scheme` renamed from `frontend` to `airoxly` for proper deep-linking on native builds.
+
+### backend:
+  - task: "POST /api/auth/session exchange with Emergent"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Manually verified: empty body → 422; invalid session_id → 401 'Sesi Google tidak valid / kedaluwarsa'; existing username/password login continues to return 200 with access_token. Real Google flow cannot be validated from a script (requires interactive browser flow through auth.emergentagent.com)."
+  - task: "get_current_user dual-mode (JWT + emg_ session_token)"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+
+### frontend:
+  - task: "Login screen Google button + AuthContext bootstrap w/ session_id"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/login.tsx, /app/frontend/src/AuthContext.tsx, /app/frontend/src/googleAuth.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Web preview shows the 'Masuk dengan Google' button rendered correctly. Native (Expo Go) & real-device end-to-end sign-in must be tested manually since it requires an interactive Emergent OAuth redirect."
+  - task: "Super Admin user-form: Email Google field"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(superadmin)/user-form.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+
+### metadata:
+  test_sequence: 14
+
+### test_plan:
+  current_focus:
+    - "POST /api/auth/session exchange"
+    - "get_current_user dual token support (JWT + session_token)"
+    - "Super Admin can set/edit google_email on users; uniqueness enforced"
+    - "Legacy username/password login unaffected"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+### agent_communication:
+    -agent: "main"
+    -message: "Google Sign-in is now integrated. Test cases requested: (1) POST /api/auth/session with an invalid session_id returns 401. (2) POST /api/auth/session with missing session_id returns 422. (3) POST /api/auth/login (JWT) still returns 200 with existing seed users. (4) Set google_email='test@example.com' on superadmin via PATCH /api/users/{id}, verify GET returns the field. (5) Create a new user with google_email; verify unique constraint by trying to set the same email on a different user → 409. (6) Verify authenticated GET /api/auth/me works with both JWT and (mock) emg_ session_token. Frontend: verify login screen renders 'Masuk dengan Google' button, and the button click on web navigates to https://auth.emergentagent.com — cannot complete the actual OAuth flow in web preview since it requires real Google auth. Do NOT try to complete the real OAuth handshake."
+

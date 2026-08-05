@@ -35,6 +35,7 @@ export default function UserForm() {
   const [address, setAddress] = useState("");
   const [salesCode, setSalesCode] = useState("");
   const [groupLetter, setGroupLetter] = useState("");
+  const [googleEmail, setGoogleEmail] = useState("");
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [salary, setSalary] = useState("");
   const [commission, setCommission] = useState("");
@@ -56,6 +57,7 @@ export default function UserForm() {
           setAddress(u.address || "");
           setSalesCode(u.sales_code || "");
           setGroupLetter(u.group_letter || "");
+          setGoogleEmail(u.google_email || "");
           setYear(String(u.year_joined || ""));
           setSalary(String(u.salary || ""));
           setCommission(String(u.commission || ""));
@@ -85,6 +87,7 @@ export default function UserForm() {
         role,
         sales_code: salesCode.trim().toUpperCase() || undefined,
         group_letter: groupLetter.trim().toUpperCase() || undefined,
+        google_email: googleEmail.trim().toLowerCase() || undefined,
         year_joined: parseInt(year) || null,
         salary: parseFloat(salary) || 0,
         commission: parseFloat(commission) || 0,
@@ -155,6 +158,14 @@ export default function UserForm() {
           <Field label={id ? "Password (opsional)" : "Password"} value={password} onChange={setPassword} testID="password-input" secure />
           <Field label="Nama Lengkap" value={name} onChange={setName} testID="name-input" />
           <Field label="No. WhatsApp" value={wa} onChange={setWa} testID="wa-input" keyboard="phone-pad" />
+          <Field
+            label="Email Google (opsional — untuk login dengan Google)"
+            value={googleEmail}
+            onChange={(v: string) => setGoogleEmail(v.trim())}
+            testID="google-email-input"
+            keyboard="email-address"
+            autoCap="none"
+          />
           <Field label="Alamat" value={address} onChange={setAddress} testID="address-input" multiline />
 
           {role !== "super_admin" && (

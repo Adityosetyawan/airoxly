@@ -1,0 +1,52 @@
+{
+  "summary": "Emergent Google Sign-in integration tested end-to-end. Backend: 17/17 pytest cases passed covering POST /api/auth/session (invalid session_id -> 401 with correct Indonesian detail, missing body -> 422), legacy JWT login still works, PATCH /users/{id} google_email with uniqueness (self OK, cross-user duplicate -> 409), GET /auth/me includes google_email, POST /users google_email uniqueness (create OK -> 200, duplicate -> 409, cleanup DELETE succeeds), dual-token get_current_user via seeded emg_ session_token (valid works, expired -> 401 'Session expired', logout revokes -> subsequent /me -> 401), and JWT stateless logout confirmed (JWT still valid after /auth/logout as expected). Frontend: /login renders the 'Masuk dengan Google' button (testID=login-google-button); classic username/password login with superadmin/super123 navigates to /(superadmin)/dashboard successfully.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "login.tsx (and app-wide)",
+        "issue": "Console warning: 'shadow*' style props are deprecated. Use 'boxShadow'. Reference: /app/frontend/app/login.tsx:182-185 (logoBadge uses shadowColor/shadowOpacity/shadowRadius/shadowOffset). RN Web reports these as deprecated in favour of the unified boxShadow style."
+      },
+      {
+        "component": "app-wide (RN Web)",
+        "issue": "Console warning: 'props.pointerEvents is deprecated. Use style.pointerEvents'. Non-blocking but should be migrated when convenient (likely from a third-party wrapper such as SafeAreaView or Toast)."
+      },
+      {
+        "component": "app-wide (RN Web)",
+        "issue": "Console warning: 'Animated: useNativeDriver is not supported because the native animated module is missing.' Expected on web preview; safe to ignore for now, but if a native driver is needed on iOS/Android it must be tested on a real device build."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_google_auth.py",
+    "/app/test_reports/pytest/iteration_14_google_auth.xml"
+  ],
+  "action_items": [
+    "(Optional / low priority) Migrate deprecated 'shadow*' style props to 'boxShadow' in login.tsx logoBadge and audit other screens for the same pattern.",
+    "(Optional) Audit codebase for props.pointerEvents usage and move it into style.pointerEvents to silence the RN Web deprecation warning."
+  ],
+  "critical_code_review_comments": [
+    "server.py:439-511 (POST /auth/session) correctly uses upsert-free insert; a repeat sign-in will insert a NEW session_token row on each call — this is fine because the endpoint mints a fresh token per exchange, but if a session_id is retried the frontend must guard against double-processing (already handled via the in-memory used-session-id Set in googleAuth.ts).",
+    "server.py:278-304 (get_current_user) properly compares tz-aware expiry (defensive `if exp.tzinfo is None` block) — verified functional through the expired-session test path.",
+    "server.py:602-608 (PATCH /users update google_email) allows clearing via empty string ('') — verified: PATCH with google_email:'' clears the field to null (tested in TestFinalCleanup).",
+    "server.py file is ~1870 lines. Consider splitting into modules (auth, users, transactions, reports) — outside scope of this test cycle."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_google_auth.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17)",
+    "frontend": "100% (2/2 light-touch)"
+  },
+  "seed_data_creation": "Test transiently inserted 2 rows into user_sessions (valid + expired) for the superadmin user and one temporary sales user (ga_test_*) — all rows explicitly deleted at end of the run. google_email set on superadmin during PATCH tests is also cleared in TestFinalCleanup, so the DB is left in its original state.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Google Sign-in integration is fully green on the backend + light frontend smoke. Real end-to-end OAuth via auth.emergentagent.com cannot be automated in the preview (would require a live Google account). Any future tests should reuse /app/backend/tests/test_google_auth.py which is idempotent and cleans up after itself. Base URL is picked from EXPO_PUBLIC_BACKEND_URL. Mongo direct access uses MONGO_URL/DB_NAME env for the emg_ token seed test.",
+  "rca_of_issue": "N/A — no bugs discovered; feature works as designed."
+}

@@ -17,13 +17,20 @@ import { useAuth } from "@/src/AuthContext";
 import { useToast } from "@/src/components/Toast";
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const router = useRouter();
   const toast = useToast();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [gLoading, setGLoading] = useState(false);
+
+  const goHome = (role: string) => {
+    if (role === "super_admin") router.replace("/(superadmin)/dashboard");
+    else if (role === "admin") router.replace("/(admin)/dashboard");
+    else router.replace("/(sales)/dashboard");
+  };
 
   const onSubmit = async () => {
     if (!username.trim() || !password) {
@@ -34,13 +41,28 @@ export default function Login() {
     try {
       const u = await login(username.trim(), password);
       toast.show(`Selamat datang, ${u.name || u.username}`, "success");
-      if (u.role === "super_admin") router.replace("/(superadmin)/dashboard");
-      else if (u.role === "admin") router.replace("/(admin)/dashboard");
-      else router.replace("/(sales)/dashboard");
+      goHome(u.role);
     } catch (e: any) {
       toast.show(e.message || "Login gagal", "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onGoogle = async () => {
+    setGLoading(true);
+    try {
+      const u = await loginWithGoogle();
+      // On web, control never returns here (page navigated).
+      // On native, we get the user back after redirect resolves.
+      if (u) {
+        toast.show(`Selamat datang, ${u.name || u.username}`, "success");
+        goHome(u.role);
+      }
+    } catch (e: any) {
+      toast.show(e.message || "Login Google gagal", "error");
+    } finally {
+      setGLoading(false);
     }
   };
 
@@ -110,6 +132,27 @@ export default function Login() {
             >
               <Text style={styles.btnText}>{loading ? "Memuat…" : "Masuk"}</Text>
             </TouchableOpacity>
+
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>atau</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <TouchableOpacity
+              onPress={onGoogle}
+              disabled={gLoading || loading}
+              style={[styles.btnGoogle, (gLoading || loading) && { opacity: 0.6 }]}
+              testID="login-google-button"
+            >
+              <Ionicons name="logo-google" size={18} color="#EA4335" />
+              <Text style={styles.btnGoogleText}>
+                {gLoading ? "Membuka Google…" : "Masuk dengan Google"}
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.gHint}>
+              Email Google harus sudah terdaftar oleh Super Admin
+            </Text>
           </View>
 
           <View style={styles.hint}>
@@ -173,6 +216,36 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   btnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 16,
+    gap: 12,
+  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: theme.color.border },
+  dividerText: { fontSize: 12, color: theme.color.muted, fontWeight: "500" },
+  btnGoogle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    backgroundColor: theme.color.surface,
+    borderRadius: 14,
+    padding: 15,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+  },
+  btnGoogleText: {
+    color: theme.color.onSurface,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  gHint: {
+    fontSize: 11,
+    color: theme.color.muted,
+    marginTop: 8,
+    textAlign: "center",
+  },
   hint: {
     marginTop: 20,
     padding: 14,

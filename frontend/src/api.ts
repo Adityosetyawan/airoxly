@@ -20,6 +20,8 @@ export type User = {
   commission?: number;
   bonus?: number;
   disabled?: boolean;
+  google_email?: string;
+  picture?: string;
 };
 
 export type Product = {
@@ -129,10 +131,26 @@ export const api = {
     return r;
   },
   logout: async () => {
+    // Best-effort revoke server-side session (JWT is stateless)
+    try { await req("/auth/logout", { method: "POST" }); } catch {}
     await storage.secureRemove(TOKEN_KEY);
     await storage.removeItem(USER_KEY);
   },
   me: () => req<User>("/auth/me"),
+
+  /**
+   * Exchange a one-time Emergent `session_id` for a 7-day session_token.
+   * Called from the Google Sign-in redirect handler.
+   */
+  googleSession: async (session_id: string) => {
+    const r = await req<{ session_token: string; user: User }>("/auth/session", {
+      method: "POST",
+      body: JSON.stringify({ session_id }),
+    });
+    await storage.secureSet(TOKEN_KEY, r.session_token);
+    await storage.setItem(USER_KEY, JSON.stringify(r.user));
+    return r;
+  },
 
   // Users
   listUsers: (params?: { role?: string; group_letter?: string }) => {

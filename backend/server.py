@@ -16,6 +16,7 @@ from datetime import datetime, timezone, timedelta
 import calendar
 import jwt
 from passlib.context import CryptContext
+import httpx
 
 
 ROOT_DIR = Path(__file__).parent
@@ -69,6 +70,8 @@ class UserPublic(BaseModel):
     commission: Optional[float] = None
     bonus: Optional[float] = None
     disabled: bool = False
+    google_email: Optional[str] = None
+    picture: Optional[str] = None
 
 
 class UserCreate(BaseModel):
@@ -84,6 +87,7 @@ class UserCreate(BaseModel):
     salary: Optional[float] = 0
     commission: Optional[float] = 0
     bonus: Optional[float] = 0
+    google_email: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
@@ -98,6 +102,7 @@ class UserUpdate(BaseModel):
     commission: Optional[float] = None
     bonus: Optional[float] = None
     disabled: Optional[bool] = None
+    google_email: Optional[str] = None
     role: Optional[Role] = None
 
 
@@ -265,17 +270,34 @@ def user_public(u: dict) -> dict:
         "commission": u.get("commission"),
         "bonus": u.get("bonus"),
         "disabled": u.get("disabled", False),
+        "google_email": u.get("google_email"),
+        "picture": u.get("picture"),
     }
 
 
 async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)):
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
-        user_id = payload.get("sub")
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    user_id: Optional[str] = None
+    # 1) Try Emergent Google session_token (prefix "emg_")
+    if token.startswith("emg_"):
+        sess = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
+        if not sess:
+            raise HTTPException(status_code=401, detail="Invalid session")
+        exp = sess.get("expires_at")
+        if exp is not None:
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            if exp < datetime.now(timezone.utc):
+                raise HTTPException(status_code=401, detail="Session expired")
+        user_id = sess.get("user_id")
+    else:
+        # 2) JWT flow (username/password)
+        try:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+            user_id = payload.get("sub")
+        except Exception:
+            raise HTTPException(status_code=401, detail="Invalid token")
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user or user.get("disabled"):
         raise HTTPException(status_code=401, detail="User not found or disabled")
@@ -324,6 +346,10 @@ DEFAULT_USERS = [
 async def seed():
     await db.users.create_index("username", unique=True)
     await db.users.create_index("id", unique=True)
+    await db.users.create_index("google_email", unique=True, sparse=True)
+    await db.user_sessions.create_index("session_token", unique=True)
+    await db.user_sessions.create_index("user_id")
+    await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
     await db.customers.create_index("barcode_id", unique=True, sparse=True)
     await db.customers.create_index("customer_no")
     await db.customers.create_index("created_by")
@@ -406,6 +432,94 @@ async def me(user=Depends(get_current_user)):
     return user_public(user)
 
 
+class SessionExchangeRequest(BaseModel):
+    session_id: str
+
+
+@api.post("/auth/session")
+async def google_session_exchange(body: SessionExchangeRequest):
+    """Exchange a one-time Emergent `session_id` for a 7-day `session_token`.
+
+    - The `session_id` is a one-time value returned by Emergent to the frontend
+      redirect. This endpoint calls Emergent's session-data API to resolve the
+      Google user's email/name/picture.
+    - The email MUST already exist as a whitelisted user (either via a Super
+      Admin having set `google_email` on a user, OR via the username matching
+      the email exactly). If no such user is found, we return 401.
+    - On success, we mint a 7-day `session_token` prefixed with `emg_` and
+      persist it in `user_sessions`.
+    """
+    session_id = (body.session_id or "").strip()
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id required")
+
+    # Resolve the session with Emergent (single external call)
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(
+                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                headers={"X-Session-ID": session_id},
+            )
+    except Exception as e:
+        logging.exception("Emergent session resolve failed: %s", e)
+        raise HTTPException(status_code=401, detail="Gagal verifikasi sesi Google")
+    if r.status_code != 200:
+        raise HTTPException(status_code=401, detail="Sesi Google tidak valid / kedaluwarsa")
+    data = r.json() or {}
+    email = (data.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=401, detail="Email Google tidak tersedia")
+    picture = data.get("picture")
+
+    # Look up user by google_email OR username == email (allowing pre-registered
+    # accounts that already use email as username).
+    user = await db.users.find_one(
+        {"$or": [{"google_email": email}, {"username": email}]},
+        {"_id": 0},
+    )
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail=f"Akun Google {email} belum terdaftar. Hubungi Super Admin untuk registrasi.",
+        )
+    if user.get("disabled"):
+        raise HTTPException(status_code=403, detail="Akun dinonaktifkan")
+
+    # Mint a session_token distinct from JWT (prefix `emg_`)
+    session_token = "emg_" + secrets.token_urlsafe(48)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    await db.user_sessions.insert_one(
+        {
+            "session_token": session_token,
+            "user_id": user["id"],
+            "email": email,
+            "created_at": datetime.now(timezone.utc),
+            "expires_at": expires_at,
+        }
+    )
+
+    # Backfill google_email/picture on user record if we now know them
+    updates: dict = {}
+    if not user.get("google_email"):
+        updates["google_email"] = email
+    if picture and user.get("picture") != picture:
+        updates["picture"] = picture
+    if updates:
+        await db.users.update_one({"id": user["id"]}, {"$set": updates})
+        user.update(updates)
+
+    return {"session_token": session_token, "user": user_public(user)}
+
+
+@api.post("/auth/logout")
+async def auth_logout(user=Depends(get_current_user), token: str = Depends(oauth2_scheme)):
+    """Revoke the current Emergent session (JWT tokens are stateless — nothing
+    to revoke server-side; frontend just clears its own copy)."""
+    if token and token.startswith("emg_"):
+        await db.user_sessions.delete_one({"session_token": token})
+    return {"ok": True}
+
+
 # ============================================================
 # USERS  (Super Admin manages all; Admin only creates/manages Sales in own group)
 # ============================================================
@@ -443,6 +557,9 @@ async def create_user(body: UserCreate, user=Depends(get_current_user)):
         body.group_letter = user.get("group_letter")
     if await db.users.find_one({"username": body.username}):
         raise HTTPException(409, "Username sudah dipakai")
+    google_email = (body.google_email or "").strip().lower() or None
+    if google_email and await db.users.find_one({"google_email": google_email}):
+        raise HTTPException(409, "Email Google sudah dipakai user lain")
     doc = {
         "id": str(uuid.uuid4()),
         "username": body.username.strip(),
@@ -458,6 +575,7 @@ async def create_user(body: UserCreate, user=Depends(get_current_user)):
         "commission": body.commission or 0,
         "bonus": body.bonus or 0,
         "disabled": False,
+        "google_email": google_email,
         "created_at": now_utc().isoformat(),
     }
     await db.users.insert_one(doc)
@@ -480,6 +598,14 @@ async def update_user(user_id: str, body: UserUpdate, user=Depends(get_current_u
     for k, v in body.dict(exclude_unset=True).items():
         if k == "password" and v:
             update["password_hash"] = hash_password(v)
+        elif k == "google_email":
+            # Normalize (empty string clears it, else lowercase) & guard uniqueness
+            v_norm = (v or "").strip().lower() or None
+            if v_norm and v_norm != target.get("google_email"):
+                exists = await db.users.find_one({"google_email": v_norm, "id": {"$ne": user_id}})
+                if exists:
+                    raise HTTPException(409, "Email Google sudah dipakai user lain")
+            update["google_email"] = v_norm
         elif k != "password" and v is not None:
             update[k] = v
     if update:

@@ -10,7 +10,7 @@ import { useAuth } from "@/src/AuthContext";
 import { useToast } from "@/src/components/Toast";
 import { formatReceipt, sendWhatsApp } from "@/src/whatsapp";
 import TicketCard from "@/src/components/TicketCard";
-import { saveShot, shareShot, sendReceiptToWhatsApp } from "@/src/utils/capture";
+import { saveShot, shareShot, saveTicketToGallerySilent } from "@/src/utils/capture";
 
 export default function TransactionDetail() {
   const { id, autoSendWA } = useLocalSearchParams<{ id: string; autoSendWA?: string }>();
@@ -67,34 +67,26 @@ export default function TransactionDetail() {
         lottery_period_name: t.lottery_period_name,
       });
 
-      // If transaction has lottery tickets → send Kartu Undian image WITH the
-      // receipt text (which already includes ticket numbers) in ONE WhatsApp
-      // message via the native share sheet.
+      // Direct-send via wa.me deep-link: opens WhatsApp chat with the
+      // customer's saved number and pre-fills the receipt text (which now
+      // already contains the lottery ticket numbers). Sales just presses Send.
+      //
+      // For lottery transactions we ALSO save the Kartu Undian PNG to the
+      // gallery silently (as a backup), so Sales can optionally send the
+      // visual card afterwards via the "Kirim Kartu Undian ke WA" button.
       if (t.lottery_tickets && t.lottery_tickets.length > 0) {
         try {
-          const { mode } = await sendReceiptToWhatsApp(
-            ticketShotRef,
-            "oxly-ticket-card-shot",
-            `OXLY-Kartu-${t.customer_name}`,
-            t.customer_wa || "",
-            msg,
-          );
-          if (mode === "combined") {
-            toast.show("Kartu + nota siap dikirim di WhatsApp", "success");
-          } else {
-            toast.show(
-              "Share sheet terbuka — pilih WhatsApp & pelanggan. Caption sudah tersalin, tinggal tempel.",
-              "success",
-            );
-          }
-          return;
-        } catch (e: any) {
-          toast.show(e?.message || "Gagal siapkan kartu, kirim teks saja", "error");
-        }
+          await saveTicketToGallerySilent(ticketShotRef, `OXLY-Kartu-${t.customer_name}`);
+        } catch {}
       }
 
-      // No tickets (or image capture failed) → open wa.me directly to customer
       await sendWhatsApp(t.customer_wa || "", msg);
+      toast.show(
+        t.lottery_tickets && t.lottery_tickets.length > 0
+          ? "WhatsApp terbuka — nota + nomor undian sudah pre-filled, tinggal tekan Send"
+          : "WhatsApp terbuka — tinggal tekan Send",
+        "success",
+      );
     } catch (e: any) {
       toast.show(e.message || "Gagal", "error");
     } finally {
@@ -251,8 +243,6 @@ export default function TransactionDetail() {
           <Text style={styles.waText}>
             {waBusy
               ? "Menyiapkan…"
-              : t.lottery_tickets && t.lottery_tickets.length > 0
-              ? `Kirim Nota + Kartu Undian ke WhatsApp`
               : t.customer_wa
               ? `Kirim Nota WA ke ${t.customer_name}`
               : "Nomor WA pelanggan kosong"}

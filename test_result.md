@@ -232,3 +232,20 @@ Simpan nomor undian di atas untuk ikut Undian Berhadiah 🍀
 Terima kasih 🙏
 ```
 
+
+## Follow-up 3 (same session):
+User asked: "Buatkan Setelah selesai input pembelian pelanggan kemudian klik tombol WA yang terkirim ke WA pelanggan secara langsung beserta text no kode undiannya."
+
+Changes:
+1. `resendWA` in `/app/frontend/app/(sales)/transaction/[id].tsx` reverted to a plain `sendWhatsApp(customer_wa, msg)` call — direct wa.me deep-link, no share sheet, no contact picker.
+2. Receipt text keeps the `🎁 Kupon Undian` block with ticket numbers (via `formatReceipt` args passed correctly).
+3. Kartu Undian PNG is still saved to gallery silently (`saveTicketToGallerySilent`) so Sales can optionally forward the visual card via the separate "Kirim Kartu Undian ke WA" button.
+4. Removed the previous `sendReceiptToWhatsApp` combined share-sheet flow. Simplified capture.ts.
+5. Main button label reverted to `Kirim Nota WA ke <name>`.
+
+Live-verified in web preview by intercepting window.open. Firing the button on the Bu Adi (Sales A2, 2 gln Air Galon 19L, tickets OXLY-68S4U1 & OXLY-XXGFVB) transaction produces exactly ONE URL:
+
+`https://wa.me/6285868616161?text=*Air OXLY*\nSales: A2\n...\n🎁 *Kupon Undian TEST_Undian_2bcffe*\n   • OXLY-68S4U1\n   • OXLY-XXGFVB\n...`
+
+which opens WhatsApp directly to the customer's saved number with the full receipt (including ticket numbers) pre-filled.
+

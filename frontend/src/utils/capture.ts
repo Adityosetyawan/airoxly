@@ -119,88 +119,38 @@ export async function shareShot(
 }
 
 /**
- * Combined WhatsApp receipt flow used when a transaction has a Kartu Undian.
- *
- * This restores the earlier UX the user preferred: one tap sends BOTH the
- * ticket card image AND the receipt text as caption in a SINGLE WhatsApp
- * message.
- *
- * Because WhatsApp does not accept caption text via the wa.me deep-link when an
- * image is attached, we use the OS share sheet:
- *
- *   Native (iOS/Android)
- *     1. Capture the Kartu Undian PNG.
- *     2. Copy the receipt text to the OS clipboard (so it can be pasted as
- *        WhatsApp caption if the share intent does not carry it — some Android
- *        launchers strip Intent.EXTRA_TEXT when a file is attached).
- *     3. Open Sharing.shareAsync(imageUri) — user picks WhatsApp + contact.
- *     4. WhatsApp opens with the image + caption text field. The text is
- *        already in the clipboard so pasting is one long-press.
- *     5. Bonus: also save the PNG to the gallery silently as a backup.
- *
- *   Web
- *     - Uses navigator.share({files, text, title}) when supported so BOTH the
- *       image and text arrive in a single share sheet.
- *     - Fallback: download PNG + copy text to clipboard + open wa.me deep-link.
+ * Save the Kartu Undian PNG silently to the device gallery.
+ * - Native: uses MediaLibrary if permission is already granted; otherwise
+ *   attempts to request permission once (best-effort — swallows errors).
+ * - Web: triggers a browser download so the image lands in the Downloads
+ *   folder as a backup.
+ * Never throws — always resolves. Meant to be a background side-effect that
+ * accompanies the wa.me deep-link (which itself can only carry text).
  */
-export async function sendReceiptToWhatsApp(
+export async function saveTicketToGallerySilent(
   shotRef: ShotRef,
-  nativeId: string,
   filename: string,
-  _phone: string,
-  receiptText: string,
-): Promise<{ mode: "combined" | "image+clipboard" }> {
-  const uriOrData = await captureImage(shotRef, nativeId, filename);
-
-  if (Platform.OS === "web") {
-    try {
-      const blob = dataUrlToBlob(uriOrData);
-      const file = new File(
-        [blob],
-        filename.endsWith(".png") ? filename : `${filename}.png`,
-        { type: "image/png" },
-      );
-      // @ts-ignore
-      if (navigator.canShare && navigator.canShare({ files: [file], text: receiptText })) {
-        // @ts-ignore
-        await navigator.share({ files: [file], text: receiptText, title: "Nota + Kartu Undian" });
-        return { mode: "combined" };
-      }
-    } catch {
-      // fall through to download + clipboard + wa.me
-    }
-    webDownload(uriOrData, filename);
-    try {
-      const Clipboard = await import("expo-clipboard");
-      await Clipboard.setStringAsync(receiptText);
-    } catch {
-      try {
-        if (typeof navigator !== "undefined" && (navigator as any).clipboard) {
-          await (navigator as any).clipboard.writeText(receiptText);
-        }
-      } catch {}
-    }
-    return { mode: "image+clipboard" };
-  }
-
-  // Native: save copy to gallery in the background, put text on clipboard,
-  // then open share sheet with the image so WA can attach both.
+): Promise<{ saved: boolean }> {
   try {
-    const perm = await MediaLibrary.getPermissionsAsync();
-    if (perm.granted) {
-      MediaLibrary.saveToLibraryAsync(uriOrData).catch(() => {});
+    if (Platform.OS === "web") {
+      const dataUrl = await captureImage(shotRef, "oxly-ticket-card-shot", filename);
+      webDownload(dataUrl, filename);
+      return { saved: true };
     }
-  } catch {}
-
-  const Clipboard = await import("expo-clipboard");
-  await Clipboard.setStringAsync(receiptText);
-
-  const canShare = await Sharing.isAvailableAsync();
-  if (!canShare) throw new Error("Fitur share tidak tersedia di device ini");
-  await Sharing.shareAsync(uriOrData, {
-    mimeType: "image/png",
-    dialogTitle: "Kirim Nota + Kartu Undian",
-    UTI: "public.png",
-  });
-  return { mode: "image+clipboard" };
+    let perm = await MediaLibrary.getPermissionsAsync();
+    if (!perm.granted && perm.canAskAgain) {
+      perm = await MediaLibrary.requestPermissionsAsync();
+    }
+    if (!perm.granted) return { saved: false };
+    const uri = await captureRef(shotRef, {
+      format: "png",
+      quality: 1,
+      result: "tmpfile",
+      fileName: filename,
+    });
+    await MediaLibrary.saveToLibraryAsync(uri);
+    return { saved: true };
+  } catch {
+    return { saved: false };
+  }
 }

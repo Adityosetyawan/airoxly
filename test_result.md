@@ -210,3 +210,25 @@ Changes:
 5. The separate "Kirim Kartu Undian ke WA" button is kept as an optional image-only action.
 
 Manually verified: button label correct in UI; main flow now goes through Sharing.shareAsync (native) / navigator.share (web) instead of wa.me deep-link. Full delivery still requires a native device (share sheet not available in web preview beyond navigator.share).
+
+## Bug Fix (same session):
+User reported the WA receipt was missing the 🎁 Kupon Undian section despite the transaction having lottery tickets. Screenshot showed nota text without ticket numbers.
+
+Root cause: `resendWA` in `/app/frontend/app/(sales)/transaction/[id].tsx` (called by the auto-send flow after creating a lottery transaction, and by the manual "Kirim Nota + Kartu Undian ke WhatsApp" button) built its `formatReceipt` args WITHOUT passing `lottery_tickets` and `lottery_period_name`. So `formatReceipt` treated them as undefined and skipped the ticket section — even though the underlying `t` object had them from the API.
+
+Fix: added `lottery_tickets: t.lottery_tickets` and `lottery_period_name: t.lottery_period_name` to the `formatReceipt` call in `resendWA`.
+
+Live-verified in web preview by intercepting `navigator.clipboard.writeText`. For a real transaction (Bu Adi, 2 gln Air Galon 19L, tickets `OXLY-68S4U1` & `OXLY-XXGFVB`) the receipt text captured now reads:
+```
+...
+Sisa hutang: Rp 20.000
+Total pinjam galon: 0 gln
+
+🎁 *Kupon Undian TEST_Undian_2bcffe*
+   • OXLY-68S4U1
+   • OXLY-XXGFVB
+Simpan nomor undian di atas untuk ikut Undian Berhadiah 🍀
+
+Terima kasih 🙏
+```
+

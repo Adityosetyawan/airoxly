@@ -334,3 +334,38 @@ which opens WhatsApp directly to the customer's saved number with the full recei
     -agent: "main"
     -message: "Google Sign-in is now integrated. Test cases requested: (1) POST /api/auth/session with an invalid session_id returns 401. (2) POST /api/auth/session with missing session_id returns 422. (3) POST /api/auth/login (JWT) still returns 200 with existing seed users. (4) Set google_email='test@example.com' on superadmin via PATCH /api/users/{id}, verify GET returns the field. (5) Create a new user with google_email; verify unique constraint by trying to set the same email on a different user → 409. (6) Verify authenticated GET /api/auth/me works with both JWT and (mock) emg_ session_token. Frontend: verify login screen renders 'Masuk dengan Google' button, and the button click on web navigates to https://auth.emergentagent.com — cannot complete the actual OAuth flow in web preview since it requires real Google auth. Do NOT try to complete the real OAuth handshake."
 
+
+## Session 15: PWA support for Sales (memory-lite mobile access)
+
+### user_problem_statement:
+"Apakah Bagian sales nya saja bisa dipisahkan App nya supaya memori yang terpakai tidak besar tetapi tetap terhubung dengan Apk admin dan super admin."
+
+### Approach:
+Instead of splitting into two Expo projects (heavy refactor with 2 code bases), we made the deployed web app installable as a PWA. Sales can `Add to Home Screen` on their phone browser and get a standalone icon that launches without the browser chrome. Zero APK install for Sales — 0 MB storage on their device. All app features continue to work over HTTPS (camera scanner via WebRTC, GPS via Geolocation API, sharing via wa.me deep links). Admin/Super Admin can still install the full APK.
+
+### Changes
+1. `/app/frontend/app.json`:
+   - `name`: `frontend` → `Air OXLY`
+   - `scheme`: kept as `airoxly`
+   - `web`: added `name`, `shortName`, `themeColor`, `backgroundColor`, `display: standalone`, `orientation`, `startUrl`, `lang`
+2. `/app/frontend/public/manifest.json` (NEW): full W3C manifest — icons (1024×1024 any + maskable, 48×48 favicon), display standalone, portrait orientation, categories, theme_color `#0F172A`.
+3. `/app/frontend/app/+html.tsx`: added `<link rel="manifest">`, apple-touch-icon, theme-color, apple-mobile-web-app meta tags, `viewport-fit=cover`, `lang="id"`, `<title>Air OXLY</title>`.
+4. `/app/frontend/src/components/PwaInstallHint.tsx` (NEW): dismissible bottom banner shown ONLY on web+mobile viewport when not already in `display-mode: standalone`. Handles Android `beforeinstallprompt` (programmatic install prompt) and shows iOS-specific "Bagikan → Ke Home Screen" instructions. Dismissal persisted via storage util.
+5. `/app/frontend/app/_layout.tsx`: mounts `<PwaInstallHint />` alongside the Stack so it appears everywhere on web only.
+
+### Manual verification:
+- `GET /manifest.json` → 200 OK with valid PWA manifest ✓
+- Login screen renders normally with the install banner at bottom on mobile viewport ✓
+- Banner text adapts based on UA: Android+deferred prompt → "Tap Pasang"; iOS → "Bagikan ⎙ → Ke Home Screen"; other → bookmark instructions ✓
+- Dismissible with X button and remembers across sessions via storage ✓
+- No regressions on existing login / Google Sign-in / Sales/Admin/SuperAdmin flows ✓
+
+Note: Real "Add to Home Screen" installation can only be tested on a real mobile browser (Chrome Android or Safari iOS) hitting the DEPLOYED production URL. Local preview shows the banner UI but cannot trigger a real install prompt.
+
+### Deployment guidance for user:
+1. Publish the app (Emergent → Publish button).
+2. Share the production URL (e.g., `https://airoxly.emergentagent.com`) with Sales team.
+3. Sales open URL in Chrome Android or Safari iOS → tap the install banner OR use browser's own "Install app" / "Add to Home Screen".
+4. Sales icon appears on home screen, launches full-screen without browser chrome — behaves like a native app but uses zero install storage.
+5. Admin/Super Admin can either install the APK OR use the same PWA.
+

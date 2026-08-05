@@ -1,0 +1,33 @@
+{
+  "name": "Air OXLY",
+  "short_name": "Air OXLY",
+  "description": "Aplikasi CRM & operasional penjualan air minum Air OXLY",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#0F172A",
+  "lang": "id",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/assets/images/icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/images/adaptive-icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/assets/images/favicon.png",
+      "sizes": "48x48",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

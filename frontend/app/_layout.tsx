@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { AuthProvider } from "@/src/AuthContext";
 import { ToastProvider } from "@/src/components/Toast";
+import PwaInstallHint from "@/src/components/PwaInstallHint";
 
 
 LogBox.ignoreAllLogs(true);
@@ -30,6 +31,7 @@ export default function RootLayout() {
         <AuthProvider>
           <ToastProvider>
             <Stack screenOptions={{ headerShown: false, animation: "fade" }} />
+            <PwaInstallHint />
           </ToastProvider>
         </AuthProvider>
       </SafeAreaProvider>

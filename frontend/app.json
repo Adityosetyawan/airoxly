@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "frontend",
+    "name": "Air OXLY",
     "slug": "frontend",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -30,7 +30,15 @@
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "Air OXLY",
+      "shortName": "Air OXLY",
+      "themeColor": "#0F172A",
+      "backgroundColor": "#ffffff",
+      "display": "standalone",
+      "orientation": "portrait",
+      "startUrl": "/",
+      "lang": "id"
     },
     "plugins": [
       "expo-router",

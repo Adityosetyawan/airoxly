@@ -1,0 +1,28 @@
+# Local dev / production self-hosted docker-compose.
+#
+# Usage:
+#   1. cp backend/.env.production.example backend/.env
+#   2. Edit backend/.env with your MongoDB Atlas URL + JWT_SECRET
+#   3. docker-compose up -d
+#
+# For a real VPS deployment: use nginx (or Caddy) as a reverse proxy in front
+# of this container so you get HTTPS + a custom domain.
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: airoxly-backend
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    env_file:
+      - ./backend/.env
+    environment:
+      - PORT=8001
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

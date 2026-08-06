@@ -1,0 +1,39 @@
+{
+  "summary": "Session 15 (self-hosted migration) regression pass. New /api/health endpoint returns 200 {status:ok,db:connected} on both localhost and public URL. All seed logins (superadmin/adminA/A1), invalid Google session -> 401 (Session 14 regression), /api/customers?sort=recent|debt (Session 13 regression), /api/auth/logout, and CORS preflight all working. Frontend /manifest.json returns 200 with valid PWA JSON; /login renders, login-google-button present, username/password submit with superadmin/super123 successfully navigates to /dashboard. 9/9 pytest tests passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "Login/Dashboard styles", "issue": "Console warning: 'shadow*' style props are deprecated — use style.boxShadow (RN Web migration). Non-blocking but should be cleaned up. Reference: React Native components across app using shadowColor/shadowOffset/shadowOpacity/shadowRadius."},
+      {"component": "Login/Dashboard", "issue": "Console warning: props.pointerEvents is deprecated — use style.pointerEvents. Reference: components passing pointerEvents as a prop."},
+      {"component": "Animations", "issue": "Console warning: Animated useNativeDriver not supported on web preview; falls back to JS-based animation. Consider guarding useNativeDriver by Platform.OS !== 'web' or removing it for web-only pages to silence noise. Non-blocking."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_self_hosted_migration.py",
+    "/app/test_reports/pytest/iteration_15_self_hosted.xml"
+  ],
+  "action_items": [
+    "(Optional) Replace deprecated RN shadow* style props with boxShadow to silence RN Web deprecation warnings.",
+    "(Optional) Migrate pointerEvents prop usages to style.pointerEvents.",
+    "(Optional) Gate Animated useNativeDriver:true behind Platform.OS !== 'web' to silence the RCTAnimation warning on the web preview."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1886 lines — recommend splitting into routers (auth, customers, orders, health) as the codebase grows beyond a single file.",
+    "/api/health returns 200 even when DB is unreachable (returns {status:degraded}). This is fine for a liveness probe but means external orchestrators using strict 2xx-based readiness will still consider the app healthy during DB outages. Consider returning 503 for the degraded branch if this endpoint is also used as a readiness probe."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_self_hosted_migration.py (new)"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (2/2 light checks)"},
+  "seed_data_creation": "None — used existing auto-seeded accounts.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Reusable regression suite at /app/backend/tests/test_self_hosted_migration.py covers health, seed logins, google-session 401, customers sort, logout, and CORS. Runs cleanly with: EXPO_PUBLIC_BACKEND_URL=http://localhost:8001 pytest backend/tests/test_self_hosted_migration.py -v. External URL also verified (https://oxly-crm.preview.emergentagent.com/api/health).",
+  "rca_of_issue": "N/A — no regressions found."
+}

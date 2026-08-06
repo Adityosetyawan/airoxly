@@ -1,0 +1,21 @@
+# One-click deploy config for Render.com (https://render.com)
+# Push this repo to GitHub, then click "New → Blueprint" on Render and point to it.
+services:
+  - type: web
+    name: airoxly-backend
+    env: docker
+    plan: starter        # ~USD 7/month (free plan spins down after 15min idle)
+    region: singapore    # closest to Indonesia
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: MONGO_URL
+        sync: false      # set in Render dashboard after first deploy
+      - key: DB_NAME
+        value: airoxly_prod
+      - key: JWT_SECRET
+        generateValue: true   # Render auto-generates a 32-byte hex string
+      - key: CORS_ORIGINS
+        sync: false           # e.g. "https://airoxly.vercel.app,https://airoxly.com"

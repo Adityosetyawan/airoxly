@@ -1857,13 +1857,29 @@ async def list_all_winners(limit: int = 200, user=Depends(get_current_user)):
 
 
 app.include_router(api)
+
+# Configurable CORS — set CORS_ORIGINS in .env for production
+# (comma-separated origins, e.g. "https://airoxly.com,https://oxly.vercel.app")
+_cors_env = os.getenv("CORS_ORIGINS", "*").strip()
+_cors_origins = [o.strip() for o in _cors_env.split(",") if o.strip()] if _cors_env != "*" else ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"],
+    allow_credentials=True if _cors_origins != ["*"] else False,
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/api/health")
+async def health_check():
+    """Simple liveness probe used by Docker HEALTHCHECK and PaaS providers."""
+    try:
+        # Ping the DB (motor equivalent) — cheap round-trip
+        await db.command("ping")
+        return {"status": "ok", "db": "connected"}
+    except Exception as e:
+        return {"status": "degraded", "db": "unreachable", "error": str(e)}
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)

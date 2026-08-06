@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Query
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -1873,13 +1874,19 @@ app.add_middleware(
 
 @app.get("/api/health")
 async def health_check():
-    """Simple liveness probe used by Docker HEALTHCHECK and PaaS providers."""
+    """Liveness + readiness probe.
+    Returns 200 when the DB ping succeeds so container orchestrators (Docker,
+    Railway, Render, K8s) mark the instance healthy. Returns 503 on failure
+    so upstream load balancers can route around a degraded instance.
+    """
     try:
-        # Ping the DB (motor equivalent) — cheap round-trip
         await db.command("ping")
         return {"status": "ok", "db": "connected"}
     except Exception as e:
-        return {"status": "degraded", "db": "unreachable", "error": str(e)}
+        return JSONResponse(
+            status_code=503,
+            content={"status": "degraded", "db": "unreachable", "error": str(e)},
+        )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)

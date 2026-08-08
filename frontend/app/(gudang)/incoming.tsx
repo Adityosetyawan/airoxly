@@ -9,7 +9,7 @@ import { api } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
 import { itemLabel } from "./dashboard";
 
-const ITEMS = ["galon", "seal", "mur", "kran", "stiker", "karet_kran", "stoper", "galon_kran", "galon_polos"];
+const ITEMS = ["galon", "galon_kran", "kran", "seal", "mur", "stiker", "karet_kran", "stoper", "galon_polos"];
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
 export default function GudangIncoming() {

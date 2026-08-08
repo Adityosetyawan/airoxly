@@ -1917,31 +1917,34 @@ class WarehouseDailyCreate(BaseModel):
 
 class WarehouseIncomingCreate(BaseModel):
     date: str
-    item: Literal["galon", "seal", "mur", "kran", "stiker", "karet_kran", "stoper", "galon_kran", "galon_polos"]
+    item: Literal["galon", "galon_kran", "seal", "mur", "kran", "stiker", "karet_kran", "stoper", "galon_polos"]
     qty: int
     note: Optional[str] = None
 
 
-STOCK_ITEMS = ["galon", "seal", "mur", "kran", "stiker", "karet_kran", "stoper"]
+STOCK_ITEMS = ["galon", "galon_kran", "seal", "mur", "kran", "stiker", "karet_kran", "stoper"]
 
 
 async def _compute_stock() -> dict:
-    """Compute current stock levels from incoming + outgoing entries."""
+    """Compute current stock levels from incoming + outgoing entries.
+
+    Stock rules (per user requirement):
+    - Only WAREHOUSE INCOMING adds stock. Production does NOT add stock.
+    - galon_kran is a distinct SKU (jenis galon khusus), does NOT reduce/add galon + kran.
+    - galon_polos = galon (SKU galon).
+    """
     stock = {k: 0 for k in STOCK_ITEMS}
 
-    # ---- INCOMING adds ----
+    # ---- INCOMING adds (from Gudang only) ----
     async for row in db.warehouse_incoming.find({}, {"_id": 0}):
         item = row.get("item")
         qty = int(row.get("qty", 0) or 0)
         if item in stock:
             stock[item] += qty
-        elif item == "galon_kran":
-            stock["galon"] += qty
-            stock["kran"] += qty
         elif item == "galon_polos":
             stock["galon"] += qty
 
-    # ---- PRODUCTION reduces ----
+    # ---- PRODUCTION reduces sparepart only (no stock addition) ----
     async for row in db.production_daily.find({}, {"_id": 0}):
         stock["galon"] -= int(row.get("galon_ganti", 0) or 0)
         stock["seal"] -= int(row.get("sil_ganti", 0) or 0)
@@ -1950,14 +1953,14 @@ async def _compute_stock() -> dict:
         stock["stiker"] -= int(row.get("stiker_ganti", 0) or 0)
         stock["stoper"] -= int(row.get("stoper_ganti", 0) or 0)
         stock["karet_kran"] -= int(row.get("karet_kran_ganti", 0) or 0)
-        # stok_galon_baru adds to galon
-        stock["galon"] += int(row.get("stok_galon_baru", 0) or 0)
+        # NOTE: stok_galon_baru is IGNORED per user request (produksi tidak menambah stok)
 
     # ---- WAREHOUSE daily reduces ----
     async for row in db.warehouse_daily.find({}, {"_id": 0}):
         stock["galon"] -= int(row.get("galon_ganti", 0) or 0)
-        stock["galon"] -= int(row.get("galon_kran", 0) or 0)
-        stock["kran"] -= int(row.get("galon_kran", 0) or 0)
+        # galon_kran is its own SKU (jenis galon khusus)
+        stock["galon_kran"] -= int(row.get("galon_kran", 0) or 0)
+        # galon_polos = jenis galon polos = SKU galon
         stock["galon"] -= int(row.get("galon_polos", 0) or 0)
         stock["kran"] -= int(row.get("kran_ganti", 0) or 0)
         stock["seal"] -= int(row.get("seal_ganti", 0) or 0)

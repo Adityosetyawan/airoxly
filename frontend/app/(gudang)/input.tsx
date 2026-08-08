@@ -165,9 +165,9 @@ export default function GudangInput() {
           </View>
 
           <SectionTitle>Penggantian Galon</SectionTitle>
-          <NumField label="Galon Ganti" value={form.galon_ganti} onChange={(v) => setF("galon_ganti", v)} color="#94A3B8" />
-          <NumField label="Galon Kran (➖ galon + kran)" value={form.galon_kran} onChange={(v) => setF("galon_kran", v)} color="#94A3B8" />
-          <NumField label="Galon Polos (➖ galon)" value={form.galon_polos} onChange={(v) => setF("galon_polos", v)} color="#94A3B8" />
+          <NumField label="Galon Ganti (➖ Galon)" value={form.galon_ganti} onChange={(v) => setF("galon_ganti", v)} color="#94A3B8" />
+          <NumField label="Galon Kran (➖ Galon Kran — SKU sendiri)" value={form.galon_kran} onChange={(v) => setF("galon_kran", v)} color="#0284C7" />
+          <NumField label="Galon Polos (➖ Galon)" value={form.galon_polos} onChange={(v) => setF("galon_polos", v)} color="#64748B" />
 
           <SectionTitle>Sparepart Ganti</SectionTitle>
           <NumField label="Kran Ganti" value={form.kran_ganti} onChange={(v) => setF("kran_ganti", v)} color="#F59E0B" />

@@ -6,9 +6,10 @@ import { theme } from "@/src/theme";
 import { api } from "@/src/api";
 import { itemLabel } from "./dashboard";
 
-const ITEM_ORDER = ["galon", "kran", "seal", "mur", "stiker", "karet_kran", "stoper"];
+const ITEM_ORDER = ["galon", "galon_kran", "kran", "seal", "mur", "stiker", "karet_kran", "stoper"];
 const ITEM_ICONS: Record<string, any> = {
   galon: "water",
+  galon_kran: "water-outline",
   seal: "ellipse-outline",
   mur: "cog",
   kran: "beaker",

@@ -74,7 +74,6 @@ export default function ProduksiHistory() {
               {item.stoper_ganti ? <Pill k="Stoper" v={item.stoper_ganti} /> : null}
               {item.karet_kran_ganti ? <Pill k="Karet Kran" v={item.karet_kran_ganti} /> : null}
               {item.produksi_galon ? <Pill k="Prod Gln" v={item.produksi_galon} color="#1E3A8A" /> : null}
-              {item.stok_galon_baru ? <Pill k="Gln Baru" v={item.stok_galon_baru} color="#DC2626" /> : null}
             </View>
             {item.note ? <Text style={styles.note}>{item.note}</Text> : null}
           </View>

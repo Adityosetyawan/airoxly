@@ -27,7 +27,6 @@ export default function ProduksiInput() {
     stoper_ganti: "",
     karet_kran_ganti: "",
     produksi_galon: "",
-    stok_galon_baru: "",
     note: "",
   });
 
@@ -62,7 +61,6 @@ export default function ProduksiInput() {
         stoper_ganti: parseInt(form.stoper_ganti || "0") || 0,
         karet_kran_ganti: parseInt(form.karet_kran_ganti || "0") || 0,
         produksi_galon: parseInt(form.produksi_galon || "0") || 0,
-        stok_galon_baru: parseInt(form.stok_galon_baru || "0") || 0,
         note: form.note || null,
       };
       await api.createProductionDaily(body);
@@ -71,7 +69,7 @@ export default function ProduksiInput() {
         ...f,
         galon_ganti: "", sil_ganti: "", mur_ganti: "", kran_ganti: "",
         stiker_ganti: "", stoper_ganti: "", karet_kran_ganti: "",
-        produksi_galon: "", stok_galon_baru: "", note: "",
+        produksi_galon: "", note: "",
       }));
     } catch (e: any) {
       toast.show(e?.message || "Gagal simpan", "error");
@@ -132,7 +130,6 @@ export default function ProduksiInput() {
           <NumField label="Stoper Ganti" value={form.stoper_ganti} onChange={(v) => setF("stoper_ganti", v)} color="#8B5CF6" />
           <NumField label="Karet Kran Ganti" value={form.karet_kran_ganti} onChange={(v) => setF("karet_kran_ganti", v)} color="#EC4899" />
           <NumField label="Produksi Galon (tidak ➖ stok)" value={form.produksi_galon} onChange={(v) => setF("produksi_galon", v)} color="#1E3A8A" />
-          <NumField label="Stok Galon Baru (➕ stok)" value={form.stok_galon_baru} onChange={(v) => setF("stok_galon_baru", v)} color="#DC2626" />
 
           <Row label="Catatan (opsional)">
             <TextInput

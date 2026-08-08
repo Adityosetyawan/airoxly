@@ -29,6 +29,8 @@ export default function Login() {
   const goHome = (role: string) => {
     if (role === "super_admin") router.replace("/(superadmin)/dashboard");
     else if (role === "admin") router.replace("/(admin)/dashboard");
+    else if (role === "produksi") router.replace("/(produksi)/dashboard");
+    else if (role === "gudang") router.replace("/(gudang)/dashboard");
     else router.replace("/(sales)/dashboard");
   };
 

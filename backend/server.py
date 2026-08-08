@@ -43,7 +43,7 @@ api = APIRouter(prefix="/api")
 # ============================================================
 # MODELS
 # ============================================================
-Role = Literal["super_admin", "admin", "sales"]
+Role = Literal["super_admin", "admin", "sales", "produksi", "gudang"]
 
 
 class LoginRequest(BaseModel):
@@ -73,6 +73,7 @@ class UserPublic(BaseModel):
     disabled: bool = False
     google_email: Optional[str] = None
     picture: Optional[str] = None
+    kelompok: Optional[str] = None  # for produksi/gudang team (e.g., "Kelompok 1", "Regu A")
 
 
 class UserCreate(BaseModel):
@@ -89,6 +90,7 @@ class UserCreate(BaseModel):
     commission: Optional[float] = 0
     bonus: Optional[float] = 0
     google_email: Optional[str] = None
+    kelompok: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
@@ -105,6 +107,7 @@ class UserUpdate(BaseModel):
     disabled: Optional[bool] = None
     google_email: Optional[str] = None
     role: Optional[Role] = None
+    kelompok: Optional[str] = None
 
 
 class Product(BaseModel):
@@ -273,6 +276,7 @@ def user_public(u: dict) -> dict:
         "disabled": u.get("disabled", False),
         "google_email": u.get("google_email"),
         "picture": u.get("picture"),
+        "kelompok": u.get("kelompok"),
     }
 
 
@@ -340,6 +344,11 @@ DEFAULT_USERS = [
     {"username": "A1", "password": "sales123", "role": "sales", "name": "Sales A1", "group_letter": "A", "sales_code": "A1", "wa_number": "628123456781"},
     {"username": "A2", "password": "sales123", "role": "sales", "name": "Sales A2", "group_letter": "A", "sales_code": "A2", "wa_number": "628123456782"},
     {"username": "B1", "password": "sales123", "role": "sales", "name": "Sales B1", "group_letter": "B", "sales_code": "B1", "wa_number": "628123456783"},
+    {"username": "produksi1", "password": "prod123", "role": "produksi", "name": "Operator Produksi 1", "kelompok": "Kelompok 1"},
+    {"username": "produksi2", "password": "prod123", "role": "produksi", "name": "Operator Produksi 2", "kelompok": "Kelompok 2"},
+    {"username": "produksi3", "password": "prod123", "role": "produksi", "name": "Operator Produksi 3", "kelompok": "Kelompok 3"},
+    {"username": "gudang1", "password": "gudang123", "role": "gudang", "name": "Operator Gudang 1", "kelompok": "Regu A"},
+    {"username": "gudang2", "password": "gudang123", "role": "gudang", "name": "Operator Gudang 2", "kelompok": "Regu B"},
 ]
 
 
@@ -406,6 +415,7 @@ async def seed():
             "commission": u.get("commission", 0),
             "bonus": u.get("bonus", 0),
             "disabled": False,
+            "kelompok": u.get("kelompok"),
             "created_at": now_utc().isoformat(),
         }
         await db.users.insert_one(doc)
@@ -1858,6 +1868,301 @@ async def list_all_winners(limit: int = 200, user=Depends(get_current_user)):
 
 
 app.include_router(api)
+
+
+# ============================================================
+# PRODUCTION & WAREHOUSE MODULE
+# ============================================================
+prod_wh = APIRouter(prefix="/api")
+
+
+# ---------- Models ----------
+class ProductionDailyCreate(BaseModel):
+    date: str  # YYYY-MM-DD
+    shift: Literal["pagi", "siang"]
+    sales_id: str  # sales user id (group)
+    galon_ganti: int = 0
+    sil_ganti: int = 0
+    mur_ganti: int = 0
+    kran_ganti: int = 0
+    stiker_ganti: int = 0
+    stoper_ganti: int = 0
+    karet_kran_ganti: int = 0
+    produksi_galon: int = 0  # NOT reduce stock
+    stok_galon_baru: int = 0  # ADD to galon stock
+    note: Optional[str] = None
+
+
+class WarehouseDailyCreate(BaseModel):
+    date: str  # YYYY-MM-DD
+    shift: Literal["pagi", "siang"]
+    sales_id: str
+    galon_ganti: int = 0
+    galon_kran: int = 0  # reduce galon + kran
+    galon_polos: int = 0  # reduce galon
+    kran_ganti: int = 0
+    seal_ganti: int = 0
+    mur_ganti: int = 0
+    stiker_ganti: int = 0
+    karet_kran_ganti: int = 0
+    stoper_ganti: int = 0
+    bawa_pagi: int = 0
+    bawa_siang: int = 0
+    kosong_pagi: int = 0
+    kosong_siang: int = 0
+    sisa_pagi: int = 0
+    sisa_siang: int = 0
+    note: Optional[str] = None
+
+
+class WarehouseIncomingCreate(BaseModel):
+    date: str
+    item: Literal["galon", "seal", "mur", "kran", "stiker", "karet_kran", "stoper", "galon_kran", "galon_polos"]
+    qty: int
+    note: Optional[str] = None
+
+
+STOCK_ITEMS = ["galon", "seal", "mur", "kran", "stiker", "karet_kran", "stoper"]
+
+
+async def _compute_stock() -> dict:
+    """Compute current stock levels from incoming + outgoing entries."""
+    stock = {k: 0 for k in STOCK_ITEMS}
+
+    # ---- INCOMING adds ----
+    async for row in db.warehouse_incoming.find({}, {"_id": 0}):
+        item = row.get("item")
+        qty = int(row.get("qty", 0) or 0)
+        if item in stock:
+            stock[item] += qty
+        elif item == "galon_kran":
+            stock["galon"] += qty
+            stock["kran"] += qty
+        elif item == "galon_polos":
+            stock["galon"] += qty
+
+    # ---- PRODUCTION reduces ----
+    async for row in db.production_daily.find({}, {"_id": 0}):
+        stock["galon"] -= int(row.get("galon_ganti", 0) or 0)
+        stock["seal"] -= int(row.get("sil_ganti", 0) or 0)
+        stock["mur"] -= int(row.get("mur_ganti", 0) or 0)
+        stock["kran"] -= int(row.get("kran_ganti", 0) or 0)
+        stock["stiker"] -= int(row.get("stiker_ganti", 0) or 0)
+        stock["stoper"] -= int(row.get("stoper_ganti", 0) or 0)
+        stock["karet_kran"] -= int(row.get("karet_kran_ganti", 0) or 0)
+        # stok_galon_baru adds to galon
+        stock["galon"] += int(row.get("stok_galon_baru", 0) or 0)
+
+    # ---- WAREHOUSE daily reduces ----
+    async for row in db.warehouse_daily.find({}, {"_id": 0}):
+        stock["galon"] -= int(row.get("galon_ganti", 0) or 0)
+        stock["galon"] -= int(row.get("galon_kran", 0) or 0)
+        stock["kran"] -= int(row.get("galon_kran", 0) or 0)
+        stock["galon"] -= int(row.get("galon_polos", 0) or 0)
+        stock["kran"] -= int(row.get("kran_ganti", 0) or 0)
+        stock["seal"] -= int(row.get("seal_ganti", 0) or 0)
+        stock["mur"] -= int(row.get("mur_ganti", 0) or 0)
+        stock["stiker"] -= int(row.get("stiker_ganti", 0) or 0)
+        stock["stoper"] -= int(row.get("stoper_ganti", 0) or 0)
+        stock["karet_kran"] -= int(row.get("karet_kran_ganti", 0) or 0)
+
+    return stock
+
+
+# ---------- PRODUCTION endpoints ----------
+@prod_wh.post("/production/daily")
+async def create_production_daily(body: ProductionDailyCreate, user=Depends(require_roles("produksi", "super_admin"))):
+    sales = await db.users.find_one({"id": body.sales_id, "role": "sales"}, {"_id": 0})
+    if not sales:
+        raise HTTPException(404, "Sales not found")
+    doc = body.dict()
+    doc.update({
+        "id": str(uuid.uuid4()),
+        "sales_code": sales.get("sales_code"),
+        "group_letter": sales.get("group_letter"),
+        "kelompok": user.get("kelompok"),
+        "created_by": user["id"],
+        "created_by_name": user.get("name") or user["username"],
+        "created_at": now_utc().isoformat(),
+    })
+    await db.production_daily.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@prod_wh.get("/production/daily")
+async def list_production_daily(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    sales_id: Optional[str] = None,
+    kelompok: Optional[str] = None,
+    user=Depends(require_roles("produksi", "super_admin", "admin", "gudang")),
+):
+    q: dict = {}
+    if date_from and date_to:
+        q["date"] = {"$gte": date_from, "$lte": date_to}
+    elif date_from:
+        q["date"] = {"$gte": date_from}
+    elif date_to:
+        q["date"] = {"$lte": date_to}
+    if sales_id:
+        q["sales_id"] = sales_id
+    if kelompok:
+        q["kelompok"] = kelompok
+    if user["role"] == "admin":
+        q["group_letter"] = user.get("group_letter")
+    rows = await db.production_daily.find(q, {"_id": 0}).sort("date", -1).to_list(1000)
+    return rows
+
+
+@prod_wh.delete("/production/daily/{entry_id}")
+async def delete_production_daily(entry_id: str, user=Depends(require_roles("produksi", "super_admin"))):
+    res = await db.production_daily.delete_one({"id": entry_id})
+    if not res.deleted_count:
+        raise HTTPException(404, "Not found")
+    return {"ok": True}
+
+
+# ---------- WAREHOUSE daily ----------
+@prod_wh.post("/warehouse/daily")
+async def create_warehouse_daily(body: WarehouseDailyCreate, user=Depends(require_roles("gudang", "super_admin"))):
+    sales = await db.users.find_one({"id": body.sales_id, "role": "sales"}, {"_id": 0})
+    if not sales:
+        raise HTTPException(404, "Sales not found")
+    doc = body.dict()
+    doc.update({
+        "id": str(uuid.uuid4()),
+        "sales_code": sales.get("sales_code"),
+        "group_letter": sales.get("group_letter"),
+        "kelompok": user.get("kelompok"),
+        "created_by": user["id"],
+        "created_by_name": user.get("name") or user["username"],
+        "created_at": now_utc().isoformat(),
+    })
+    await db.warehouse_daily.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@prod_wh.get("/warehouse/daily")
+async def list_warehouse_daily(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    sales_id: Optional[str] = None,
+    kelompok: Optional[str] = None,
+    user=Depends(require_roles("gudang", "produksi", "super_admin", "admin")),
+):
+    q: dict = {}
+    if date_from and date_to:
+        q["date"] = {"$gte": date_from, "$lte": date_to}
+    elif date_from:
+        q["date"] = {"$gte": date_from}
+    elif date_to:
+        q["date"] = {"$lte": date_to}
+    if sales_id:
+        q["sales_id"] = sales_id
+    if kelompok:
+        q["kelompok"] = kelompok
+    if user["role"] == "admin":
+        q["group_letter"] = user.get("group_letter")
+    rows = await db.warehouse_daily.find(q, {"_id": 0}).sort("date", -1).to_list(1000)
+    return rows
+
+
+@prod_wh.delete("/warehouse/daily/{entry_id}")
+async def delete_warehouse_daily(entry_id: str, user=Depends(require_roles("gudang", "super_admin"))):
+    res = await db.warehouse_daily.delete_one({"id": entry_id})
+    if not res.deleted_count:
+        raise HTTPException(404, "Not found")
+    return {"ok": True}
+
+
+# ---------- WAREHOUSE incoming ----------
+@prod_wh.post("/warehouse/incoming")
+async def create_warehouse_incoming(body: WarehouseIncomingCreate, user=Depends(require_roles("gudang", "super_admin"))):
+    doc = body.dict()
+    doc.update({
+        "id": str(uuid.uuid4()),
+        "kelompok": user.get("kelompok"),
+        "created_by": user["id"],
+        "created_by_name": user.get("name") or user["username"],
+        "created_at": now_utc().isoformat(),
+    })
+    await db.warehouse_incoming.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@prod_wh.get("/warehouse/incoming")
+async def list_warehouse_incoming(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    item: Optional[str] = None,
+    user=Depends(require_roles("gudang", "produksi", "super_admin", "admin")),
+):
+    q: dict = {}
+    if date_from and date_to:
+        q["date"] = {"$gte": date_from, "$lte": date_to}
+    if item:
+        q["item"] = item
+    rows = await db.warehouse_incoming.find(q, {"_id": 0}).sort("date", -1).to_list(2000)
+    return rows
+
+
+@prod_wh.delete("/warehouse/incoming/{entry_id}")
+async def delete_warehouse_incoming(entry_id: str, user=Depends(require_roles("gudang", "super_admin"))):
+    res = await db.warehouse_incoming.delete_one({"id": entry_id})
+    if not res.deleted_count:
+        raise HTTPException(404, "Not found")
+    return {"ok": True}
+
+
+# ---------- STOCK ----------
+@prod_wh.get("/warehouse/stock")
+async def get_warehouse_stock(user=Depends(require_roles("gudang", "produksi", "super_admin", "admin"))):
+    return await _compute_stock()
+
+
+# ---------- VALIDATION: bawa-sisa vs transactions ----------
+@prod_wh.get("/production/validate-sales/{sales_id}/{date}")
+async def validate_sales_bawa_sisa(sales_id: str, date: str, user=Depends(require_roles("super_admin", "admin", "gudang", "produksi"))):
+    """Compare (bawa-sisa) from warehouse_daily vs actual transaction sales count for that sales on that date."""
+    # Sum bawa/sisa across all warehouse_daily entries of this sales on this date
+    entries = await db.warehouse_daily.find({"sales_id": sales_id, "date": date}, {"_id": 0}).to_list(100)
+    bawa_total = sum(int(e.get("bawa_pagi", 0) or 0) + int(e.get("bawa_siang", 0) or 0) for e in entries)
+    sisa_total = sum(int(e.get("sisa_pagi", 0) or 0) + int(e.get("sisa_siang", 0) or 0) for e in entries)
+    terjual_by_gudang = bawa_total - sisa_total
+
+    # Sum transactions for this sales on this date (galon sold)
+    from_dt = f"{date}T00:00:00"
+    to_dt = f"{date}T23:59:59.999999"
+    txns = await db.transactions.find({
+        "sales_id": sales_id,
+        "date": {"$gte": from_dt, "$lte": to_dt},
+    }, {"_id": 0}).to_list(1000)
+    # count galon sold (galon isi type). Sum qty where product name contains "Galon Isi" or unit is gln
+    galon_sold_txn = 0
+    for t in txns:
+        for item in t.get("items", []):
+            unit = (item.get("unit") or "").lower()
+            name = (item.get("product_name") or "").lower()
+            if unit == "gln" and "kosong" not in name:
+                galon_sold_txn += int(item.get("qty", 0) or 0)
+
+    match = terjual_by_gudang == galon_sold_txn
+    return {
+        "sales_id": sales_id,
+        "date": date,
+        "bawa_total": bawa_total,
+        "sisa_total": sisa_total,
+        "terjual_by_gudang": terjual_by_gudang,
+        "terjual_by_transaksi": galon_sold_txn,
+        "match": match,
+        "diff": galon_sold_txn - terjual_by_gudang,
+    }
+
+
+app.include_router(prod_wh)
 
 # Configurable CORS — set CORS_ORIGINS in .env for production
 # (comma-separated origins, e.g. "https://airoxly.com,https://oxly.vercel.app")

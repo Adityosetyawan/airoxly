@@ -4,7 +4,7 @@ export const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL + "/api";
 export const TOKEN_KEY = "oxly.auth.token";
 export const USER_KEY = "oxly.auth.user";
 
-export type Role = "super_admin" | "admin" | "sales";
+export type Role = "super_admin" | "admin" | "sales" | "produksi" | "gudang";
 
 export type User = {
   id: string;
@@ -22,6 +22,7 @@ export type User = {
   disabled?: boolean;
   google_email?: string;
   picture?: string;
+  kelompok?: string;
 };
 
 export type Product = {
@@ -302,6 +303,54 @@ export const api = {
     req<any>(`/lottery/stats${period_id ? "?period_id=" + period_id : ""}`),
   listAllWinners: (limit = 200) =>
     req<any[]>(`/lottery/winners?limit=${limit}`),
+
+  // Production
+  createProductionDaily: (body: any) =>
+    req<any>("/production/daily", { method: "POST", body: JSON.stringify(body) }),
+  listProductionDaily: (params: { date_from?: string; date_to?: string; sales_id?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.date_from) q.set("date_from", params.date_from);
+    if (params.date_to) q.set("date_to", params.date_to);
+    if (params.sales_id) q.set("sales_id", params.sales_id);
+    const s = q.toString();
+    return req<any[]>(`/production/daily${s ? "?" + s : ""}`);
+  },
+  deleteProductionDaily: (id: string) => req(`/production/daily/${id}`, { method: "DELETE" }),
+
+  // Warehouse daily
+  createWarehouseDaily: (body: any) =>
+    req<any>("/warehouse/daily", { method: "POST", body: JSON.stringify(body) }),
+  listWarehouseDaily: (params: { date_from?: string; date_to?: string; sales_id?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.date_from) q.set("date_from", params.date_from);
+    if (params.date_to) q.set("date_to", params.date_to);
+    if (params.sales_id) q.set("sales_id", params.sales_id);
+    const s = q.toString();
+    return req<any[]>(`/warehouse/daily${s ? "?" + s : ""}`);
+  },
+  deleteWarehouseDaily: (id: string) => req(`/warehouse/daily/${id}`, { method: "DELETE" }),
+
+  // Warehouse incoming
+  createWarehouseIncoming: (body: any) =>
+    req<any>("/warehouse/incoming", { method: "POST", body: JSON.stringify(body) }),
+  listWarehouseIncoming: (params: { date_from?: string; date_to?: string; item?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.date_from) q.set("date_from", params.date_from);
+    if (params.date_to) q.set("date_to", params.date_to);
+    if (params.item) q.set("item", params.item);
+    const s = q.toString();
+    return req<any[]>(`/warehouse/incoming${s ? "?" + s : ""}`);
+  },
+  deleteWarehouseIncoming: (id: string) => req(`/warehouse/incoming/${id}`, { method: "DELETE" }),
+
+  // Warehouse stock
+  getWarehouseStock: () => req<Record<string, number>>("/warehouse/stock"),
+
+  // Validate bawa-sisa vs transactions
+  validateSalesBawaSisa: (sales_id: string, date: string) =>
+    req<{ bawa_total: number; sisa_total: number; terjual_by_gudang: number; terjual_by_transaksi: number; match: boolean; diff: number }>(
+      `/production/validate-sales/${sales_id}/${date}`,
+    ),
 };
 
 export async function getSavedUser(): Promise<User | null> {

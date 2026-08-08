@@ -1,0 +1,59 @@
+import { Redirect, Tabs } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "@/src/AuthContext";
+import { theme } from "@/src/theme";
+
+export default function ProduksiLayout() {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Redirect href="/login" />;
+  if (user.role !== "produksi" && user.role !== "super_admin") return <Redirect href="/" />;
+
+  return (
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: theme.color.brandPrimary,
+        tabBarInactiveTintColor: theme.color.muted,
+        tabBarStyle: { backgroundColor: theme.color.surface, borderTopColor: theme.color.border },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "500" },
+      }}
+    >
+      <Tabs.Screen
+        name="dashboard"
+        options={{
+          title: "Beranda",
+          tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="input"
+        options={{
+          title: "Input Harian",
+          tabBarIcon: ({ color, size }) => <Ionicons name="create-outline" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="history"
+        options={{
+          title: "Riwayat",
+          tabBarIcon: ({ color, size }) => <Ionicons name="time-outline" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="stock"
+        options={{
+          title: "Stok",
+          tabBarIcon: ({ color, size }) => <Ionicons name="cube-outline" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Profil",
+          tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
+        }}
+      />
+    </Tabs>
+  );
+}

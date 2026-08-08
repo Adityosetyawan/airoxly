@@ -192,7 +192,7 @@ function SpPill({ k, v }: { k: string; v: number }) {
 export function itemLabel(k: string) {
   return (
     {
-      galon: "Galon",
+      galon: "Galon Polos",
       seal: "Seal / Sil",
       mur: "Mur",
       kran: "Kran",

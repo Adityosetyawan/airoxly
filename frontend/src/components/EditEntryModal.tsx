@@ -29,7 +29,6 @@ const PROD_FIELDS: { key: string; label: string; color: string }[] = [
 ];
 
 const WH_FIELDS: { key: string; label: string; color: string }[] = [
-  { key: "galon_ganti", label: "Galon Ganti", color: "#94A3B8" },
   { key: "galon_kran", label: "Galon Kran", color: "#0284C7" },
   { key: "galon_polos", label: "Galon Polos", color: "#64748B" },
   { key: "kran_ganti", label: "Kran Ganti", color: "#F59E0B" },

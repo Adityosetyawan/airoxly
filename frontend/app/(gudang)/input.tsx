@@ -19,7 +19,6 @@ export default function GudangInput() {
     date: todayStr(),
     shift: "pagi" as "pagi" | "siang",
     sales_id: "",
-    galon_ganti: "",
     galon_kran: "",
     galon_polos: "",
     kran_ganti: "",
@@ -67,7 +66,6 @@ export default function GudangInput() {
         date: form.date,
         shift: form.shift,
         sales_id: form.sales_id,
-        galon_ganti: parseInt(form.galon_ganti || "0") || 0,
         galon_kran: parseInt(form.galon_kran || "0") || 0,
         galon_polos: parseInt(form.galon_polos || "0") || 0,
         kran_ganti: parseInt(form.kran_ganti || "0") || 0,
@@ -165,9 +163,8 @@ export default function GudangInput() {
           </View>
 
           <SectionTitle>Penggantian Galon</SectionTitle>
-          <NumField label="Galon Ganti (➖ Galon)" value={form.galon_ganti} onChange={(v) => setF("galon_ganti", v)} color="#94A3B8" />
-          <NumField label="Galon Kran (➖ Galon Kran — SKU sendiri)" value={form.galon_kran} onChange={(v) => setF("galon_kran", v)} color="#0284C7" />
-          <NumField label="Galon Polos (➖ Galon)" value={form.galon_polos} onChange={(v) => setF("galon_polos", v)} color="#64748B" />
+          <NumField label="Galon Kran (➖ Stok Galon Kran)" value={form.galon_kran} onChange={(v) => setF("galon_kran", v)} color="#0284C7" />
+          <NumField label="Galon Polos (➖ Stok Galon Polos)" value={form.galon_polos} onChange={(v) => setF("galon_polos", v)} color="#64748B" />
 
           <SectionTitle>Sparepart Ganti</SectionTitle>
           <NumField label="Kran Ganti" value={form.kran_ganti} onChange={(v) => setF("kran_ganti", v)} color="#F59E0B" />

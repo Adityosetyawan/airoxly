@@ -10,7 +10,7 @@ import { api } from "@/src/api";
 export function itemLabel(k: string) {
   return (
     {
-      galon: "Galon",
+      galon: "Galon Polos",
       seal: "Seal / Sil",
       mur: "Mur",
       kran: "Kran",

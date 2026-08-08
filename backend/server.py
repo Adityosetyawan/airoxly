@@ -1341,13 +1341,47 @@ async def monthly_report(
         float(admin.get("bonus_target_mg5", 0) or 0),
     ])
 
-    # Red: part prices + Yellow: qty
+    # Red: part prices + Yellow: qty + Auto qty from production/warehouse
     parts_docs = await db.part_prices.find({}, {"_id": 0}).sort("order", 1).to_list(100)
     part_qtys = admin.get("part_qtys", {}) or {}
+
+    # ---- AUTO-COMPUTE part quantities from production_daily & warehouse_daily ----
+    prod_entries = await db.production_daily.find(
+        {"sales_id": sales_id, "date": {"$gte": start, "$lte": end}},
+        {"_id": 0},
+    ).to_list(2000)
+    wh_entries = await db.warehouse_daily.find(
+        {"sales_id": sales_id, "date": {"$gte": start, "$lte": end}},
+        {"_id": 0},
+    ).to_list(2000)
+
+    def _sum(rows, key):
+        return sum(int(r.get(key, 0) or 0) for r in rows)
+
+    # Map part_name -> auto qty from prod + wh entries
+    auto_part_qtys: dict = {
+        "Seal": _sum(prod_entries, "sil_ganti") + _sum(wh_entries, "seal_ganti"),
+        "Mur": _sum(prod_entries, "mur_ganti") + _sum(wh_entries, "mur_ganti"),
+        "Kran": _sum(prod_entries, "kran_ganti") + _sum(wh_entries, "kran_ganti"),
+        "Stiker": _sum(prod_entries, "stiker_ganti") + _sum(wh_entries, "stiker_ganti"),
+        "Stoper": _sum(prod_entries, "stoper_ganti") + _sum(wh_entries, "stoper_ganti"),
+        "Karet Kran": _sum(prod_entries, "karet_kran_ganti") + _sum(wh_entries, "karet_kran_ganti"),
+        "Galon Kran": _sum(wh_entries, "galon_kran"),
+        "Galon Polos": _sum(wh_entries, "galon_polos") + _sum(wh_entries, "galon_ganti") + _sum(prod_entries, "galon_ganti"),
+    }
+
     parts = []
     parts_total = 0.0
     for p in parts_docs:
-        qty = int(part_qtys.get(p["name"], 0) or 0)
+        auto_qty = int(auto_part_qtys.get(p["name"], 0) or 0)
+        manual_qty_raw = part_qtys.get(p["name"])
+        # Effective qty: if admin has manually set (>0), use manual, else use auto
+        if manual_qty_raw is not None and int(manual_qty_raw or 0) > 0:
+            qty = int(manual_qty_raw)
+            source = "manual"
+        else:
+            qty = auto_qty
+            source = "auto" if auto_qty > 0 else "empty"
         subtotal = float(p.get("rp_per_pcs", 0)) * qty
         parts_total += subtotal
         parts.append({
@@ -1355,6 +1389,9 @@ async def monthly_report(
             "name": p["name"],
             "rp_per_pcs": float(p.get("rp_per_pcs", 0)),
             "qty": qty,
+            "auto_qty": auto_qty,
+            "manual_qty": int(manual_qty_raw or 0) if manual_qty_raw is not None else 0,
+            "source": source,
             "subtotal": subtotal,
         })
 
@@ -1367,6 +1404,20 @@ async def monthly_report(
 
     # Net income
     pendapatan_bersih = A1_penjualan - A4_kulakan - A3_biaya_operasional - A2_gaji_bonus
+
+    # Aggregate production & warehouse extra data
+    prod_wh_summary = {
+        "produksi_galon_total": _sum(prod_entries, "produksi_galon"),
+        "bawa_total": _sum(wh_entries, "bawa_pagi") + _sum(wh_entries, "bawa_siang"),
+        "sisa_total": _sum(wh_entries, "sisa_pagi") + _sum(wh_entries, "sisa_siang"),
+        "terjual_by_gudang": (_sum(wh_entries, "bawa_pagi") + _sum(wh_entries, "bawa_siang")) - (_sum(wh_entries, "sisa_pagi") + _sum(wh_entries, "sisa_siang")),
+        "prod_entries_count": len(prod_entries),
+        "wh_entries_count": len(wh_entries),
+    }
+    # Validation: check if terjual_by_gudang matches txn total_gln
+    prod_wh_summary["terjual_by_transaksi"] = total_gln
+    prod_wh_summary["match"] = prod_wh_summary["terjual_by_gudang"] == total_gln
+    prod_wh_summary["diff"] = total_gln - prod_wh_summary["terjual_by_gudang"]
 
     return {
         "sales_id": sales_id,
@@ -1397,6 +1448,7 @@ async def monthly_report(
         },
         "parts": parts,
         "rp_kulakan_per_galon": rp_kulakan,
+        "prod_wh_summary": prod_wh_summary,
         # totals
         "A1_penjualan": A1_penjualan,
         "A2_gaji_bonus": A2_gaji_bonus,

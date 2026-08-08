@@ -301,6 +301,38 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
             </View>
           </View>
 
+          {/* SECTION: PRODUKSI & GUDANG SUMMARY */}
+          {data.prod_wh_summary && (data.prod_wh_summary.prod_entries_count > 0 || data.prod_wh_summary.wh_entries_count > 0) ? (
+            <>
+              <SectionTitle icon="hammer-outline">Data Produksi & Gudang</SectionTitle>
+              <View style={styles.tableCard}>
+                <View style={styles.pwRow}>
+                  <PWStat label="Produksi Galon" value={data.prod_wh_summary.produksi_galon_total} color="#1E3A8A" />
+                  <PWStat label="Bawa (Gudang)" value={data.prod_wh_summary.bawa_total} color="#059669" />
+                  <PWStat label="Sisa (Gudang)" value={data.prod_wh_summary.sisa_total} color="#F59E0B" />
+                </View>
+                <View style={styles.pwRow}>
+                  <PWStat label="Terjual Gudang" value={data.prod_wh_summary.terjual_by_gudang} color="#0EA5E9" />
+                  <PWStat label="Terjual Transaksi" value={data.prod_wh_summary.terjual_by_transaksi} color="#0EA5E9" />
+                  <PWStat
+                    label="Selisih"
+                    value={data.prod_wh_summary.diff}
+                    color={data.prod_wh_summary.match ? "#059669" : "#DC2626"}
+                  />
+                </View>
+                {!data.prod_wh_summary.match ? (
+                  <View style={styles.mismatchAlert}>
+                    <Ionicons name="warning" size={16} color="#DC2626" />
+                    <Text style={styles.mismatchText}>
+                      ⚠️ SELISIH: Data Gudang menunjukkan terjual {data.prod_wh_summary.terjual_by_gudang} galon,
+                      sedangkan transaksi Sales tercatat {data.prod_wh_summary.terjual_by_transaksi} galon.
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            </>
+          ) : null}
+
           {/* SECTION C: PART REPLACEMENT (red price + yellow qty) */}
           <SectionTitle icon="construct-outline">Biaya Penggantian Part</SectionTitle>
           <View style={styles.tableCard}>
@@ -339,6 +371,12 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
                   style={[styles.colUnit, styles.yellowCell]}
                 >
                   <Text style={styles.yellowText}>{p.qty || 0}</Text>
+                  {p.source === "auto" && p.auto_qty > 0 ? (
+                    <Text style={styles.autoHint}>auto</Text>
+                  ) : null}
+                  {p.source === "manual" && p.auto_qty > 0 && p.auto_qty !== p.qty ? (
+                    <Text style={styles.overrideHint}>override (auto: {p.auto_qty})</Text>
+                  ) : null}
                 </TouchableOpacity>
                 <View style={[styles.colUnit, styles.subtotalCell]}>
                   <Text style={styles.subtotalText}>{p.subtotal > 0 ? rp(p.subtotal) : "-"}</Text>
@@ -505,6 +543,16 @@ function SectionTitle({ children, icon }: { children: React.ReactNode; icon: any
     </View>
   );
 }
+
+function PWStat({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <View style={{ flex: 1, alignItems: "center", padding: 8, borderRadius: 8, backgroundColor: color + "15" }}>
+      <Text style={{ fontSize: 18, fontWeight: "800", color }}>{value}</Text>
+      <Text style={{ fontSize: 10, color, opacity: 0.8, textAlign: "center" }}>{label}</Text>
+    </View>
+  );
+}
+
 
 function BiayaRow({
   label,
@@ -1108,6 +1156,11 @@ const styles = StyleSheet.create({
   redText: { fontSize: 11, color: COLOR_RED_TEXT, fontWeight: "700" },
   yellowCell: { backgroundColor: COLOR_YELLOW, padding: 6, alignItems: "center", justifyContent: "center" },
   yellowText: { fontSize: 11, color: COLOR_YELLOW_TEXT, fontWeight: "700" },
+  autoHint: { fontSize: 8, color: "#059669", fontWeight: "800", marginTop: 1 },
+  overrideHint: { fontSize: 7, color: "#DC2626", fontWeight: "600", marginTop: 1 },
+  pwRow: { flexDirection: "row", gap: 6, padding: 8 },
+  mismatchAlert: { flexDirection: "row", gap: 6, padding: 10, backgroundColor: "#FEE2E2", alignItems: "center" },
+  mismatchText: { flex: 1, fontSize: 11, color: "#991B1B", fontWeight: "600" },
   subtotalCell: { backgroundColor: theme.color.surface, padding: 6, alignItems: "center", justifyContent: "center" },
   subtotalText: { fontSize: 11, color: theme.color.brand, fontWeight: "700" },
   totalRow: { backgroundColor: theme.color.surfaceSecondary },

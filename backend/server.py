@@ -587,6 +587,7 @@ async def create_user(body: UserCreate, user=Depends(get_current_user)):
         "bonus": body.bonus or 0,
         "disabled": False,
         "google_email": google_email,
+        "kelompok": body.kelompok,
         "created_at": now_utc().isoformat(),
     }
     await db.users.insert_one(doc)

@@ -1,0 +1,43 @@
+{
+  "summary": "Session 16 — Produksi & Gudang module + vercel.json SPA rewrite regression pass. Backend: 17/17 pytest passed (1 cleanup skipped because superadmin/super123 login failed as noted in the review context — user changed the super_admin password). Verified: login produksi1/prod123 & gudang1/gudang123 return kelompok field; POST/GET /api/production/daily creates entry with auto-tagged kelompok='Kelompok 1' + sales_code; PATCH once succeeds (edit_count -> 1), second PATCH returns 403; produksi DELETE /api/production/daily/{id} returns 403; POST /api/warehouse/incoming (galon 50) increases GET /api/warehouse/stock 'galon' by +50; POST /api/warehouse/daily (bawa_pagi=70, sisa_pagi=5) → GET /api/production/validate-sales returns bawa_total=70 sisa_total=5 terjual_by_gudang=65; PATCH warehouse/daily once succeeds, twice 403; gudang DELETE warehouse/daily returns 403; GET /api/reports/monthly (adminA, sales A1, 2026/08) returns parts array containing Seal.qty>=5 source='auto' & Kran.qty>=3 source='auto', plus prod_wh_summary with all 7 required fields (produksi_galon_total, bawa_total, sisa_total, terjual_by_gudang, terjual_by_transaksi, match, diff). Frontend: login page loads, produksi1 login navigates to /dashboard with header 'Produksi — Operator Produksi 1 • Kelompok 1'; gudang1 login → header shows 'Regu A'; Barang Datang screen shows exactly 8 item chips (Galon Polos, Galon Kran, Kran, Seal/Sil, Mur, Stiker, Karet Kran, Stoper) — no duplicate galon_polos. vercel.json rewrite pattern updated to simple '/(.*)' catch-all → '/index.html' (correct SPA setup). RN Web deprecation warnings (shadow*, pointerEvents, useNativeDriver) still present but non-blocking (pre-existing from iteration_15).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "cleanup path", "issue": "superadmin/super123 login returns non-200 (user changed the super_admin password out-of-band per review context). This means auto-cleanup of TEST_ records was skipped; residual TEST_pytest rows may remain in production_daily/warehouse_daily/warehouse_incoming for date 2026-08-15/sales A1. Not a code bug — expected per task note."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "RN Web shadow props", "issue": "Console warning: 'shadow*' style props are deprecated — use style.boxShadow. Reference: multiple components using shadowColor/shadowOffset/shadowOpacity/shadowRadius. Non-blocking (already reported in iteration_15)."},
+      {"component": "pointerEvents prop", "issue": "Console warning: props.pointerEvents is deprecated — use style.pointerEvents. Non-blocking."},
+      {"component": "Animated useNativeDriver on web", "issue": "Console warning: useNativeDriver not supported on web preview; falls back to JS animation. Gate with Platform.OS !== 'web'. Non-blocking."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_produksi_gudang.py",
+    "/app/test_reports/pytest/iteration_16_prod_gudang.xml"
+  ],
+  "action_items": [
+    "(Optional) If super_admin flows need testing in future iterations, either reset the password back to super123 or update /app/memory/test_credentials.md with the new password. Currently 1 cleanup test is skipped because of this.",
+    "(Optional / carried-over) Migrate deprecated RN Web props: shadow* → boxShadow, pointerEvents prop → style.pointerEvents, and gate useNativeDriver behind Platform.OS !== 'web'.",
+    "(Optional / code review) server.py is now 2348 lines — consider splitting into routers (auth, customers, orders, reports, production_warehouse, health)."
+  ],
+  "critical_code_review_comments": [
+    "server.py grew to 2348 lines (from 1886 in iteration_15). The new prod_wh APIRouter block (~400 lines, lines 1928–2316) is a good candidate to move into /app/backend/routers/production_warehouse.py to keep the main file navigable.",
+    "PATCH /api/production/daily and PATCH /api/warehouse/daily are almost identical in structure (~30 lines each) — potential DRY opportunity via a small helper (validate ownership + edit_count + apply updates).",
+    "In _compute_stock, negative stock is not floored at 0; this is intentional but a very negative value would indicate data-entry drift. Consider surfacing a health warning field in GET /api/warehouse/stock when any item < 0.",
+    "monthly_report auto-fill correctly uses 'auto' when manual_qty is None/0 and 'manual' when >0; edge case: admin setting manual_qty=0 explicitly falls back to auto, which is the intended behavior per code comments — worth documenting in an OpenAPI description."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_produksi_gudang.py (new — 17 tests)"
+  ],
+  "success_rate": {"backend": "100% (17/17 executed, 1 cleanup skipped due to superadmin password change)", "frontend": "100% (login + produksi dashboard + gudang dashboard + Barang Datang all render correctly)"},
+  "seed_data_creation": "Created 1 production_daily entry (sales_id=A1, date=2026-08-15, sil_ganti=5→6 after edit, kran_ganti=3), 1 warehouse_daily entry (bawa_pagi=70, sisa_pagi=5→4 after edit), 1 warehouse_incoming (galon +50). NOT cleaned up because superadmin/super123 login failed — main agent may want to purge these TEST_pytest rows manually.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Reusable regression suite at /app/backend/tests/test_produksi_gudang.py. Run: EXPO_PUBLIC_BACKEND_URL=http://localhost:8001 pytest backend/tests/test_produksi_gudang.py -v. If super_admin password is restored, the last test_cleanup will also purge TEST_pytest rows. Vercel.json now uses '/(.*)' catch-all → '/index.html' which is correct for Expo Router SPA on Vercel; no server-side testing possible in the container but the config file was reviewed and is valid per Vercel schema.",
+  "rca_of_issue": "N/A — no regressions. The vercel.json change from complex negative-lookahead to simple '/(.*)' catch-all is the standard Expo Router SPA pattern (client-side routing needs every unknown path to serve index.html). Local Expo web preview served through Metro is unaffected because it uses its own dev server, not vercel.json; Vercel deployment will need to be verified post-deploy on airoxly.vercel.app."
+}

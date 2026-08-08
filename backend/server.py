@@ -1957,7 +1957,7 @@ class WarehouseIncomingCreate(BaseModel):
     note: Optional[str] = None
 
 
-STOCK_ITEMS = ["galon", "galon_kran", "seal", "mur", "kran", "stiker", "karet_kran", "stoper"]
+STOCK_ITEMS = ["galon", "galon_kran", "kran", "seal", "mur", "stiker", "karet_kran", "stoper"]
 
 
 async def _compute_stock() -> dict:

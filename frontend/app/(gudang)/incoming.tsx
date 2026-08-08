@@ -113,9 +113,6 @@ export default function GudangIncoming() {
               <Text style={styles.rowItem}>{itemLabel(r.item)} • +{r.qty}</Text>
               {r.note ? <Text style={styles.rowNote}>{r.note}</Text> : null}
             </View>
-            <TouchableOpacity onPress={() => onDelete(r.id)}>
-              <Ionicons name="trash-outline" size={20} color={theme.color.error} />
-            </TouchableOpacity>
           </View>
         )}
       />

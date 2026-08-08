@@ -2106,7 +2106,7 @@ async def list_production_daily(
 
 
 @prod_wh.delete("/production/daily/{entry_id}")
-async def delete_production_daily(entry_id: str, user=Depends(require_roles("produksi", "super_admin"))):
+async def delete_production_daily(entry_id: str, user=Depends(require_roles("super_admin"))):
     res = await db.production_daily.delete_one({"id": entry_id})
     if not res.deleted_count:
         raise HTTPException(404, "Not found")
@@ -2192,7 +2192,7 @@ async def list_warehouse_daily(
 
 
 @prod_wh.delete("/warehouse/daily/{entry_id}")
-async def delete_warehouse_daily(entry_id: str, user=Depends(require_roles("gudang", "super_admin"))):
+async def delete_warehouse_daily(entry_id: str, user=Depends(require_roles("super_admin"))):
     res = await db.warehouse_daily.delete_one({"id": entry_id})
     if not res.deleted_count:
         raise HTTPException(404, "Not found")
@@ -2261,7 +2261,7 @@ async def list_warehouse_incoming(
 
 
 @prod_wh.delete("/warehouse/incoming/{entry_id}")
-async def delete_warehouse_incoming(entry_id: str, user=Depends(require_roles("gudang", "super_admin"))):
+async def delete_warehouse_incoming(entry_id: str, user=Depends(require_roles("super_admin"))):
     res = await db.warehouse_incoming.delete_one({"id": entry_id})
     if not res.deleted_count:
         raise HTTPException(404, "Not found")

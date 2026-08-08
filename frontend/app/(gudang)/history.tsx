@@ -67,9 +67,6 @@ export default function GudangHistory() {
                       <Ionicons name="create-outline" size={18} color={theme.color.brand} />
                     </TouchableOpacity>
                   )}
-                  <TouchableOpacity onPress={() => onDelete(item.id)}>
-                    <Ionicons name="trash-outline" size={18} color={theme.color.error} />
-                  </TouchableOpacity>
                 </View>
               </View>
               <View style={styles.pills}>

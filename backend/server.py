@@ -356,7 +356,27 @@ DEFAULT_USERS = [
 async def seed():
     await db.users.create_index("username", unique=True)
     await db.users.create_index("id", unique=True)
-    await db.users.create_index("google_email", unique=True, sparse=True)
+    # google_email must be unique ONLY when it is a real string.
+    # `sparse=True` alone does NOT skip documents whose value is null — it only
+    # skips missing fields — so we use a partialFilterExpression that indexes
+    # only docs where google_email is an actual string.
+    try:
+        existing = await db.users.index_information()
+        for idx_name, idx_info in existing.items():
+            keys = idx_info.get("key", [])
+            if any(k[0] == "google_email" for k in keys):
+                # Drop legacy index (may be sparse-unique which still trips on null)
+                if "partialFilterExpression" not in idx_info:
+                    await db.users.drop_index(idx_name)
+        # Also normalize any existing docs so null values become "unset"
+        await db.users.update_many({"google_email": None}, {"$unset": {"google_email": ""}})
+    except Exception as _e:
+        logging.getLogger(__name__).warning("google_email index migration: %s", _e)
+    await db.users.create_index(
+        "google_email",
+        unique=True,
+        partialFilterExpression={"google_email": {"$type": "string"}},
+    )
     await db.user_sessions.create_index("session_token", unique=True)
     await db.user_sessions.create_index("user_id")
     await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
@@ -586,10 +606,13 @@ async def create_user(body: UserCreate, user=Depends(get_current_user)):
         "commission": body.commission or 0,
         "bonus": body.bonus or 0,
         "disabled": False,
-        "google_email": google_email,
         "kelompok": body.kelompok,
         "created_at": now_utc().isoformat(),
     }
+    # Only set google_email when it is a real value — avoids collisions on the
+    # unique partial index when multiple users have no Google account.
+    if google_email:
+        doc["google_email"] = google_email
     await db.users.insert_one(doc)
     return user_public(doc)
 
@@ -607,6 +630,7 @@ async def update_user(user_id: str, body: UserUpdate, user=Depends(get_current_u
         if body.role and body.role != "sales":
             raise HTTPException(403, "Admin tidak bisa mengubah role")
     update: dict = {}
+    unset: dict = {}
     for k, v in body.dict(exclude_unset=True).items():
         if k == "password" and v:
             update["password_hash"] = hash_password(v)
@@ -617,11 +641,21 @@ async def update_user(user_id: str, body: UserUpdate, user=Depends(get_current_u
                 exists = await db.users.find_one({"google_email": v_norm, "id": {"$ne": user_id}})
                 if exists:
                     raise HTTPException(409, "Email Google sudah dipakai user lain")
-            update["google_email"] = v_norm
+            if v_norm:
+                update["google_email"] = v_norm
+            else:
+                # Clear the field entirely so it does not collide on the unique
+                # partial index (which excludes docs without google_email).
+                unset["google_email"] = ""
         elif k != "password" and v is not None:
             update[k] = v
-    if update:
-        await db.users.update_one({"id": user_id}, {"$set": update})
+    if update or unset:
+        ops: dict = {}
+        if update:
+            ops["$set"] = update
+        if unset:
+            ops["$unset"] = unset
+        await db.users.update_one({"id": user_id}, ops)
     updated = await db.users.find_one({"id": user_id}, {"_id": 0})
     return user_public(updated)
 

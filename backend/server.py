@@ -1915,6 +1915,41 @@ class WarehouseDailyCreate(BaseModel):
     note: Optional[str] = None
 
 
+class ProductionDailyUpdate(BaseModel):
+    shift: Optional[Literal["pagi", "siang"]] = None
+    sales_id: Optional[str] = None
+    galon_ganti: Optional[int] = None
+    sil_ganti: Optional[int] = None
+    mur_ganti: Optional[int] = None
+    kran_ganti: Optional[int] = None
+    stiker_ganti: Optional[int] = None
+    stoper_ganti: Optional[int] = None
+    karet_kran_ganti: Optional[int] = None
+    produksi_galon: Optional[int] = None
+    note: Optional[str] = None
+
+
+class WarehouseDailyUpdate(BaseModel):
+    shift: Optional[Literal["pagi", "siang"]] = None
+    sales_id: Optional[str] = None
+    galon_ganti: Optional[int] = None
+    galon_kran: Optional[int] = None
+    galon_polos: Optional[int] = None
+    kran_ganti: Optional[int] = None
+    seal_ganti: Optional[int] = None
+    mur_ganti: Optional[int] = None
+    stiker_ganti: Optional[int] = None
+    karet_kran_ganti: Optional[int] = None
+    stoper_ganti: Optional[int] = None
+    bawa_pagi: Optional[int] = None
+    bawa_siang: Optional[int] = None
+    kosong_pagi: Optional[int] = None
+    kosong_siang: Optional[int] = None
+    sisa_pagi: Optional[int] = None
+    sisa_siang: Optional[int] = None
+    note: Optional[str] = None
+
+
 class WarehouseIncomingCreate(BaseModel):
     date: str
     item: Literal["galon", "galon_kran", "seal", "mur", "kran", "stiker", "karet_kran", "stoper", "galon_polos"]
@@ -2026,6 +2061,38 @@ async def delete_production_daily(entry_id: str, user=Depends(require_roles("pro
     return {"ok": True}
 
 
+@prod_wh.patch("/production/daily/{entry_id}")
+async def update_production_daily(entry_id: str, body: ProductionDailyUpdate, user=Depends(require_roles("produksi", "super_admin"))):
+    existing = await db.production_daily.find_one({"id": entry_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(404, "Not found")
+    # Enforce 1-time edit limit for produksi role (super_admin unlimited)
+    if user["role"] == "produksi":
+        edit_count = int(existing.get("edit_count", 0))
+        if edit_count >= 1:
+            raise HTTPException(403, "Entry sudah pernah di-edit. Hanya bisa 1x edit oleh Produksi.")
+        # Also only owner can edit their own entry
+        if existing.get("created_by") != user["id"]:
+            raise HTTPException(403, "Hanya bisa edit entry sendiri")
+    updates = {k: v for k, v in body.dict().items() if v is not None}
+    if not updates:
+        return existing
+    # If sales_id changed, refresh derived fields
+    if "sales_id" in updates and updates["sales_id"] != existing.get("sales_id"):
+        sales = await db.users.find_one({"id": updates["sales_id"], "role": "sales"}, {"_id": 0})
+        if not sales:
+            raise HTTPException(404, "Sales not found")
+        updates["sales_code"] = sales.get("sales_code")
+        updates["group_letter"] = sales.get("group_letter")
+    if user["role"] == "produksi":
+        updates["edit_count"] = int(existing.get("edit_count", 0)) + 1
+    updates["updated_at"] = now_utc().isoformat()
+    updates["updated_by"] = user["id"]
+    updates["updated_by_name"] = user.get("name") or user["username"]
+    await db.production_daily.update_one({"id": entry_id}, {"$set": updates})
+    return await db.production_daily.find_one({"id": entry_id}, {"_id": 0})
+
+
 # ---------- WAREHOUSE daily ----------
 @prod_wh.post("/warehouse/daily")
 async def create_warehouse_daily(body: WarehouseDailyCreate, user=Depends(require_roles("gudang", "super_admin"))):
@@ -2078,6 +2145,35 @@ async def delete_warehouse_daily(entry_id: str, user=Depends(require_roles("guda
     if not res.deleted_count:
         raise HTTPException(404, "Not found")
     return {"ok": True}
+
+
+@prod_wh.patch("/warehouse/daily/{entry_id}")
+async def update_warehouse_daily(entry_id: str, body: WarehouseDailyUpdate, user=Depends(require_roles("gudang", "super_admin"))):
+    existing = await db.warehouse_daily.find_one({"id": entry_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(404, "Not found")
+    if user["role"] == "gudang":
+        edit_count = int(existing.get("edit_count", 0))
+        if edit_count >= 1:
+            raise HTTPException(403, "Entry sudah pernah di-edit. Hanya bisa 1x edit oleh Gudang.")
+        if existing.get("created_by") != user["id"]:
+            raise HTTPException(403, "Hanya bisa edit entry sendiri")
+    updates = {k: v for k, v in body.dict().items() if v is not None}
+    if not updates:
+        return existing
+    if "sales_id" in updates and updates["sales_id"] != existing.get("sales_id"):
+        sales = await db.users.find_one({"id": updates["sales_id"], "role": "sales"}, {"_id": 0})
+        if not sales:
+            raise HTTPException(404, "Sales not found")
+        updates["sales_code"] = sales.get("sales_code")
+        updates["group_letter"] = sales.get("group_letter")
+    if user["role"] == "gudang":
+        updates["edit_count"] = int(existing.get("edit_count", 0)) + 1
+    updates["updated_at"] = now_utc().isoformat()
+    updates["updated_by"] = user["id"]
+    updates["updated_by_name"] = user.get("name") or user["username"]
+    await db.warehouse_daily.update_one({"id": entry_id}, {"$set": updates})
+    return await db.warehouse_daily.find_one({"id": entry_id}, {"_id": 0})
 
 
 # ---------- WAREHOUSE incoming ----------

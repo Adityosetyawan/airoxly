@@ -41,6 +41,13 @@ export default function GudangLayout() {
         }}
       />
       <Tabs.Screen
+        name="history"
+        options={{
+          title: "Riwayat",
+          tabBarIcon: ({ color, size }) => <Ionicons name="time-outline" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="stock"
         options={{
           title: "Stok",

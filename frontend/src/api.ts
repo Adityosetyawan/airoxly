@@ -316,6 +316,8 @@ export const api = {
     return req<any[]>(`/production/daily${s ? "?" + s : ""}`);
   },
   deleteProductionDaily: (id: string) => req(`/production/daily/${id}`, { method: "DELETE" }),
+  updateProductionDaily: (id: string, body: any) =>
+    req<any>(`/production/daily/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 
   // Warehouse daily
   createWarehouseDaily: (body: any) =>
@@ -329,6 +331,8 @@ export const api = {
     return req<any[]>(`/warehouse/daily${s ? "?" + s : ""}`);
   },
   deleteWarehouseDaily: (id: string) => req(`/warehouse/daily/${id}`, { method: "DELETE" }),
+  updateWarehouseDaily: (id: string, body: any) =>
+    req<any>(`/warehouse/daily/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 
   // Warehouse incoming
   createWarehouseIncoming: (body: any) =>

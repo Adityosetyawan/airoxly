@@ -75,6 +75,7 @@ export default function SuperDashboard() {
           <ActBtn icon="location" label="Live GPS" onPress={() => router.push("/(superadmin)/live")} />
           <ActBtn icon="gift" label="Undian Berhadiah" onPress={() => router.push("/(superadmin)/lottery")} />
           <ActBtn icon="trophy" label="Riwayat Pemenang" onPress={() => router.push("/(superadmin)/winners")} />
+          <ActBtn icon="hammer" label="Data Produksi & Gudang" onPress={() => router.push("/(superadmin)/produksi-data")} />
         </View>
 
         <Text style={styles.section}>Sales Hari Ini</Text>

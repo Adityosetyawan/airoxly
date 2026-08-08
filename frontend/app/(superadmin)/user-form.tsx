@@ -20,6 +20,8 @@ import { useToast } from "@/src/components/Toast";
 const ROLES: { id: Role; label: string }[] = [
   { id: "sales", label: "Sales" },
   { id: "admin", label: "Admin" },
+  { id: "produksi", label: "Produksi" },
+  { id: "gudang", label: "Gudang" },
   { id: "super_admin", label: "Super Admin" },
 ];
 
@@ -41,6 +43,7 @@ export default function UserForm() {
   const [commission, setCommission] = useState("");
   const [bonus, setBonus] = useState("");
   const [disabled, setDisabled] = useState(false);
+  const [kelompok, setKelompok] = useState("");
   const [loading, setLoading] = useState(!!id);
   const [saving, setSaving] = useState(false);
 
@@ -63,6 +66,7 @@ export default function UserForm() {
           setCommission(String(u.commission || ""));
           setBonus(String(u.bonus || ""));
           setDisabled(!!u.disabled);
+          setKelompok((u as any).kelompok || "");
         }
       } catch (e: any) {
         toast.show(e.message || "Gagal", "error");
@@ -92,6 +96,7 @@ export default function UserForm() {
         salary: parseFloat(salary) || 0,
         commission: parseFloat(commission) || 0,
         bonus: parseFloat(bonus) || 0,
+        kelompok: kelompok.trim() || undefined,
       };
       if (id) {
         payload.disabled = disabled;
@@ -168,7 +173,7 @@ export default function UserForm() {
           />
           <Field label="Alamat" value={address} onChange={setAddress} testID="address-input" multiline />
 
-          {role !== "super_admin" && (
+          {role !== "super_admin" && role !== "produksi" && role !== "gudang" && (
             <>
               {role === "sales" ? (
                 <Field label="Kode Sales (mis. A1)" value={salesCode} onChange={(v: string) => setSalesCode(v.toUpperCase())} testID="salesCode-input" autoCap="characters" />
@@ -183,6 +188,15 @@ export default function UserForm() {
               <Field label="Komisi" value={commission} onChange={setCommission} testID="commission-input" keyboard="number-pad" />
               <Field label="Bonus" value={bonus} onChange={setBonus} testID="bonus-input" keyboard="number-pad" />
             </>
+          )}
+
+          {(role === "produksi" || role === "gudang") && (
+            <Field
+              label={role === "produksi" ? "Kelompok Produksi (mis. Kelompok 1)" : "Regu Gudang (mis. Regu A)"}
+              value={kelompok}
+              onChange={setKelompok}
+              testID="kelompok-input"
+            />
           )}
 
           {id && (

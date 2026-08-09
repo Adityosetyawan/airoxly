@@ -42,6 +42,8 @@ export default function GudangInput() {
     bawa_siang: "",
     kosong_pagi: "",
     kosong_siang: "",
+    kosong_kembali_siang: "",
+    kosong_kembali_sore: "",
     sisa_pagi: "",
     sisa_siang: "",
     note: "",
@@ -127,6 +129,8 @@ export default function GudangInput() {
         bawa_siang: parseInt(form.bawa_siang || "0") || 0,
         kosong_pagi: parseInt(form.kosong_pagi || "0") || 0,
         kosong_siang: parseInt(form.kosong_siang || "0") || 0,
+        kosong_kembali_siang: parseInt(form.kosong_kembali_siang || "0") || 0,
+        kosong_kembali_sore: parseInt(form.kosong_kembali_sore || "0") || 0,
         sisa_pagi: parseInt(form.sisa_pagi || "0") || 0,
         sisa_siang: parseInt(form.sisa_siang || "0") || 0,
         note: form.note || null,
@@ -148,6 +152,9 @@ export default function GudangInput() {
   const bawa = (parseInt(form.bawa_pagi || "0") || 0) + (parseInt(form.bawa_siang || "0") || 0);
   const sisa = (parseInt(form.sisa_pagi || "0") || 0) + (parseInt(form.sisa_siang || "0") || 0);
   const terjual = bawa - sisa;
+  const kosongPulang =
+    (parseInt(form.kosong_kembali_siang || "0") || 0) + (parseInt(form.kosong_kembali_sore || "0") || 0);
+  const selectedSales = sales.find((s) => s.id === form.sales_id);
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.color.surfaceSecondary }}>
@@ -197,7 +204,7 @@ export default function GudangInput() {
             </View>
           </Row>
 
-          <Row label={`Sales (${filteredSales.length}/${sales.length})`}>
+          <Row label={`Sales ${sales.length ? `(pilih 1 dari ${sales.length})` : ""}`}>
             <View style={styles.searchBox}>
               <Ionicons name="search" size={16} color={theme.color.muted} />
               <TextInput
@@ -216,48 +223,53 @@ export default function GudangInput() {
                 </TouchableOpacity>
               ) : null}
             </View>
-            {filteredSales.length === 0 ? (
-              <Text style={styles.emptyChip}>Tidak ada sales yang cocok</Text>
-            ) : (
-              <View style={styles.groupWrap}>
-                {filteredSales.map((s) => (
-                  <TouchableOpacity
-                    key={s.id}
-                    onPress={() => setF("sales_id", s.id)}
-                    style={[styles.chip, form.sales_id === s.id && styles.chipOn]}
-                    testID={`sales-chip-${s.sales_code}`}
-                  >
-                    <Text style={[styles.chipText, form.sales_id === s.id && { color: "#fff" }]}>
-                      {s.sales_code || s.name}
-                      {s.group_letter ? <Text style={{ opacity: 0.6, fontSize: 10 }}> · {s.group_letter}</Text> : null}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+            {/* Selected sales indicator — selalu tampil kalau ada */}
+            {selectedSales ? (
+              <View style={styles.selectedBox}>
+                <Ionicons name="checkmark-circle" size={16} color={theme.color.brandPrimary} />
+                <Text style={styles.selectedText}>
+                  Terpilih: <Text style={{ fontWeight: "800" }}>{selectedSales.sales_code || selectedSales.name}</Text>
+                  {selectedSales.group_letter ? `  ·  Wilayah ${selectedSales.group_letter}` : ""}
+                </Text>
+                {selectedSales.name && selectedSales.sales_code ? (
+                  <Text style={styles.selectedSub} numberOfLines={1}>{selectedSales.name}</Text>
+                ) : null}
               </View>
+            ) : (
+              <Text style={styles.emptyChip}>Ketik untuk mencari sales…</Text>
             )}
+            {/* Chips hanya muncul saat search aktif — supaya layar rapi. */}
+            {search.trim().length > 0 ? (
+              filteredSales.length === 0 ? (
+                <Text style={styles.emptyChip}>Tidak ada sales yang cocok</Text>
+              ) : (
+                <View style={styles.groupWrap}>
+                  {filteredSales.map((s) => (
+                    <TouchableOpacity
+                      key={s.id}
+                      onPress={() => {
+                        setF("sales_id", s.id);
+                        setSearch("");
+                      }}
+                      style={[styles.chip, form.sales_id === s.id && styles.chipOn]}
+                      testID={`sales-chip-${s.sales_code}`}
+                    >
+                      <Text style={[styles.chipText, form.sales_id === s.id && { color: "#fff" }]}>
+                        {s.sales_code || s.name}
+                        {s.group_letter ? <Text style={{ opacity: 0.6, fontSize: 10 }}> · {s.group_letter}</Text> : null}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )
+            ) : null}
           </Row>
 
-          <SectionTitle>Aktivitas Sales (Bawa / Sisa)</SectionTitle>
+          <SectionTitle>1️⃣ Bawa Isi (dari foto real)</SectionTitle>
           <View style={styles.rowTwo}>
             <NumFieldSmall label="Bawa Isi Pagi" value={form.bawa_pagi} onChange={(v) => setF("bawa_pagi", v)} />
-            <NumFieldSmall label="Sisa (Kosong Siang)" value={form.sisa_pagi} onChange={(v) => setF("sisa_pagi", v)} />
-          </View>
-          <View style={styles.rowTwo}>
             <NumFieldSmall label="Bawa Isi Siang" value={form.bawa_siang} onChange={(v) => setF("bawa_siang", v)} />
-            <NumFieldSmall label="Sisa (Kosong Sore)" value={form.sisa_siang} onChange={(v) => setF("sisa_siang", v)} />
           </View>
-          <View style={styles.rowTwo}>
-            <NumFieldSmall label="Kosong Awal Pagi" value={form.kosong_pagi} onChange={(v) => setF("kosong_pagi", v)} />
-            <NumFieldSmall label="Kosong Awal Siang" value={form.kosong_siang} onChange={(v) => setF("kosong_siang", v)} />
-          </View>
-
-          <View style={styles.terjualBox}>
-            <Text style={styles.terjualLabel}>Terjual (Bawa − Sisa)</Text>
-            <Text style={styles.terjualValue}>{terjual}</Text>
-          </View>
-
-          {/* Foto galon 4 titik */}
-          <SectionTitle>📷 Foto Galon (Real-time, tidak dari galeri)</SectionTitle>
           <View style={styles.photoGrid}>
             <View style={{ flex: 1 }}>
               <PhotoCapture value={photoIsiPagi} onChange={setPhotoIsiPagi} label="Isi Pagi" testID="photo-isi-pagi" />
@@ -266,6 +278,26 @@ export default function GudangInput() {
               <PhotoCapture value={photoIsiSiang} onChange={setPhotoIsiSiang} label="Isi Siang" testID="photo-isi-siang" />
             </View>
           </View>
+
+          <SectionTitle>2️⃣ Sisa Isi (belum terjual — diisi Gudang)</SectionTitle>
+          <View style={styles.rowTwo}>
+            <NumFieldSmall label="Sisa Isi Pagi" value={form.sisa_pagi} onChange={(v) => setF("sisa_pagi", v)} />
+            <NumFieldSmall label="Sisa Isi Sore" value={form.sisa_siang} onChange={(v) => setF("sisa_siang", v)} />
+          </View>
+
+          <View style={styles.terjualBox}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.terjualLabel}>Terjual (Bawa Isi − Sisa Isi)</Text>
+              <Text style={styles.terjualSub}>({bawa} − {sisa} = galon terjual ke konsumen)</Text>
+            </View>
+            <Text style={styles.terjualValue}>{terjual}</Text>
+          </View>
+
+          <SectionTitle>3️⃣ Kosong Kembali (dari foto real)</SectionTitle>
+          <View style={styles.rowTwo}>
+            <NumFieldSmall label="Kosong Kembali Siang" value={form.kosong_kembali_siang} onChange={(v) => setF("kosong_kembali_siang", v)} />
+            <NumFieldSmall label="Kosong Kembali Sore" value={form.kosong_kembali_sore} onChange={(v) => setF("kosong_kembali_sore", v)} />
+          </View>
           <View style={styles.photoGrid}>
             <View style={{ flex: 1 }}>
               <PhotoCapture value={photoKosongSiang} onChange={setPhotoKosongSiang} label="Kosong Siang" testID="photo-kosong-siang" />
@@ -273,6 +305,20 @@ export default function GudangInput() {
             <View style={{ flex: 1 }}>
               <PhotoCapture value={photoKosongSore} onChange={setPhotoKosongSore} label="Kosong Sore" testID="photo-kosong-sore" />
             </View>
+          </View>
+          {kosongPulang > 0 || form.sales_id ? (
+            <View style={styles.kosongInfoBox}>
+              <Ionicons name="information-circle" size={14} color={theme.color.brand} />
+              <Text style={styles.kosongInfoText}>
+                Total kosong pulang: <Text style={{ fontWeight: "800" }}>{kosongPulang}</Text> galon — akan dibandingkan dengan galon diganti Produksi
+              </Text>
+            </View>
+          ) : null}
+
+          <SectionTitle>Kosong Berangkat (opsional — legacy)</SectionTitle>
+          <View style={styles.rowTwo}>
+            <NumFieldSmall label="Kosong Awal Pagi" value={form.kosong_pagi} onChange={(v) => setF("kosong_pagi", v)} />
+            <NumFieldSmall label="Kosong Awal Siang" value={form.kosong_siang} onChange={(v) => setF("kosong_siang", v)} />
           </View>
 
           <SectionTitle>Penggantian Galon</SectionTitle>
@@ -369,8 +415,31 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   searchInput: { flex: 1, paddingVertical: 10, fontSize: 14, color: theme.color.onSurface },
+  selectedBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: theme.color.brandTertiary,
+    marginBottom: 6,
+    flexWrap: "wrap",
+  },
+  selectedText: { fontSize: 13, color: theme.color.onBrandTertiary, fontWeight: "600" },
+  selectedSub: { fontSize: 11, color: theme.color.onBrandTertiary, opacity: 0.75, flexBasis: "100%" },
   emptyChip: { fontSize: 12, color: theme.color.muted, fontStyle: "italic", textAlign: "center", padding: 8 },
-  groupWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6, maxHeight: 200 },
+  groupWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6, maxHeight: 200, marginTop: 4 },
+  terjualSub: { fontSize: 10, color: theme.color.onBrandTertiary, opacity: 0.7, marginTop: 2 },
+  kosongInfoBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    padding: 10,
+    backgroundColor: theme.color.brandTertiary,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  kosongInfoText: { fontSize: 11, color: theme.color.onBrandTertiary, flex: 1, lineHeight: 16 },
   chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: theme.color.border, backgroundColor: "#fff" },
   chipOn: { backgroundColor: theme.color.brandPrimary, borderColor: theme.color.brandPrimary },
   chipText: { fontSize: 13, fontWeight: "600", color: theme.color.onSurface },

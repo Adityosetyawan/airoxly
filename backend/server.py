@@ -2156,13 +2156,20 @@ class WarehouseDailyCreate(BaseModel):
     stiker_ganti: int = 0
     karet_kran_ganti: int = 0
     stoper_ganti: int = 0
-    bawa_pagi: int = 0
-    bawa_siang: int = 0
+    # -- Aktivitas Sales (jumlah galon)
+    bawa_pagi: int = 0    # galon ISI dibawa berangkat pagi (dari foto)
+    bawa_siang: int = 0   # galon ISI dibawa berangkat siang (dari foto)
+    # kosong_kembali_* default None supaya legacy data (yang menyimpan kosong pulang
+    # di sisa_*) tetap dihitung dengan fallback. Kalau eksplisit dikirim 0 → 0.
+    kosong_kembali_siang: Optional[int] = None  # galon KOSONG kembali siang (foto)
+    kosong_kembali_sore: Optional[int] = None   # galon KOSONG kembali sore  (foto)
+    # Legacy — kosong yang sales bawa saat berangkat (ambil dari gudang)
     kosong_pagi: int = 0
     kosong_siang: int = 0
-    sisa_pagi: int = 0
-    sisa_siang: int = 0
-    # Foto real-time kamera (data URI). Empty/null = tidak ada foto.
+    # -- SISA GALON ISI yang tidak terjual (diisi petugas Gudang)
+    sisa_pagi: int = 0    # sisa isi pagi yang belum laku
+    sisa_siang: int = 0   # sisa isi sore yang belum laku (nama field dipertahankan utk kompatibilitas)
+    # -- Foto real-time kamera (data URI). Empty/null = tidak ada foto.
     photo_isi_pagi: Optional[str] = None      # foto galon isi yg dibawa pagi
     photo_isi_siang: Optional[str] = None     # foto galon isi yg dibawa siang
     photo_kosong_siang: Optional[str] = None  # foto galon kosong pulang siang
@@ -2198,6 +2205,8 @@ class WarehouseDailyUpdate(BaseModel):
     stoper_ganti: Optional[int] = None
     bawa_pagi: Optional[int] = None
     bawa_siang: Optional[int] = None
+    kosong_kembali_siang: Optional[int] = None
+    kosong_kembali_sore: Optional[int] = None
     kosong_pagi: Optional[int] = None
     kosong_siang: Optional[int] = None
     sisa_pagi: Optional[int] = None
@@ -2363,6 +2372,10 @@ async def create_warehouse_daily(body: WarehouseDailyCreate, user=Depends(requir
     for pk in ("photo_isi_pagi", "photo_isi_siang", "photo_kosong_siang", "photo_kosong_sore"):
         if not doc.get(pk):
             doc.pop(pk, None)
+    # kosong_kembali_* None = tidak diisi → hilangkan agar fallback ke sisa_* berjalan
+    for k in ("kosong_kembali_siang", "kosong_kembali_sore"):
+        if doc.get(k) is None:
+            doc.pop(k, None)
     doc.update({
         "id": str(uuid.uuid4()),
         "sales_code": sales.get("sales_code"),
@@ -2541,7 +2554,9 @@ app.include_router(prod_wh)
 # ============================================================
 # Definisi bisnis (dikonfirmasi user):
 #   pembanding: input Produksi (galon_ganti per sales/hari)
-#   selisih   = (sisa_pagi + sisa_siang) - Σ production_daily.galon_ganti
+#   kosong_pulang = Σ (kosong_kembali_siang + kosong_kembali_sore) -- galon
+#                    kosong yang dibawa sales kembali (dari foto real Gudang)
+#   selisih   = kosong_pulang - Σ production_daily.galon_ganti
 #     selisih < 0 → MERAH  |selisih|
 #     selisih > 0 → HIJAU   selisih
 #     selisih = 0 → aman (tidak ada tanda)
@@ -2550,15 +2565,32 @@ app.include_router(prod_wh)
 
 
 async def _compute_discrepancy_for_date(sales_id: str, date: str) -> dict:
-    """Hitung selisih & warna untuk 1 sales pada 1 tanggal."""
+    """Hitung selisih & warna untuk 1 sales pada 1 tanggal.
+
+    Perbandingan:
+      kosong_pulang        = Σ (kosong_kembali_siang + kosong_kembali_sore)
+      galon_ganti_produksi = Σ production_daily.galon_ganti
+      selisih              = kosong_pulang − galon_ganti_produksi
+        selisih < 0 → MERAH (kurang) |selisih|
+        selisih > 0 → HIJAU (lebih)   selisih
+
+    Backwards-compat: entries lama yang masih menyimpan angka kosong pulang di
+    `sisa_pagi/sisa_siang` (schema versi awal) juga diakui — kalau field baru
+    `kosong_kembali_*` tidak ada, fallback ke sisa_*.
+    """
     wh_entries = await db.warehouse_daily.find(
         {"sales_id": sales_id, "date": date},
         {"_id": 0},
     ).to_list(100)
-    kosong_pulang = sum(
-        int(e.get("sisa_pagi", 0) or 0) + int(e.get("sisa_siang", 0) or 0)
-        for e in wh_entries
-    )
+    kosong_pulang = 0
+    for e in wh_entries:
+        kk_siang = e.get("kosong_kembali_siang")
+        kk_sore = e.get("kosong_kembali_sore")
+        if kk_siang is None and kk_sore is None:
+            # Legacy row — fallback to sisa_* (old semantic = "kosong pulang")
+            kosong_pulang += int(e.get("sisa_pagi", 0) or 0) + int(e.get("sisa_siang", 0) or 0)
+        else:
+            kosong_pulang += int(kk_siang or 0) + int(kk_sore or 0)
     hijau_cleared_any = any(e.get("hijau_cleared") for e in wh_entries)
     prod_entries = await db.production_daily.find(
         {"sales_id": sales_id, "date": date},

@@ -76,6 +76,11 @@ export default function AdminDashboard() {
             <Text style={styles.linkText}>Riwayat Pemenang Undian</Text>
             <Ionicons name="chevron-forward" size={16} color={theme.color.muted} />
           </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push("/(admin)/selisih")} style={styles.linkBtnAlt} testID="open-selisih-btn">
+            <Ionicons name="git-compare" size={16} color={theme.color.brandPrimary} />
+            <Text style={styles.linkTextAlt}>Selisih Galon (Merah/Hijau)</Text>
+            <Ionicons name="chevron-forward" size={16} color={theme.color.muted} />
+          </TouchableOpacity>
         </View>
 
         <Text style={styles.section}>Rangkuman Per Sales (Hari Ini)</Text>

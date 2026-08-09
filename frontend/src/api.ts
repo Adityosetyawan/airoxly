@@ -373,6 +373,47 @@ export const api = {
     req<{ bawa_total: number; sisa_total: number; terjual_by_gudang: number; terjual_by_transaksi: number; match: boolean; diff: number }>(
       `/production/validate-sales/${sales_id}/${date}`,
     ),
+
+  // Warehouse discrepancy (selisih galon merah/hijau)
+  warehouseDiscrepancy: (params: { date_from?: string; date_to?: string; sales_id?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.date_from) q.set("date_from", params.date_from);
+    if (params.date_to) q.set("date_to", params.date_to);
+    if (params.sales_id) q.set("sales_id", params.sales_id);
+    const s = q.toString();
+    return req<{
+      entries: Array<{
+        sales_id: string;
+        sales_code?: string;
+        sales_name?: string;
+        group_letter?: string;
+        date: string;
+        kosong_pulang: number;
+        galon_ganti_produksi: number;
+        selisih: number;
+        merah: number;
+        hijau: number;
+        hijau_raw: number;
+        hijau_cleared: boolean;
+        warehouse_entry_ids: string[];
+      }>;
+      summary: Array<{
+        sales_id: string;
+        sales_code?: string;
+        sales_name?: string;
+        group_letter?: string;
+        total_merah: number;
+        total_hijau: number;
+        total_hijau_raw: number;
+        days_merah: number;
+        days_hijau: number;
+      }>;
+    }>(`/warehouse/discrepancy${s ? "?" + s : ""}`);
+  },
+  clearHijau: (entry_id: string) =>
+    req<{ ok: boolean }>(`/warehouse/daily/${entry_id}/clear-hijau`, { method: "POST" }),
+  restoreHijau: (entry_id: string) =>
+    req<{ ok: boolean }>(`/warehouse/daily/${entry_id}/restore-hijau`, { method: "POST" }),
 };
 
 export async function getSavedUser(): Promise<User | null> {

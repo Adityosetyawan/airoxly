@@ -2162,6 +2162,11 @@ class WarehouseDailyCreate(BaseModel):
     kosong_siang: int = 0
     sisa_pagi: int = 0
     sisa_siang: int = 0
+    # Foto real-time kamera (data URI). Empty/null = tidak ada foto.
+    photo_isi_pagi: Optional[str] = None      # foto galon isi yg dibawa pagi
+    photo_isi_siang: Optional[str] = None     # foto galon isi yg dibawa siang
+    photo_kosong_siang: Optional[str] = None  # foto galon kosong pulang siang
+    photo_kosong_sore: Optional[str] = None   # foto galon kosong pulang sore
     note: Optional[str] = None
 
 
@@ -2197,6 +2202,10 @@ class WarehouseDailyUpdate(BaseModel):
     kosong_siang: Optional[int] = None
     sisa_pagi: Optional[int] = None
     sisa_siang: Optional[int] = None
+    photo_isi_pagi: Optional[str] = None      # kirim "" untuk hapus foto
+    photo_isi_siang: Optional[str] = None
+    photo_kosong_siang: Optional[str] = None
+    photo_kosong_sore: Optional[str] = None
     note: Optional[str] = None
 
 
@@ -2350,6 +2359,10 @@ async def create_warehouse_daily(body: WarehouseDailyCreate, user=Depends(requir
     if not sales:
         raise HTTPException(404, "Sales not found")
     doc = body.dict()
+    # Buang None photos supaya doc bersih di Mongo.
+    for pk in ("photo_isi_pagi", "photo_isi_siang", "photo_kosong_siang", "photo_kosong_sore"):
+        if not doc.get(pk):
+            doc.pop(pk, None)
     doc.update({
         "id": str(uuid.uuid4()),
         "sales_code": sales.get("sales_code"),
@@ -2411,6 +2424,12 @@ async def update_warehouse_daily(entry_id: str, body: WarehouseDailyUpdate, user
     updates = {k: v for k, v in body.dict().items() if v is not None}
     if not updates:
         return existing
+    # Photo fields: value "" = user hapus foto → gunakan $unset, jangan simpan ""
+    unset: dict = {}
+    for pk in ("photo_isi_pagi", "photo_isi_siang", "photo_kosong_siang", "photo_kosong_sore"):
+        if pk in updates and updates[pk] == "":
+            unset[pk] = ""
+            updates.pop(pk)
     if "sales_id" in updates and updates["sales_id"] != existing.get("sales_id"):
         sales = await db.users.find_one({"id": updates["sales_id"], "role": "sales"}, {"_id": 0})
         if not sales:
@@ -2422,7 +2441,10 @@ async def update_warehouse_daily(entry_id: str, body: WarehouseDailyUpdate, user
     updates["updated_at"] = now_utc().isoformat()
     updates["updated_by"] = user["id"]
     updates["updated_by_name"] = user.get("name") or user["username"]
-    await db.warehouse_daily.update_one({"id": entry_id}, {"$set": updates})
+    ops: dict = {"$set": updates}
+    if unset:
+        ops["$unset"] = unset
+    await db.warehouse_daily.update_one({"id": entry_id}, ops)
     return await db.warehouse_daily.find_one({"id": entry_id}, {"_id": 0})
 
 
@@ -2512,6 +2534,180 @@ async def validate_sales_bawa_sisa(sales_id: str, date: str, user=Depends(requir
 
 
 app.include_router(prod_wh)
+
+
+# ============================================================
+# WAREHOUSE — DISCREPANCY (Selisih Galon Merah/Hijau)
+# ============================================================
+# Definisi bisnis (dikonfirmasi user):
+#   pembanding: input Produksi (galon_ganti per sales/hari)
+#   selisih   = (sisa_pagi + sisa_siang) - Σ production_daily.galon_ganti
+#     selisih < 0 → MERAH  |selisih|
+#     selisih > 0 → HIJAU   selisih
+#     selisih = 0 → aman (tidak ada tanda)
+# Tanda otomatis HILANG saat Gudang/Produksi mengedit angka sehingga selisih=0.
+# Admin/super_admin bisa memaksa hijau=0 lewat clear-hijau (marker hijau_cleared).
+
+
+async def _compute_discrepancy_for_date(sales_id: str, date: str) -> dict:
+    """Hitung selisih & warna untuk 1 sales pada 1 tanggal."""
+    wh_entries = await db.warehouse_daily.find(
+        {"sales_id": sales_id, "date": date},
+        {"_id": 0},
+    ).to_list(100)
+    kosong_pulang = sum(
+        int(e.get("sisa_pagi", 0) or 0) + int(e.get("sisa_siang", 0) or 0)
+        for e in wh_entries
+    )
+    hijau_cleared_any = any(e.get("hijau_cleared") for e in wh_entries)
+    prod_entries = await db.production_daily.find(
+        {"sales_id": sales_id, "date": date},
+        {"_id": 0},
+    ).to_list(100)
+    galon_ganti_produksi = sum(int(p.get("galon_ganti", 0) or 0) for p in prod_entries)
+    selisih = kosong_pulang - galon_ganti_produksi
+    merah = -selisih if selisih < 0 else 0
+    hijau_raw = selisih if selisih > 0 else 0
+    hijau = 0 if hijau_cleared_any else hijau_raw
+    return {
+        "sales_id": sales_id,
+        "date": date,
+        "kosong_pulang": kosong_pulang,
+        "galon_ganti_produksi": galon_ganti_produksi,
+        "selisih": selisih,
+        "merah": merah,
+        "hijau": hijau,
+        "hijau_raw": hijau_raw,
+        "hijau_cleared": hijau_cleared_any,
+        "warehouse_entry_ids": [e.get("id") for e in wh_entries],
+    }
+
+
+@app.get("/api/warehouse/discrepancy")
+async def get_discrepancy(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    sales_id: Optional[str] = None,
+    user=Depends(require_roles("super_admin", "admin", "gudang", "produksi")),
+):
+    """Kembalikan daily selisih & akumulasi per sales.
+
+    Query param:
+      - date_from / date_to (YYYY-MM-DD) — default: seluruh riwayat
+      - sales_id — filter satu sales
+
+    Response:
+      {
+        entries: [ { sales_id, sales_code, name, date, kosong_pulang, galon_ganti_produksi,
+                     merah, hijau, hijau_cleared, selisih }, ... ],
+        summary: [ { sales_id, sales_code, name, group_letter, total_merah, total_hijau,
+                     total_hijau_raw, days_merah, days_hijau }, ... ]
+      }
+    """
+    # 1) Gather all (sales_id, date) combos yang punya warehouse_daily
+    wq: dict = {}
+    if date_from and date_to:
+        wq["date"] = {"$gte": date_from, "$lte": date_to}
+    elif date_from:
+        wq["date"] = {"$gte": date_from}
+    elif date_to:
+        wq["date"] = {"$lte": date_to}
+    if sales_id:
+        wq["sales_id"] = sales_id
+    if user["role"] == "admin":
+        wq["group_letter"] = user.get("group_letter")
+    wh_rows = await db.warehouse_daily.find(wq, {"_id": 0}).to_list(5000)
+
+    # unique (sales_id, date) pairs
+    pairs = set()
+    for r in wh_rows:
+        if r.get("sales_id") and r.get("date"):
+            pairs.add((r["sales_id"], r["date"]))
+
+    # 2) Compute each pair
+    entries: list[dict] = []
+    sales_ids = {p[0] for p in pairs}
+    users_map: dict[str, dict] = {}
+    async for u in db.users.find({"id": {"$in": list(sales_ids)}}, {"_id": 0}):
+        users_map[u["id"]] = u
+
+    for sid, dt in sorted(pairs, key=lambda x: (x[1], x[0]), reverse=True):
+        d = await _compute_discrepancy_for_date(sid, dt)
+        if d["merah"] == 0 and d["hijau"] == 0 and d["hijau_raw"] == 0:
+            # Skip entries dengan zero discrepancy — kurangi noise
+            continue
+        u = users_map.get(sid, {})
+        d["sales_code"] = u.get("sales_code") or u.get("username", sid)
+        d["sales_name"] = u.get("name")
+        d["group_letter"] = u.get("group_letter")
+        entries.append(d)
+
+    # 3) Aggregate per-sales summary
+    summary_map: dict[str, dict] = {}
+    for e in entries:
+        s = summary_map.setdefault(e["sales_id"], {
+            "sales_id": e["sales_id"],
+            "sales_code": e["sales_code"],
+            "sales_name": e["sales_name"],
+            "group_letter": e["group_letter"],
+            "total_merah": 0,
+            "total_hijau": 0,
+            "total_hijau_raw": 0,
+            "days_merah": 0,
+            "days_hijau": 0,
+        })
+        s["total_merah"] += e["merah"]
+        s["total_hijau"] += e["hijau"]
+        s["total_hijau_raw"] += e["hijau_raw"]
+        if e["merah"] > 0:
+            s["days_merah"] += 1
+        if e["hijau"] > 0:
+            s["days_hijau"] += 1
+    summary = sorted(
+        summary_map.values(),
+        key=lambda x: (x["total_merah"], x["total_hijau"]),
+        reverse=True,
+    )
+    return {"entries": entries, "summary": summary}
+
+
+@app.post("/api/warehouse/daily/{entry_id}/clear-hijau")
+async def clear_hijau(entry_id: str, user=Depends(require_roles("admin", "super_admin"))):
+    """Admin/Super Admin bisa nolkan tanda hijau pada 1 entry harian.
+    Semua entry pada hari-sales yang sama juga ditandai (agar summary konsisten).
+    """
+    e = await db.warehouse_daily.find_one({"id": entry_id}, {"_id": 0})
+    if not e:
+        raise HTTPException(404, "Entry tidak ditemukan")
+    # Guard admin ke wilayahnya saja
+    if user["role"] == "admin" and e.get("group_letter") != user.get("group_letter"):
+        raise HTTPException(403, "Bukan wilayah Anda")
+    await db.warehouse_daily.update_many(
+        {"sales_id": e.get("sales_id"), "date": e.get("date")},
+        {"$set": {
+            "hijau_cleared": True,
+            "hijau_cleared_by": user["id"],
+            "hijau_cleared_by_name": user.get("name") or user["username"],
+            "hijau_cleared_at": now_utc().isoformat(),
+        }},
+    )
+    return {"ok": True, "sales_id": e.get("sales_id"), "date": e.get("date")}
+
+
+@app.post("/api/warehouse/daily/{entry_id}/restore-hijau")
+async def restore_hijau(entry_id: str, user=Depends(require_roles("admin", "super_admin"))):
+    """Kebalikan clear-hijau — hijau count muncul kembali."""
+    e = await db.warehouse_daily.find_one({"id": entry_id}, {"_id": 0})
+    if not e:
+        raise HTTPException(404, "Entry tidak ditemukan")
+    if user["role"] == "admin" and e.get("group_letter") != user.get("group_letter"):
+        raise HTTPException(403, "Bukan wilayah Anda")
+    await db.warehouse_daily.update_many(
+        {"sales_id": e.get("sales_id"), "date": e.get("date")},
+        {"$unset": {"hijau_cleared": "", "hijau_cleared_by": "", "hijau_cleared_by_name": "", "hijau_cleared_at": ""}},
+    )
+    return {"ok": True}
+
 
 # Configurable CORS — set CORS_ORIGINS in .env for production
 # (comma-separated origins, e.g. "https://airoxly.com,https://oxly.vercel.app")

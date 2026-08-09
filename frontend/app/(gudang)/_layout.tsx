@@ -48,6 +48,13 @@ export default function GudangLayout() {
         }}
       />
       <Tabs.Screen
+        name="selisih"
+        options={{
+          title: "Selisih",
+          tabBarIcon: ({ color, size }) => <Ionicons name="git-compare-outline" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="stock"
         options={{
           title: "Stok",

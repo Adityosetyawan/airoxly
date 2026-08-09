@@ -1,0 +1,72 @@
+{
+  "summary": "Backend tests for the new 'Selisih Galon Merah/Hijau' feature. Verified POST/PATCH /api/warehouse/daily photo fields, GET /api/warehouse/discrepancy (merah/hijau/summary), clear-hijau + restore-hijau, RBAC (gudang/sales/wrong-group admin → 403), and regression on /warehouse/stock + /expenses. New file: /app/backend/tests/test_discrepancy.py. All 6 tests PASS (parallel-safe with xdist loadscope).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_discrepancy.py",
+    "/app/test_reports/pytest/iteration_18_discrepancy.xml"
+  ],
+  "test_details": {
+    "1_warehouse_photo_create_patch": {
+      "status": "PASS",
+      "checks": [
+        "POST /api/warehouse/daily (gudang1) with 4 photo_* data URIs → 200, all 4 fields persisted",
+        "GET /api/warehouse/daily verifies photos present in list",
+        "PATCH photo_isi_pagi='' → 200, field unset in response, other 3 photos preserved, edit_count=1"
+      ]
+    },
+    "2_discrepancy_merah_hijau_clear_restore": {
+      "status": "PASS",
+      "checks": [
+        "wh(sisa_pagi=5) + prod(galon_ganti=7) → merah=2, hijau=0, selisih=-2",
+        "PATCH sisa_pagi=8 → merah=0, hijau=1, hijau_raw=1, hijau_cleared=False",
+        "POST /clear-hijau (adminA, same group A) → 200; GET → hijau=0, hijau_raw=1, hijau_cleared=True",
+        "POST /restore-hijau (adminA) → 200; GET → hijau=1, hijau_cleared unset"
+      ]
+    },
+    "3_clear_hijau_rbac": {
+      "status": "PASS",
+      "checks": [
+        "clear-hijau as gudang1 (role=gudang) → 403 (require_roles admin/super_admin)",
+        "clear-hijau as A1 (sales) → 403",
+        "clear-hijau as adminB (group B) for A1 entry (group A) → 403 'Bukan wilayah Anda'"
+      ]
+    },
+    "4_summary_aggregation": {
+      "status": "PASS",
+      "checks": [
+        "2 days for A1: day1 merah=3, day2 hijau=2 → summary[0].total_merah=3, total_hijau=2, days_merah=1, days_hijau=1"
+      ]
+    },
+    "5_regression": {
+      "status": "PASS",
+      "checks": [
+        "GET /api/warehouse/stock (gudang1) → 200 with expected keys (galon, seal, mur, kran)",
+        "GET /api/expenses (A1 sales) → 200 list"
+      ]
+    }
+  },
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py has grown to 2743 lines — splitting into modules (auth, transactions, warehouse, discrepancy, admin) will simplify maintenance. Not blocking.",
+    "clear-hijau/restore-hijau operate on all entries in (sales_id,date) via update_many — matches the summary aggregation design. Correct.",
+    "_compute_discrepancy_for_date silently coerces None/'' → 0 via `or 0` — resilient to sparse docs. Good defensive coding."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_discrepancy.py (new)"
+  ],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "n/a (skipped per request)"},
+  "seed_data_creation": "No persistent seed. Tests write to fixed past dates (2020-01-13..17) for sales A1 and clean up via super_admin DELETE in per-class autouse fixtures (parallel-safe with xdist loadscope).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: pytest backend/tests/test_discrepancy.py -v. Tests use per-class autouse cleanup so each class owns its own test date (DATE_PHOTO=01-16, DATE_T3=01-15, DATE_T4=01-17, DATE_T5_A/B=01-13/14) for parallel isolation. If flaky, run with `-o addopts=''` for serial. Sales A1 UUID hardcoded from /app/memory/test_credentials.md.",
+  "rca_of_issue": "n/a — all requested endpoints pass on first serial run. Initial parallel failures were test-infrastructure only (module-scoped cleanup fixture ran twice due to xdist loadscope splitting classes across workers); resolved by moving cleanup to per-class autouse fixtures scoped to each class's own dates."
+}

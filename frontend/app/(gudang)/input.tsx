@@ -1,8 +1,17 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  ScrollView, StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Platform,
+  ActivityIndicator,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { AppHeader } from "@/src/components/AppHeader";
+import { PhotoCapture } from "@/src/components/PhotoCapture";
 import { theme } from "@/src/theme";
 import { api } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
@@ -15,6 +24,8 @@ export default function GudangInput() {
   const [sales, setSales] = useState<SalesUser[]>([]);
   const [saving, setSaving] = useState(false);
   const [validation, setValidation] = useState<any>(null);
+  const [discrepancy, setDiscrepancy] = useState<{ merah: number; hijau: number; kosong_pulang: number; galon_ganti_produksi: number; hijau_cleared: boolean } | null>(null);
+  const [search, setSearch] = useState("");
   const [form, setForm] = useState({
     date: todayStr(),
     shift: "pagi" as "pagi" | "siang",
@@ -35,6 +46,10 @@ export default function GudangInput() {
     sisa_siang: "",
     note: "",
   });
+  const [photoIsiPagi, setPhotoIsiPagi] = useState<string | null>(null);
+  const [photoIsiSiang, setPhotoIsiSiang] = useState<string | null>(null);
+  const [photoKosongSiang, setPhotoKosongSiang] = useState<string | null>(null);
+  const [photoKosongSore, setPhotoKosongSore] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -43,6 +58,8 @@ export default function GudangInput() {
         const list = (users || []).filter((u: any) => !u.disabled).map((u: any) => ({
           id: u.id, sales_code: u.sales_code, name: u.name, group_letter: u.group_letter,
         }));
+        // Sort by group + code so pemakai tetap terarah
+        list.sort((a: any, b: any) => (a.sales_code || "").localeCompare(b.sales_code || ""));
         setSales(list);
         if (list[0]) setForm((f) => ({ ...f, sales_id: list[0].id }));
       } catch {}
@@ -51,18 +68,50 @@ export default function GudangInput() {
 
   const setF = (k: string, v: any) => setForm((s) => ({ ...s, [k]: v }));
 
+  // Filter sales by search (nama atau kode)
+  const filteredSales = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return sales;
+    return sales.filter(
+      (s) =>
+        (s.sales_code || "").toLowerCase().includes(q) ||
+        (s.name || "").toLowerCase().includes(q),
+    );
+  }, [sales, search]);
+
   const doValidate = async (sid: string, date: string) => {
     try {
       const v = await api.validateSalesBawaSisa(sid, date);
       setValidation(v);
     } catch {}
+    try {
+      const d = await api.warehouseDiscrepancy({ date_from: date, date_to: date, sales_id: sid });
+      const first = d.entries?.[0];
+      if (first) {
+        setDiscrepancy({
+          merah: first.merah,
+          hijau: first.hijau,
+          kosong_pulang: first.kosong_pulang,
+          galon_ganti_produksi: first.galon_ganti_produksi,
+          hijau_cleared: first.hijau_cleared,
+        });
+      } else {
+        setDiscrepancy(null);
+      }
+    } catch {}
   };
 
+  // Real-time preview selisih (client-side, sebelum simpan) — banding dengan input Produksi hari itu
+  useEffect(() => {
+    if (!form.sales_id) return;
+    doValidate(form.sales_id, form.date);
+  }, [form.sales_id, form.date]);
+
   const onSave = async () => {
-    if (!form.sales_id) return toast.show("Pilih Group (Sales)", "error");
+    if (!form.sales_id) return toast.show("Pilih Sales dulu", "error");
     setSaving(true);
     try {
-      const body = {
+      const body: any = {
         date: form.date,
         shift: form.shift,
         sales_id: form.sales_id,
@@ -82,9 +131,12 @@ export default function GudangInput() {
         sisa_siang: parseInt(form.sisa_siang || "0") || 0,
         note: form.note || null,
       };
+      if (photoIsiPagi) body.photo_isi_pagi = photoIsiPagi;
+      if (photoIsiSiang) body.photo_isi_siang = photoIsiSiang;
+      if (photoKosongSiang) body.photo_kosong_siang = photoKosongSiang;
+      if (photoKosongSore) body.photo_kosong_sore = photoKosongSore;
       await api.createWarehouseDaily(body);
-      toast.show("Input gudang berhasil disimpan", "success");
-      // Auto validate after save
+      toast.show("Input Gudang tersimpan", "success");
       await doValidate(form.sales_id, form.date);
     } catch (e: any) {
       toast.show(e?.message || "Gagal simpan", "error");
@@ -101,20 +153,32 @@ export default function GudangInput() {
     <View style={{ flex: 1, backgroundColor: theme.color.surfaceSecondary }}>
       <AppHeader title="Input Harian Gudang" />
       <ScrollView contentContainerStyle={styles.body}>
-        {validation && !validation.match ? (
-          <View style={styles.alertRed}>
-            <Text style={styles.alertTitle}>⚠️ Selisih dengan Transaksi Sales!</Text>
-            <Text style={styles.alertText}>
-              Terjual (Bawa−Sisa) = {validation.terjual_by_gudang} galon{"\n"}
-              Terjual di Transaksi App = {validation.terjual_by_transaksi} galon{"\n"}
-              Selisih: {validation.diff > 0 ? "+" : ""}{validation.diff}
-            </Text>
+        {/* Discrepancy indicator (merah / hijau vs input Produksi) */}
+        {discrepancy && (discrepancy.merah > 0 || discrepancy.hijau > 0) ? (
+          <View style={[styles.discrepancyBox, discrepancy.merah > 0 ? styles.discrepancyRed : styles.discrepancyGreen]}>
+            <Ionicons name={discrepancy.merah > 0 ? "alert-circle" : "checkmark-circle"} size={22} color={discrepancy.merah > 0 ? theme.color.error : theme.color.success} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.discrepancyTitle}>
+                {discrepancy.merah > 0 ? `Kurang ${discrepancy.merah} galon kosong` : `Lebih ${discrepancy.hijau} galon kosong`}
+              </Text>
+              <Text style={styles.discrepancyDesc}>
+                Kosongan pulang: {discrepancy.kosong_pulang} · Galon diganti Produksi: {discrepancy.galon_ganti_produksi}
+              </Text>
+            </View>
           </View>
         ) : null}
-        {validation && validation.match ? (
-          <View style={styles.alertGreen}>
-            <Text style={styles.alertTitle}>✅ Data cocok dengan transaksi Sales</Text>
-            <Text style={styles.alertText}>Terjual: {validation.terjual_by_gudang} galon</Text>
+        {discrepancy && discrepancy.merah === 0 && discrepancy.hijau === 0 && (discrepancy.kosong_pulang > 0 || discrepancy.galon_ganti_produksi > 0) ? (
+          <View style={[styles.discrepancyBox, styles.discrepancyOK]}>
+            <Ionicons name="shield-checkmark" size={22} color={theme.color.success} />
+            <Text style={styles.discrepancyTitle}>Kosongan cocok dengan input Produksi ✓</Text>
+          </View>
+        ) : null}
+        {validation && !validation.match && validation.terjual_by_transaksi > 0 ? (
+          <View style={styles.alertRed}>
+            <Text style={styles.alertTitle}>⚠️ Selisih dengan Transaksi Sales</Text>
+            <Text style={styles.alertText}>
+              Terjual (Bawa−Sisa) = {validation.terjual_by_gudang} · Transaksi App = {validation.terjual_by_transaksi} · Selisih {validation.diff > 0 ? "+" : ""}{validation.diff}
+            </Text>
           </View>
         ) : null}
 
@@ -133,33 +197,82 @@ export default function GudangInput() {
             </View>
           </Row>
 
-          <Row label="Group (Sales)">
-            <View style={styles.groupWrap}>
-              {sales.map((s) => (
-                <TouchableOpacity key={s.id} onPress={() => setF("sales_id", s.id)} style={[styles.chip, form.sales_id === s.id && styles.chipOn]}>
-                  <Text style={[styles.chipText, form.sales_id === s.id && { color: "#fff" }]}>{s.sales_code || s.name}</Text>
+          <Row label={`Sales (${filteredSales.length}/${sales.length})`}>
+            <View style={styles.searchBox}>
+              <Ionicons name="search" size={16} color={theme.color.muted} />
+              <TextInput
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Cari nama atau kode sales… (contoh: A1)"
+                placeholderTextColor={theme.color.muted}
+                style={styles.searchInput}
+                autoCapitalize="none"
+                autoCorrect={false}
+                testID="gudang-sales-search"
+              />
+              {search ? (
+                <TouchableOpacity onPress={() => setSearch("")}>
+                  <Ionicons name="close-circle" size={18} color={theme.color.muted} />
                 </TouchableOpacity>
-              ))}
+              ) : null}
             </View>
+            {filteredSales.length === 0 ? (
+              <Text style={styles.emptyChip}>Tidak ada sales yang cocok</Text>
+            ) : (
+              <View style={styles.groupWrap}>
+                {filteredSales.map((s) => (
+                  <TouchableOpacity
+                    key={s.id}
+                    onPress={() => setF("sales_id", s.id)}
+                    style={[styles.chip, form.sales_id === s.id && styles.chipOn]}
+                    testID={`sales-chip-${s.sales_code}`}
+                  >
+                    <Text style={[styles.chipText, form.sales_id === s.id && { color: "#fff" }]}>
+                      {s.sales_code || s.name}
+                      {s.group_letter ? <Text style={{ opacity: 0.6, fontSize: 10 }}> · {s.group_letter}</Text> : null}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </Row>
 
           <SectionTitle>Aktivitas Sales (Bawa / Sisa)</SectionTitle>
           <View style={styles.rowTwo}>
-            <NumFieldSmall label="Bawa Pagi" value={form.bawa_pagi} onChange={(v) => setF("bawa_pagi", v)} />
-            <NumFieldSmall label="Sisa Pagi" value={form.sisa_pagi} onChange={(v) => setF("sisa_pagi", v)} />
+            <NumFieldSmall label="Bawa Isi Pagi" value={form.bawa_pagi} onChange={(v) => setF("bawa_pagi", v)} />
+            <NumFieldSmall label="Sisa (Kosong Siang)" value={form.sisa_pagi} onChange={(v) => setF("sisa_pagi", v)} />
           </View>
           <View style={styles.rowTwo}>
-            <NumFieldSmall label="Bawa Siang" value={form.bawa_siang} onChange={(v) => setF("bawa_siang", v)} />
-            <NumFieldSmall label="Sisa Siang" value={form.sisa_siang} onChange={(v) => setF("sisa_siang", v)} />
+            <NumFieldSmall label="Bawa Isi Siang" value={form.bawa_siang} onChange={(v) => setF("bawa_siang", v)} />
+            <NumFieldSmall label="Sisa (Kosong Sore)" value={form.sisa_siang} onChange={(v) => setF("sisa_siang", v)} />
           </View>
           <View style={styles.rowTwo}>
-            <NumFieldSmall label="Kosong Pagi" value={form.kosong_pagi} onChange={(v) => setF("kosong_pagi", v)} />
-            <NumFieldSmall label="Kosong Siang" value={form.kosong_siang} onChange={(v) => setF("kosong_siang", v)} />
+            <NumFieldSmall label="Kosong Awal Pagi" value={form.kosong_pagi} onChange={(v) => setF("kosong_pagi", v)} />
+            <NumFieldSmall label="Kosong Awal Siang" value={form.kosong_siang} onChange={(v) => setF("kosong_siang", v)} />
           </View>
 
           <View style={styles.terjualBox}>
             <Text style={styles.terjualLabel}>Terjual (Bawa − Sisa)</Text>
             <Text style={styles.terjualValue}>{terjual}</Text>
+          </View>
+
+          {/* Foto galon 4 titik */}
+          <SectionTitle>📷 Foto Galon (Real-time, tidak dari galeri)</SectionTitle>
+          <View style={styles.photoGrid}>
+            <View style={{ flex: 1 }}>
+              <PhotoCapture value={photoIsiPagi} onChange={setPhotoIsiPagi} label="Isi Pagi" testID="photo-isi-pagi" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <PhotoCapture value={photoIsiSiang} onChange={setPhotoIsiSiang} label="Isi Siang" testID="photo-isi-siang" />
+            </View>
+          </View>
+          <View style={styles.photoGrid}>
+            <View style={{ flex: 1 }}>
+              <PhotoCapture value={photoKosongSiang} onChange={setPhotoKosongSiang} label="Kosong Siang" testID="photo-kosong-siang" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <PhotoCapture value={photoKosongSore} onChange={setPhotoKosongSore} label="Kosong Sore" testID="photo-kosong-sore" />
+            </View>
           </View>
 
           <SectionTitle>Penggantian Galon</SectionTitle>
@@ -185,7 +298,7 @@ export default function GudangInput() {
           </Row>
         </View>
 
-        <TouchableOpacity style={styles.saveBtn} onPress={onSave} disabled={saving}>
+        <TouchableOpacity style={styles.saveBtn} onPress={onSave} disabled={saving} testID="gudang-save-btn">
           {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>SIMPAN</Text>}
         </TouchableOpacity>
       </ScrollView>
@@ -244,7 +357,20 @@ const styles = StyleSheet.create({
   shiftBtn: { flex: 1, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: theme.color.border, alignItems: "center" },
   shiftBtnOn: { backgroundColor: theme.color.brandPrimary, borderColor: theme.color.brandPrimary },
   shiftText: { fontWeight: "700", color: theme.color.onSurface },
-  groupWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+    backgroundColor: "#fff",
+    marginBottom: 8,
+  },
+  searchInput: { flex: 1, paddingVertical: 10, fontSize: 14, color: theme.color.onSurface },
+  emptyChip: { fontSize: 12, color: theme.color.muted, fontStyle: "italic", textAlign: "center", padding: 8 },
+  groupWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6, maxHeight: 200 },
   chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: theme.color.border, backgroundColor: "#fff" },
   chipOn: { backgroundColor: theme.color.brandPrimary, borderColor: theme.color.brandPrimary },
   chipText: { fontSize: 13, fontWeight: "600", color: theme.color.onSurface },
@@ -252,31 +378,22 @@ const styles = StyleSheet.create({
   numLabelBox: { flex: 1, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 10, borderRadius: 8 },
   dot: { width: 10, height: 10, borderRadius: 999 },
   numLabel: { fontSize: 13, fontWeight: "600", color: theme.color.onSurface },
-  numInput: {
-    width: 90,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 15,
-    textAlign: "center",
-    backgroundColor: "#fff",
-    fontWeight: "700",
-  },
+  numInput: { width: 90, borderWidth: 1, borderColor: theme.color.border, borderRadius: 8, padding: 10, fontSize: 15, textAlign: "center", backgroundColor: "#fff", fontWeight: "700" },
   smallLabel: { fontSize: 11, color: theme.color.muted, fontWeight: "600" },
   smallInput: { borderWidth: 1, borderColor: theme.color.border, borderRadius: 8, padding: 10, fontSize: 15, textAlign: "center", backgroundColor: "#fff", fontWeight: "700" },
   terjualBox: { backgroundColor: theme.color.brandTertiary, padding: 12, borderRadius: 10, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   terjualLabel: { fontSize: 12, fontWeight: "700", color: theme.color.onBrandTertiary },
   terjualValue: { fontSize: 22, fontWeight: "900", color: theme.color.onBrandTertiary },
+  photoGrid: { flexDirection: "row", gap: 10, marginBottom: 6 },
+  discrepancyBox: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 12, padding: 12, borderLeftWidth: 4 },
+  discrepancyRed: { backgroundColor: "#FEE2E2", borderLeftColor: theme.color.error },
+  discrepancyGreen: { backgroundColor: "#D1FAE5", borderLeftColor: theme.color.success },
+  discrepancyOK: { backgroundColor: "#ECFDF5", borderLeftColor: theme.color.success },
+  discrepancyTitle: { fontSize: 14, fontWeight: "800", color: theme.color.onSurface },
+  discrepancyDesc: { fontSize: 11, color: theme.color.onSurfaceSecondary, marginTop: 2 },
   alertRed: { backgroundColor: "#FEE2E2", borderRadius: 12, padding: 12, borderLeftWidth: 4, borderLeftColor: theme.color.error, gap: 4 },
-  alertGreen: { backgroundColor: "#D1FAE5", borderRadius: 12, padding: 12, borderLeftWidth: 4, borderLeftColor: theme.color.success, gap: 4 },
   alertTitle: { fontSize: 13, fontWeight: "800", color: theme.color.onSurface },
   alertText: { fontSize: 12, color: theme.color.onSurface },
-  saveBtn: {
-    backgroundColor: "#F59E0B",
-    padding: 16,
-    borderRadius: 14,
-    alignItems: "center",
-  },
+  saveBtn: { backgroundColor: "#F59E0B", padding: 16, borderRadius: 14, alignItems: "center" },
   saveText: { color: "#fff", fontWeight: "800", fontSize: 18, letterSpacing: 1 },
 });

@@ -16,8 +16,18 @@ import string
 from datetime import datetime, timezone, timedelta
 import calendar
 import jwt
+from math import radians, sin, cos, asin, sqrt
 from passlib.context import CryptContext
 import httpx
+
+
+def _haversine_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Great-circle distance between two lat/lng pairs, in meters."""
+    r_earth = 6371000.0
+    dlat = radians(lat2 - lat1)
+    dlng = radians(lng2 - lng1)
+    a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlng / 2) ** 2
+    return 2 * r_earth * asin(sqrt(a))
 
 
 ROOT_DIR = Path(__file__).parent
@@ -203,6 +213,14 @@ class ExpenseCreate(BaseModel):
     description: Optional[str] = ""
     amount: float
     date: Optional[str] = None  # ISO date; defaults to today
+    photo_base64: Optional[str] = None  # Foto nota (data URI atau base64 mentah)
+
+
+class ExpenseUpdate(BaseModel):
+    category: Optional[str] = None
+    description: Optional[str] = None
+    amount: Optional[float] = None
+    photo_base64: Optional[str] = None  # kirim "" untuk hapus foto
 
 
 class PartPriceUpdate(BaseModel):
@@ -1543,9 +1561,51 @@ async def create_expense(body: ExpenseCreate, user=Depends(require_roles("sales"
         "date": date_iso,
         "date_only": date_only,
         "created_at": now_utc().isoformat(),
+        "edit_count": 0,
     }
+    if body.photo_base64:
+        doc["photo_base64"] = body.photo_base64
     await db.expenses.insert_one(doc)
     return strip_id(doc)
+
+
+@api.patch("/expenses/{expense_id}")
+async def update_expense(expense_id: str, body: ExpenseUpdate, user=Depends(get_current_user)):
+    e = await db.expenses.find_one({"id": expense_id})
+    if not e:
+        raise HTTPException(404, "Pengeluaran tidak ditemukan")
+    is_super = user["role"] == "super_admin"
+    if user["role"] == "sales":
+        if e.get("sales_id") != user["id"]:
+            raise HTTPException(403, "Bukan pengeluaran Anda")
+    elif user["role"] == "admin":
+        raise HTTPException(403, "Admin tidak bisa mengubah pengeluaran")
+    elif not is_super:
+        raise HTTPException(403, "Forbidden")
+    update: dict = {}
+    unset: dict = {}
+    if body.category is not None:
+        update["category"] = body.category.strip() or "Lain-lain"
+    if body.description is not None:
+        update["description"] = body.description.strip()
+    if body.amount is not None:
+        if body.amount <= 0:
+            raise HTTPException(400, "Jumlah pengeluaran harus > 0")
+        update["amount"] = float(body.amount)
+    if body.photo_base64 is not None:
+        if body.photo_base64 == "":
+            unset["photo_base64"] = ""
+        else:
+            update["photo_base64"] = body.photo_base64
+    if update or unset:
+        update["edit_count"] = int(e.get("edit_count") or 0) + 1
+        update["updated_at"] = now_utc().isoformat()
+        ops: dict = {"$set": update}
+        if unset:
+            ops["$unset"] = unset
+        await db.expenses.update_one({"id": expense_id}, ops)
+    updated = await db.expenses.find_one({"id": expense_id}, {"_id": 0})
+    return updated
 
 
 @api.get("/expenses")
@@ -1594,6 +1654,35 @@ async def delete_expense(expense_id: str, user=Depends(get_current_user)):
 # ============================================================
 @api.post("/location/ping")
 async def location_ping(body: LocationPing, user=Depends(get_current_user)):
+    # GPS noise filter — skip if the new point is < min_move meters away from
+    # the previous point AND it was captured within the last 5 minutes.
+    # Threshold is configurable via `settings.gps_min_move_m` (default 20 m).
+    setting = await db.settings.find_one({"key": "gps_min_move_m"}, {"_id": 0})
+    try:
+        min_move_m = float((setting or {}).get("value") or 20)
+    except Exception:
+        min_move_m = 20.0
+    last = await db.locations.find({"sales_id": user["id"]}, {"_id": 0}).sort("ts", -1).limit(1).to_list(1)
+    if last and min_move_m > 0:
+        prev = last[0]
+        try:
+            dist_m = _haversine_m(prev["lat"], prev["lng"], body.lat, body.lng)
+            # Also enforce within a recent-window so a slow-moving sales still
+            # gets a fresh ping after a long pause (avoids gaps in polyline).
+            from datetime import datetime as _dt
+            prev_ts = _dt.fromisoformat((prev.get("ts") or "").replace("Z", "+00:00"))
+            elapsed = (now_utc() - prev_ts).total_seconds()
+        except Exception:
+            dist_m = min_move_m + 1
+            elapsed = 999
+        if dist_m < min_move_m and elapsed < 300:
+            # Still refresh last-known so live map shows the sales as active.
+            ts_only = now_utc().isoformat()
+            await db.users.update_one(
+                {"id": user["id"]},
+                {"$set": {"last_location": {"lat": body.lat, "lng": body.lng, "ts": ts_only}}},
+            )
+            return {"ok": True, "filtered": True, "distance_m": round(dist_m, 1)}
     doc = {
         "id": str(uuid.uuid4()),
         "sales_id": user["id"],
@@ -1606,7 +1695,7 @@ async def location_ping(body: LocationPing, user=Depends(get_current_user)):
     await db.locations.insert_one(doc)
     # Also upsert last-known
     await db.users.update_one({"id": user["id"]}, {"$set": {"last_location": {"lat": body.lat, "lng": body.lng, "ts": doc["ts"]}}})
-    return {"ok": True}
+    return {"ok": True, "filtered": False}
 
 
 @api.get("/location/live")
@@ -1955,6 +2044,80 @@ async def list_all_winners(limit: int = 200, user=Depends(get_current_user)):
 
 
 app.include_router(api)
+
+
+# ============================================================
+# ADMIN — DANGEROUS DATA RESET ENDPOINTS (Super Admin only)
+# ============================================================
+class ResetRequest(BaseModel):
+    confirm: str  # must match server-expected phrase
+
+
+@app.post("/api/admin/reset-sales-data")
+async def reset_sales_data(body: ResetRequest, user=Depends(require_roles("super_admin"))):
+    """Wipe all operational sales data (transactions, expenses, monthly
+    reports, GPS trails, lottery tickets/winners, production & warehouse
+    entries). Keeps: users, products, customers, settings, part prices,
+    lottery periods. Also resets aggregate fields on customer docs so debt /
+    purchase counters restart clean.
+    """
+    if (body.confirm or "").strip().upper() != "RESET PENJUALAN":
+        raise HTTPException(400, "Konfirmasi tidak cocok. Ketik: RESET PENJUALAN")
+    result = {}
+    for coll in (
+        "transactions",
+        "expenses",
+        "monthly_reports",
+        "locations",
+        "lottery_tickets",
+        "lottery_winners",
+        "production_daily",
+        "warehouse_daily",
+        "warehouse_incoming",
+    ):
+        r = await db[coll].delete_many({})
+        result[coll] = r.deleted_count
+    # Reset aggregate counters on customers (they stay, but debts/purchases zeroed)
+    upd = await db.customers.update_many(
+        {},
+        {"$set": {
+            "gallon_loans": 0,
+            "total_debt": 0,
+            "total_purchases": 0,
+            "purchase_count": 0,
+            "last_purchase_date": None,
+        }},
+    )
+    result["customers_reset"] = upd.modified_count
+    # Clear last_location on user docs too so live-map starts clean.
+    await db.users.update_many({}, {"$unset": {"last_location": ""}})
+    return {"ok": True, "reset": result}
+
+
+@app.post("/api/admin/reset-all-data")
+async def reset_all_data(body: ResetRequest, user=Depends(require_roles("super_admin"))):
+    """Total wipe: same as reset-sales-data PLUS deletes ALL customers.
+    Keeps only: users, products, settings, part prices, lottery periods.
+    """
+    if (body.confirm or "").strip().upper() != "RESET SEMUA":
+        raise HTTPException(400, "Konfirmasi tidak cocok. Ketik: RESET SEMUA")
+    result = {}
+    for coll in (
+        "transactions",
+        "expenses",
+        "monthly_reports",
+        "locations",
+        "lottery_tickets",
+        "lottery_winners",
+        "production_daily",
+        "warehouse_daily",
+        "warehouse_incoming",
+        "customers",
+    ):
+        r = await db[coll].delete_many({})
+        result[coll] = r.deleted_count
+    await db.users.update_many({}, {"$unset": {"last_location": ""}})
+    return {"ok": True, "reset": result}
 
 
 # ============================================================

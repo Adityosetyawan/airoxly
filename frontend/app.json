@@ -12,9 +12,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.emergent.oxlycrm.taw2qk",
       "infoPlist": {
-        "NSCameraUsageDescription": "Scan barcode pelanggan",
+        "NSCameraUsageDescription": "Foto barcode pelanggan & foto nota pengeluaran",
         "NSLocationWhenInUseUsageDescription": "Melacak lokasi sales di lapangan",
-        "NSPhotoLibraryUsageDescription": "Simpan screenshot laporan ke galeri",
+        "NSPhotoLibraryUsageDescription": "Pilih foto nota pengeluaran dari galeri",
         "NSPhotoLibraryAddUsageDescription": "Simpan screenshot laporan ke galeri"
       }
     },
@@ -53,7 +53,14 @@
       ],
       [
         "expo-camera",
-        { "cameraPermission": "Izinkan aplikasi mengakses kamera untuk scan barcode pelanggan" }
+        { "cameraPermission": "Izinkan aplikasi mengakses kamera untuk scan barcode pelanggan & foto nota pengeluaran" }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Pilih foto nota pengeluaran dari galeri HP",
+          "cameraPermission": "Foto nota pengeluaran langsung dari kamera"
+        }
       ],
       [
         "expo-location",

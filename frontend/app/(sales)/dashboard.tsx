@@ -29,6 +29,7 @@ export default function SalesDashboard() {
   const [lotteryCount, setLotteryCount] = useState<number>(0);
   const [refreshing, setRefreshing] = useState(false);
   const [expenseModal, setExpenseModal] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [posterOpen, setPosterOpen] = useState(false);
   const [posterBusy, setPosterBusy] = useState<null | "save" | "share">(null);
   const posterShotRef = useRef<ViewShot>(null);
@@ -168,7 +169,7 @@ export default function SalesDashboard() {
                 <Ionicons name="people" size={20} color={theme.color.brand} />
                 <Text style={styles.actText}>Pelanggan</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.act, { backgroundColor: "#FEE2E2" }]} onPress={() => setExpenseModal(true)} testID="action-expense">
+              <TouchableOpacity style={[styles.act, { backgroundColor: "#FEE2E2" }]} onPress={() => { setEditingExpense(null); setExpenseModal(true); }} testID="action-expense">
                 <Ionicons name="add-circle" size={20} color={theme.color.error} />
                 <Text style={[styles.actText, { color: theme.color.error }]}>Pengeluaran</Text>
               </TouchableOpacity>
@@ -177,7 +178,7 @@ export default function SalesDashboard() {
             {/* EXPENSES TODAY */}
             <View style={styles.secHeader}>
               <Text style={styles.section}>Pengeluaran Hari Ini ({expenses.length})</Text>
-              <TouchableOpacity onPress={() => setExpenseModal(true)} testID="add-expense-header-btn">
+              <TouchableOpacity onPress={() => { setEditingExpense(null); setExpenseModal(true); }} testID="add-expense-header-btn">
                 <Text style={styles.addLink}>+ Tambah</Text>
               </TouchableOpacity>
             </View>
@@ -188,15 +189,29 @@ export default function SalesDashboard() {
             ) : (
               expenses.map((e) => (
                 <View key={e.id} style={styles.expRow} testID={`expense-${e.id}`}>
-                  <View style={styles.expIcon}>
-                    <Ionicons name={CAT_ICONS[e.category] || "cash-outline"} size={18} color={theme.color.error} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.expCat}>{e.category}</Text>
+                  <TouchableOpacity
+                    style={styles.expIcon}
+                    onPress={() => { setEditingExpense(e); setExpenseModal(true); }}
+                    testID={`edit-expense-${e.id}`}
+                  >
+                    {e.photo_base64 ? (
+                      <Ionicons name="receipt" size={18} color={theme.color.brandPrimary} />
+                    ) : (
+                      <Ionicons name={CAT_ICONS[e.category] || "cash-outline"} size={18} color={theme.color.error} />
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ flex: 1 }}
+                    onPress={() => { setEditingExpense(e); setExpenseModal(true); }}
+                  >
+                    <Text style={styles.expCat}>
+                      {e.category}
+                      {e.photo_base64 ? <Text style={{ color: theme.color.brandPrimary, fontSize: 11 }}>  · 📷 nota</Text> : null}
+                    </Text>
                     <Text style={styles.expDesc} numberOfLines={1}>
                       {e.description || new Date(e.date).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                   <Text style={styles.expAmount}>−Rp {rp(e.amount)}</Text>
                   <TouchableOpacity onPress={() => deleteExpense(e.id)} style={styles.expDel} testID={`del-expense-${e.id}`}>
                     <Ionicons name="close" size={18} color={theme.color.muted} />
@@ -250,8 +265,9 @@ export default function SalesDashboard() {
 
       <ExpenseModal
         visible={expenseModal}
-        onClose={() => setExpenseModal(false)}
-        onSaved={() => { setExpenseModal(false); load(); }}
+        expense={editingExpense}
+        onClose={() => { setExpenseModal(false); setEditingExpense(null); }}
+        onSaved={() => { setExpenseModal(false); setEditingExpense(null); load(); }}
       />
 
       {/* Promo Poster Modal (Sales) */}

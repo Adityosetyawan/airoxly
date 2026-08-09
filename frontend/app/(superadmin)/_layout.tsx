@@ -31,6 +31,7 @@ export default function SuperAdminLayout() {
       <Tabs.Screen name="customers" options={{ href: null }} />
       <Tabs.Screen name="customer/[id]" options={{ href: null }} />
       <Tabs.Screen name="produksi-data" options={{ href: null }} />
+      <Tabs.Screen name="settings" options={{ href: null }} />
     </Tabs>
   );
 }

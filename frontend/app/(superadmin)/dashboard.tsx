@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -6,13 +6,17 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { theme, rp } from "@/src/theme";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/AuthContext";
+import { useToast } from "@/src/components/Toast";
 
 export default function SuperDashboard() {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const toast = useToast();
   const [stats, setStats] = useState<any>(null);
   const [report, setReport] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const tapCount = useRef(0);
+  const tapTimer = useRef<any>(null);
   const today = new Date().toISOString().slice(0, 10);
 
   const load = useCallback(async () => {
@@ -29,6 +33,21 @@ export default function SuperDashboard() {
     setRefreshing(true);
     await load();
     setRefreshing(false);
+  };
+
+  const handleSecretTap = () => {
+    tapCount.current += 1;
+    if (tapTimer.current) clearTimeout(tapTimer.current);
+    tapTimer.current = setTimeout(() => { tapCount.current = 0; }, 2500);
+    if (tapCount.current >= 3 && tapCount.current < 7) {
+      const left = 7 - tapCount.current;
+      toast.show(`${left} ketukan lagi untuk membuka pengaturan sistem`, "info");
+    }
+    if (tapCount.current >= 7) {
+      tapCount.current = 0;
+      if (tapTimer.current) clearTimeout(tapTimer.current);
+      router.push("/(superadmin)/settings");
+    }
   };
 
   return (
@@ -104,6 +123,11 @@ export default function SuperDashboard() {
         {(!report?.groups || report.groups.length === 0) && (
           <Text style={styles.empty}>Belum ada transaksi hari ini</Text>
         )}
+
+        {/* Hidden trigger — tap 7× to open Settings & Reset panel */}
+        <TouchableOpacity onPress={handleSecretTap} activeOpacity={1} style={styles.versionBox} testID="secret-version-tap">
+          <Text style={styles.versionText}>Air OXLY · v1.0.0</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -152,4 +176,6 @@ const styles = StyleSheet.create({
   gLabel: { fontSize: 12, color: theme.color.muted },
   gValue: { fontSize: 14, fontWeight: "600", color: theme.color.brand, marginTop: 2 },
   empty: { textAlign: "center", color: theme.color.muted, padding: 20 },
+  versionBox: { alignItems: "center", paddingVertical: 20, marginTop: 20 },
+  versionText: { fontSize: 11, color: theme.color.muted, opacity: 0.6 },
 });

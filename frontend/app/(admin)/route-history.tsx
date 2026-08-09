@@ -49,13 +49,23 @@ export default function RouteHistory() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [showCustomers, setShowCustomers] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [visitRadiusM, setVisitRadiusM] = useState(100); // default 100m
+  const [minMoveM, setMinMoveM] = useState(20); // default 20m
 
   useEffect(() => {
     (async () => {
       try {
-        const r = await api.liveLocations();
+        const [r, s1, s2] = await Promise.all([
+          api.liveLocations(),
+          api.getSetting("visit_radius_m").catch(() => null),
+          api.getSetting("gps_min_move_m").catch(() => null),
+        ]);
         setSalesList(r);
         if (!salesId && r.length > 0) setSalesId(r[0].id);
+        const vr = Number(s1?.value);
+        if (vr && vr > 0) setVisitRadiusM(vr);
+        const mm = Number(s2?.value);
+        if (mm && mm > 0) setMinMoveM(mm);
       } catch (e: any) {
         toast.show(e?.message || "Gagal ambil daftar sales", "error");
       }
@@ -84,34 +94,50 @@ export default function RouteHistory() {
     load();
   }, [load]);
 
+  // Smoothed points: filter out client-side jitter — keep first, and only
+  // add subsequent points that are at least `minMoveM` from the last kept one.
+  // Always keep the last point so END marker lands on the newest ping.
+  const smoothPoints = useMemo(() => {
+    if (points.length <= 2) return points;
+    const kmThreshold = minMoveM / 1000;
+    const kept: typeof points = [points[0]];
+    for (let i = 1; i < points.length - 1; i++) {
+      const last = kept[kept.length - 1];
+      if (haversineKm(last, points[i]) >= kmThreshold) kept.push(points[i]);
+    }
+    kept.push(points[points.length - 1]);
+    return kept;
+  }, [points, minMoveM]);
+
   const totalKm = useMemo(() => {
     let km = 0;
-    for (let i = 1; i < points.length; i++) km += haversineKm(points[i - 1], points[i]);
+    for (let i = 1; i < smoothPoints.length; i++) km += haversineKm(smoothPoints[i - 1], smoothPoints[i]);
     return km;
-  }, [points]);
+  }, [smoothPoints]);
 
   const firstTs = points[0]?.ts;
   const lastTs = points[points.length - 1]?.ts;
 
   const polylines = useMemo<MapPolyline[]>(
-    () => (points.length >= 2 ? [{ points, color: "16a34a", weight: 4 }] : []),
-    [points],
+    () => (smoothPoints.length >= 2 ? [{ points: smoothPoints, color: "16a34a", weight: 4 }] : []),
+    [smoothPoints],
   );
 
   const markers = useMemo<MapMarker[]>(() => {
     const m: MapMarker[] = [];
-    if (points.length > 0) {
-      m.push({ lat: points[0].lat, lng: points[0].lng, label: "START", color: "2563eb" });
+    if (smoothPoints.length > 0) {
+      m.push({ lat: smoothPoints[0].lat, lng: smoothPoints[0].lng, label: "START", color: "2563eb" });
     }
-    if (points.length > 1) {
-      const last = points[points.length - 1];
+    if (smoothPoints.length > 1) {
+      const last = smoothPoints[smoothPoints.length - 1];
       m.push({ lat: last.lat, lng: last.lng, label: "END", color: "dc2626" });
     }
     if (showCustomers) {
+      const radiusKm = visitRadiusM / 1000;
       customers.forEach((c) => {
         if (c.lat == null || c.lng == null) return;
-        // Highlight customers "visited" (within 100m of any route point)
-        const visited = points.some((p) => haversineKm({ lat: p.lat, lng: p.lng }, { lat: c.lat!, lng: c.lng! }) < 0.1);
+        // Highlight customers "visited" (within visitRadiusM of any route point)
+        const visited = points.some((p) => haversineKm({ lat: p.lat, lng: p.lng }, { lat: c.lat!, lng: c.lng! }) < radiusKm);
         m.push({
           lat: c.lat,
           lng: c.lng,
@@ -122,17 +148,18 @@ export default function RouteHistory() {
       });
     }
     return m;
-  }, [points, customers, showCustomers]);
+  }, [smoothPoints, points, customers, showCustomers, visitRadiusM]);
 
   const visitedCount = useMemo(() => {
     if (points.length === 0) return 0;
+    const radiusKm = visitRadiusM / 1000;
     return customers.filter(
       (c) =>
         c.lat != null &&
         c.lng != null &&
-        points.some((p) => haversineKm({ lat: p.lat, lng: p.lng }, { lat: c.lat!, lng: c.lng! }) < 0.1),
+        points.some((p) => haversineKm({ lat: p.lat, lng: p.lng }, { lat: c.lat!, lng: c.lng! }) < radiusKm),
     ).length;
-  }, [points, customers]);
+  }, [points, customers, visitRadiusM]);
 
   const selectedSales = salesList.find((s) => s.id === salesId);
 

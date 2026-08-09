@@ -1,0 +1,81 @@
+{
+  "summary": "Backend regression suite for new features (expense photo + edit, GPS filter, settings RBAC, reset-endpoint guards, create-user without google_email). All 9 tests PASS. New reusable file: /app/backend/tests/test_new_features.py.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_new_features.py",
+    "/app/test_reports/pytest/iteration_17_new_features.xml"
+  ],
+  "test_details": {
+    "1_expense_photo_and_edit": {
+      "status": "PASS",
+      "checks": [
+        "POST /api/expenses (sales) with photo_base64 -> 200, photo returned",
+        "PATCH amount/description (sales) -> 200, edit_count=1, photo preserved",
+        "PATCH photo_base64='' -> 200, photo removed from response, edit_count=2",
+        "PATCH as adminA -> 403 'Admin tidak bisa mengubah pengeluaran'",
+        "Cleanup DELETE (sales) -> 200"
+      ]
+    },
+    "2_gps_filter": {
+      "status": "PASS",
+      "checks": [
+        "1st ping (fresh coords) -> {ok:true, filtered:false}",
+        "2nd ping ~1m away -> {ok:true, filtered:true, distance_m<20}",
+        "3rd ping ~200m away -> {ok:true, filtered:false}",
+        "gps_min_move_m restored to 20"
+      ]
+    },
+    "3_settings_rbac": {
+      "status": "PASS",
+      "checks": [
+        "GET /api/settings/visit_radius_m as sales -> 200",
+        "PUT as sales -> 403",
+        "PUT as super_admin value=150 -> 200, value persisted (GET returns 150)",
+        "Reset to 100"
+      ]
+    },
+    "4_reset_guards": {
+      "status": "PASS",
+      "notes": "No destructive reset executed. Only guard paths verified.",
+      "checks": [
+        "POST /admin/reset-sales-data no body -> 422",
+        "POST /admin/reset-sales-data confirm='WRONG' -> 400 'Konfirmasi tidak cocok'",
+        "POST /admin/reset-sales-data as sales -> 403",
+        "POST /admin/reset-all-data as admin -> 403",
+        "POST /admin/reset-all-data as adminA with confirm='RESET SEMUA' -> 403 (RBAC blocks first)"
+      ]
+    },
+    "5_create_user_no_google_email": {
+      "status": "PASS",
+      "checks": [
+        "Create admin (group=D) without google_email -> 200",
+        "Create second admin (group=E) without google_email -> 200 (no duplicate-null 500 regression)",
+        "Cleanup DELETE both users -> 200"
+      ]
+    }
+  },
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 2547 lines — consider splitting into modules (auth, users, transactions, expenses, location, reports, admin) for maintainability.",
+    "google_email partial unique index migration in seed() is defensive & correct; no action needed.",
+    "location_ping's inner `from datetime import datetime as _dt` shadowing is fine but could be hoisted to top-of-file for consistency."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_new_features.py (new)"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "n/a (skipped per request)"},
+  "seed_data_creation": "No persistent seed data created. All test artifacts (expense, users) cleaned up in teardown.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "New reusable pytest module test_new_features.py verifies: expense photo/edit RBAC, GPS filter distance thresholds, settings RBAC, admin reset-endpoint guards (non-destructive), and duplicate-null google_email fix. Run with: pytest backend/tests/test_new_features.py -v",
+  "rca_of_issue": "n/a — all requested regressions pass on first run."
+}

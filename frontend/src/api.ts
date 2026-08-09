@@ -98,6 +98,8 @@ export type Expense = {
   amount: number;
   date: string;
   date_only: string;
+  photo_base64?: string;
+  edit_count?: number;
 };
 
 async function req<T = any>(
@@ -215,9 +217,25 @@ export const api = {
     const s = q.toString();
     return req<Expense[]>(`/expenses${s ? "?" + s : ""}`);
   },
-  createExpense: (body: { category: string; description?: string; amount: number; date?: string }) =>
+  createExpense: (body: { category: string; description?: string; amount: number; date?: string; photo_base64?: string }) =>
     req<Expense>("/expenses", { method: "POST", body: JSON.stringify(body) }),
+  updateExpense: (
+    id: string,
+    body: { category?: string; description?: string; amount?: number; photo_base64?: string },
+  ) => req<Expense>(`/expenses/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteExpense: (id: string) => req(`/expenses/${id}`, { method: "DELETE" }),
+
+  // DANGEROUS — Super Admin only
+  resetSalesData: (confirm: string) =>
+    req<{ ok: boolean; reset: Record<string, number> }>("/admin/reset-sales-data", {
+      method: "POST",
+      body: JSON.stringify({ confirm }),
+    }),
+  resetAllData: (confirm: string) =>
+    req<{ ok: boolean; reset: Record<string, number> }>("/admin/reset-all-data", {
+      method: "POST",
+      body: JSON.stringify({ confirm }),
+    }),
 
   // Part prices (red — super admin)
   listPartPrices: () => req<any[]>("/part-prices"),

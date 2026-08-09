@@ -66,36 +66,21 @@ export function ExpenseModal({
     }
   }, [visible, expense]);
 
-  const pickPhoto = async (from: "camera" | "gallery") => {
+  const pickPhoto = async (_: "camera") => {
     try {
-      let perm;
-      if (from === "camera") {
-        perm = await ImagePicker.getCameraPermissionsAsync();
-        if (!perm.granted) {
-          if (!perm.canAskAgain) {
-            toast.show("Izin kamera diblokir. Buka Pengaturan.", "error");
-            Linking.openSettings().catch(() => {});
-            return;
-          }
-          perm = await ImagePicker.requestCameraPermissionsAsync();
-          if (!perm.granted) {
-            toast.show("Izin kamera dibutuhkan untuk foto nota", "error");
-            return;
-          }
+      // Kamera real-time saja — galeri disable agar tidak bisa upload nota lama
+      // atau nota rekayasa. Foto harus diambil saat itu juga.
+      let perm = await ImagePicker.getCameraPermissionsAsync();
+      if (!perm.granted) {
+        if (!perm.canAskAgain) {
+          toast.show("Izin kamera diblokir. Buka Pengaturan.", "error");
+          Linking.openSettings().catch(() => {});
+          return;
         }
-      } else {
-        perm = await ImagePicker.getMediaLibraryPermissionsAsync();
+        perm = await ImagePicker.requestCameraPermissionsAsync();
         if (!perm.granted) {
-          if (!perm.canAskAgain) {
-            toast.show("Izin galeri diblokir. Buka Pengaturan.", "error");
-            Linking.openSettings().catch(() => {});
-            return;
-          }
-          perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (!perm.granted) {
-            toast.show("Izin galeri dibutuhkan", "error");
-            return;
-          }
+          toast.show("Izin kamera dibutuhkan untuk foto nota", "error");
+          return;
         }
       }
       const opts: ImagePicker.ImagePickerOptions = {
@@ -103,11 +88,9 @@ export function ExpenseModal({
         quality: 0.55,
         base64: true,
         allowsEditing: false,
+        cameraType: ImagePicker.CameraType.back,
       };
-      const res =
-        from === "camera"
-          ? await ImagePicker.launchCameraAsync(opts)
-          : await ImagePicker.launchImageLibraryAsync(opts);
+      const res = await ImagePicker.launchCameraAsync(opts);
       if (res.canceled || !res.assets?.[0]) return;
       const a = res.assets[0];
       if (a.base64) {
@@ -191,16 +174,13 @@ export function ExpenseModal({
                 </View>
               </View>
             ) : (
-              <View style={styles.pickerRow}>
-                <TouchableOpacity onPress={() => pickPhoto("camera")} style={styles.pickerBtn} testID="expense-camera-btn">
-                  <Ionicons name="camera" size={22} color={theme.color.brand} />
-                  <Text style={styles.pickerText}>Kamera</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => pickPhoto("gallery")} style={styles.pickerBtn} testID="expense-gallery-btn">
-                  <Ionicons name="images" size={22} color={theme.color.brand} />
-                  <Text style={styles.pickerText}>Galeri</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity onPress={() => pickPhoto("camera")} style={styles.pickerBtnFull} testID="expense-camera-btn">
+                <Ionicons name="camera" size={26} color={theme.color.brand} />
+                <View style={{ alignItems: "center" }}>
+                  <Text style={styles.pickerText}>Foto Nota (Kamera)</Text>
+                  <Text style={styles.pickerHint}>Hanya bisa foto langsung — bukan dari galeri</Text>
+                </View>
+              </TouchableOpacity>
             )}
 
             <Text style={styles.label}>Kategori</Text>
@@ -304,19 +284,20 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   btnText: { color: "#fff", fontSize: 15, fontWeight: "600" },
-  pickerRow: { flexDirection: "row", gap: 12 },
-  pickerBtn: {
-    flex: 1,
-    padding: 20,
+  pickerBtnFull: {
+    padding: 24,
     borderRadius: 14,
     borderWidth: 1,
     borderStyle: "dashed",
     borderColor: theme.color.brandPrimary,
     alignItems: "center",
-    gap: 8,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 14,
     backgroundColor: theme.color.brandTertiary,
   },
-  pickerText: { color: theme.color.onBrandTertiary, fontSize: 13, fontWeight: "600" },
+  pickerText: { color: theme.color.onBrandTertiary, fontSize: 14, fontWeight: "700" },
+  pickerHint: { color: theme.color.onBrandTertiary, fontSize: 10, opacity: 0.8, marginTop: 2 },
   photoBox: {
     borderRadius: 14,
     overflow: "hidden",

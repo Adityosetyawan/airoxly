@@ -12,9 +12,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.emergent.oxlycrm.taw2qk",
       "infoPlist": {
-        "NSCameraUsageDescription": "Foto barcode pelanggan & foto nota pengeluaran",
+        "NSCameraUsageDescription": "Foto barcode pelanggan & foto nota pengeluaran real-time",
         "NSLocationWhenInUseUsageDescription": "Melacak lokasi sales di lapangan",
-        "NSPhotoLibraryUsageDescription": "Pilih foto nota pengeluaran dari galeri",
+        "NSPhotoLibraryUsageDescription": "Simpan screenshot laporan ke galeri",
         "NSPhotoLibraryAddUsageDescription": "Simpan screenshot laporan ke galeri"
       }
     },
@@ -58,8 +58,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Pilih foto nota pengeluaran dari galeri HP",
-          "cameraPermission": "Foto nota pengeluaran langsung dari kamera"
+          "cameraPermission": "Foto nota pengeluaran langsung dari kamera (real-time, bukan dari galeri)"
         }
       ],
       [

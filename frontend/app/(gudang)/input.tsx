@@ -160,24 +160,26 @@ export default function GudangInput() {
     <View style={{ flex: 1, backgroundColor: theme.color.surfaceSecondary }}>
       <AppHeader title="Input Harian Gudang" />
       <ScrollView contentContainerStyle={styles.body}>
-        {/* Discrepancy indicator (merah / hijau vs input Produksi) */}
+        {/* Discrepancy indicator (merah / hijau: bawa isi vs galon kembali) */}
         {discrepancy && (discrepancy.merah > 0 || discrepancy.hijau > 0) ? (
           <View style={[styles.discrepancyBox, discrepancy.merah > 0 ? styles.discrepancyRed : styles.discrepancyGreen]}>
             <Ionicons name={discrepancy.merah > 0 ? "alert-circle" : "checkmark-circle"} size={22} color={discrepancy.merah > 0 ? theme.color.error : theme.color.success} />
             <View style={{ flex: 1 }}>
               <Text style={styles.discrepancyTitle}>
-                {discrepancy.merah > 0 ? `Kurang ${discrepancy.merah} galon kosong` : `Lebih ${discrepancy.hijau} galon kosong`}
+                {discrepancy.merah > 0 ? `KURANG ${discrepancy.merah} galon` : `LEBIH ${discrepancy.hijau} galon`}
               </Text>
               <Text style={styles.discrepancyDesc}>
-                Kosongan pulang: {discrepancy.kosong_pulang} · Galon diganti Produksi: {discrepancy.galon_ganti_produksi}
+                Bawa Isi: {(discrepancy as any).bawa_total ?? discrepancy.galon_ganti_produksi} · Galon Kembali: {(discrepancy as any).galon_kembali ?? discrepancy.kosong_pulang}
               </Text>
             </View>
           </View>
         ) : null}
-        {discrepancy && discrepancy.merah === 0 && discrepancy.hijau === 0 && (discrepancy.kosong_pulang > 0 || discrepancy.galon_ganti_produksi > 0) ? (
+        {discrepancy && discrepancy.merah === 0 && discrepancy.hijau === 0 &&
+          (((discrepancy as any).bawa_total ?? discrepancy.galon_ganti_produksi) > 0 ||
+            ((discrepancy as any).galon_kembali ?? discrepancy.kosong_pulang) > 0) ? (
           <View style={[styles.discrepancyBox, styles.discrepancyOK]}>
             <Ionicons name="shield-checkmark" size={22} color={theme.color.success} />
-            <Text style={styles.discrepancyTitle}>Kosongan cocok dengan input Produksi ✓</Text>
+            <Text style={styles.discrepancyTitle}>Bawa Isi = Galon Kembali ✓</Text>
           </View>
         ) : null}
         {validation && !validation.match && validation.terjual_by_transaksi > 0 ? (
@@ -293,33 +295,27 @@ export default function GudangInput() {
             <Text style={styles.terjualValue}>{terjual}</Text>
           </View>
 
-          <SectionTitle>3️⃣ Kosong Kembali (dari foto real)</SectionTitle>
+          <SectionTitle>3️⃣ Galon Kembali (dari foto real)</SectionTitle>
           <View style={styles.rowTwo}>
-            <NumFieldSmall label="Kosong Kembali Siang" value={form.kosong_kembali_siang} onChange={(v) => setF("kosong_kembali_siang", v)} />
-            <NumFieldSmall label="Kosong Kembali Sore" value={form.kosong_kembali_sore} onChange={(v) => setF("kosong_kembali_sore", v)} />
+            <NumFieldSmall label="Galon Kembali Siang" value={form.kosong_kembali_siang} onChange={(v) => setF("kosong_kembali_siang", v)} />
+            <NumFieldSmall label="Galon Kembali Sore" value={form.kosong_kembali_sore} onChange={(v) => setF("kosong_kembali_sore", v)} />
           </View>
           <View style={styles.photoGrid}>
             <View style={{ flex: 1 }}>
-              <PhotoCapture value={photoKosongSiang} onChange={setPhotoKosongSiang} label="Kosong Siang" testID="photo-kosong-siang" />
+              <PhotoCapture value={photoKosongSiang} onChange={setPhotoKosongSiang} label="Galon Siang" testID="photo-galon-siang" />
             </View>
             <View style={{ flex: 1 }}>
-              <PhotoCapture value={photoKosongSore} onChange={setPhotoKosongSore} label="Kosong Sore" testID="photo-kosong-sore" />
+              <PhotoCapture value={photoKosongSore} onChange={setPhotoKosongSore} label="Galon Sore" testID="photo-galon-sore" />
             </View>
           </View>
           {kosongPulang > 0 || form.sales_id ? (
             <View style={styles.kosongInfoBox}>
               <Ionicons name="information-circle" size={14} color={theme.color.brand} />
               <Text style={styles.kosongInfoText}>
-                Total kosong pulang: <Text style={{ fontWeight: "800" }}>{kosongPulang}</Text> galon — akan dibandingkan dengan galon diganti Produksi
+                Total galon kembali: <Text style={{ fontWeight: "800" }}>{kosongPulang}</Text> galon — dibandingkan dengan Bawa Isi ({bawa}) untuk menentukan LEBIH/KURANG
               </Text>
             </View>
           ) : null}
-
-          <SectionTitle>Kosong Berangkat (opsional — legacy)</SectionTitle>
-          <View style={styles.rowTwo}>
-            <NumFieldSmall label="Kosong Awal Pagi" value={form.kosong_pagi} onChange={(v) => setF("kosong_pagi", v)} />
-            <NumFieldSmall label="Kosong Awal Siang" value={form.kosong_siang} onChange={(v) => setF("kosong_siang", v)} />
-          </View>
 
           <SectionTitle>Penggantian Galon</SectionTitle>
           <NumField label="Galon Kran (➖ Stok Galon Kran)" value={form.galon_kran} onChange={(v) => setF("galon_kran", v)} color="#0284C7" />

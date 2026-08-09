@@ -2552,60 +2552,54 @@ app.include_router(prod_wh)
 # ============================================================
 # WAREHOUSE — DISCREPANCY (Selisih Galon Merah/Hijau)
 # ============================================================
-# Definisi bisnis (dikonfirmasi user):
-#   pembanding: input Produksi (galon_ganti per sales/hari)
-#   kosong_pulang = Σ (kosong_kembali_siang + kosong_kembali_sore) -- galon
-#                    kosong yang dibawa sales kembali (dari foto real Gudang)
-#   selisih   = kosong_pulang - Σ production_daily.galon_ganti
-#     selisih < 0 → MERAH  |selisih|
-#     selisih > 0 → HIJAU   selisih
+# Definisi bisnis (dikonfirmasi user, revisi 2):
+#   Bandingkan galon ISI yang dibawa vs galon yang KEMBALI (dari sales).
+#   bawa_total    = Σ (bawa_pagi + bawa_siang)                      [galon isi]
+#   galon_kembali = Σ (kosong_kembali_siang + kosong_kembali_sore)  [galon kembali]
+#   selisih       = bawa_total − galon_kembali
+#     selisih > 0 → HIJAU (LEBIH, bawa > kembali)   selisih
+#     selisih < 0 → MERAH (KURANG, bawa < kembali)  |selisih|
 #     selisih = 0 → aman (tidak ada tanda)
-# Tanda otomatis HILANG saat Gudang/Produksi mengedit angka sehingga selisih=0.
+# Tanda otomatis HILANG saat Gudang mengedit angka sehingga selisih=0.
 # Admin/super_admin bisa memaksa hijau=0 lewat clear-hijau (marker hijau_cleared).
 
 
 async def _compute_discrepancy_for_date(sales_id: str, date: str) -> dict:
     """Hitung selisih & warna untuk 1 sales pada 1 tanggal.
 
-    Perbandingan:
-      kosong_pulang        = Σ (kosong_kembali_siang + kosong_kembali_sore)
-      galon_ganti_produksi = Σ production_daily.galon_ganti
-      selisih              = kosong_pulang − galon_ganti_produksi
-        selisih < 0 → MERAH (kurang) |selisih|
-        selisih > 0 → HIJAU (lebih)   selisih
-
     Backwards-compat: entries lama yang masih menyimpan angka kosong pulang di
-    `sisa_pagi/sisa_siang` (schema versi awal) juga diakui — kalau field baru
-    `kosong_kembali_*` tidak ada, fallback ke sisa_*.
+    `sisa_pagi/sisa_siang` (schema versi awal) tetap dihitung sebagai
+    galon_kembali kalau field baru `kosong_kembali_*` tidak ada.
     """
     wh_entries = await db.warehouse_daily.find(
         {"sales_id": sales_id, "date": date},
         {"_id": 0},
     ).to_list(100)
-    kosong_pulang = 0
+    bawa_total = 0
+    galon_kembali = 0
     for e in wh_entries:
+        bawa_total += int(e.get("bawa_pagi", 0) or 0) + int(e.get("bawa_siang", 0) or 0)
         kk_siang = e.get("kosong_kembali_siang")
         kk_sore = e.get("kosong_kembali_sore")
         if kk_siang is None and kk_sore is None:
             # Legacy row — fallback to sisa_* (old semantic = "kosong pulang")
-            kosong_pulang += int(e.get("sisa_pagi", 0) or 0) + int(e.get("sisa_siang", 0) or 0)
+            galon_kembali += int(e.get("sisa_pagi", 0) or 0) + int(e.get("sisa_siang", 0) or 0)
         else:
-            kosong_pulang += int(kk_siang or 0) + int(kk_sore or 0)
+            galon_kembali += int(kk_siang or 0) + int(kk_sore or 0)
     hijau_cleared_any = any(e.get("hijau_cleared") for e in wh_entries)
-    prod_entries = await db.production_daily.find(
-        {"sales_id": sales_id, "date": date},
-        {"_id": 0},
-    ).to_list(100)
-    galon_ganti_produksi = sum(int(p.get("galon_ganti", 0) or 0) for p in prod_entries)
-    selisih = kosong_pulang - galon_ganti_produksi
-    merah = -selisih if selisih < 0 else 0
+    selisih = bawa_total - galon_kembali
+    # LEBIH (hijau) → bawa > kembali ; KURANG (merah) → bawa < kembali
     hijau_raw = selisih if selisih > 0 else 0
+    merah = -selisih if selisih < 0 else 0
     hijau = 0 if hijau_cleared_any else hijau_raw
     return {
         "sales_id": sales_id,
         "date": date,
-        "kosong_pulang": kosong_pulang,
-        "galon_ganti_produksi": galon_ganti_produksi,
+        "bawa_total": bawa_total,
+        "galon_kembali": galon_kembali,
+        # Legacy alias — kept for older FE bundles still expecting these
+        "kosong_pulang": galon_kembali,
+        "galon_ganti_produksi": bawa_total,
         "selisih": selisih,
         "merah": merah,
         "hijau": hijau,

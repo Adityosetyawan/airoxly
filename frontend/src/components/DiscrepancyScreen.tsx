@@ -23,6 +23,8 @@ type Entry = {
   sales_name?: string;
   group_letter?: string;
   date: string;
+  bawa_total?: number;
+  galon_kembali?: number;
   kosong_pulang: number;
   galon_ganti_produksi: number;
   selisih: number;
@@ -145,7 +147,7 @@ export function DiscrepancyScreen({ readOnly = false }: { readOnly?: boolean }) 
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.color.surfaceSecondary }} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Selisih Galon</Text>
-        <Text style={styles.headerSub}>Kosongan Pulang vs Produksi Ganti</Text>
+        <Text style={styles.headerSub}>Bawa Isi vs Galon Kembali</Text>
       </View>
 
       <View style={styles.filterRow}>
@@ -265,7 +267,7 @@ export function DiscrepancyScreen({ readOnly = false }: { readOnly?: boolean }) 
               {e.hijau_raw > 0 && e.hijau_cleared ? <Badge value={0} kind="gray" big label={`hijau ${e.hijau_raw} · dinolkan`} /> : null}
             </View>
             <Text style={styles.entryFormula}>
-              Kosongan pulang {e.kosong_pulang} − Produksi ganti {e.galon_ganti_produksi} = {e.selisih > 0 ? "+" : ""}
+              Bawa Isi {e.bawa_total ?? e.galon_ganti_produksi} − Galon Kembali {e.galon_kembali ?? e.kosong_pulang} = {e.selisih > 0 ? "+" : ""}
               {e.selisih}
             </Text>
             {canClearHijau && (e.hijau > 0 || (e.hijau_raw > 0 && e.hijau_cleared)) ? (

@@ -388,6 +388,8 @@ export const api = {
         sales_name?: string;
         group_letter?: string;
         date: string;
+        bawa_total?: number;
+        galon_kembali?: number;
         kosong_pulang: number;
         galon_ganti_produksi: number;
         selisih: number;

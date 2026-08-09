@@ -192,35 +192,22 @@ class TestDiscrepancyFlow:
     def test_merah_then_hijau_then_clear_then_restore(
         self, http: requests.Session, tokens: dict
     ):
-        # Warehouse: sisa_pagi=5 → kosong_pulang=5
+        # Skenario MERAH: bawa=5, galon_kembali=8 → selisih=-3, merah=3
         wh = http.post(
             f"{BASE_URL}/warehouse/daily",
             json={
                 "date": DATE_T3,
                 "shift": "pagi",
                 "sales_id": SALES_A1_ID,
-                "bawa_pagi": 8,
-                "sisa_pagi": 5,
+                "bawa_pagi": 5,
+                "kosong_kembali_siang": 8,
             },
             headers=_auth(tokens["gudang"]),
         )
         assert wh.status_code == 200, wh.text
         wh_id = wh.json()["id"]
 
-        # Production: galon_ganti=7
-        pd = http.post(
-            f"{BASE_URL}/production/daily",
-            json={
-                "date": DATE_T3,
-                "shift": "pagi",
-                "sales_id": SALES_A1_ID,
-                "galon_ganti": 7,
-            },
-            headers=_auth(tokens["produksi"]),
-        )
-        assert pd.status_code == 200, pd.text
-
-        # GET discrepancy → merah=2, hijau=0
+        # GET discrepancy → merah=3, hijau=0
         r = http.get(
             f"{BASE_URL}/warehouse/discrepancy",
             params={
@@ -235,16 +222,16 @@ class TestDiscrepancyFlow:
         assert len(body["entries"]) == 1, body
         e = body["entries"][0]
         assert e["sales_id"] == SALES_A1_ID
-        assert e["merah"] == 2, e
+        assert e["merah"] == 3, e
         assert e["hijau"] == 0, e
-        assert e["kosong_pulang"] == 5
-        assert e["galon_ganti_produksi"] == 7
-        assert e["selisih"] == -2
+        assert e["bawa_total"] == 5
+        assert e["galon_kembali"] == 8
+        assert e["selisih"] == -3
 
-        # PATCH sisa_pagi=8 → kosong_pulang=8, selisih=1 → hijau=1
+        # PATCH bawa_pagi=12 → selisih=+4 → hijau=4
         p = http.patch(
             f"{BASE_URL}/warehouse/daily/{wh_id}",
-            json={"sisa_pagi": 8},
+            json={"bawa_pagi": 12},
             headers=_auth(tokens["gudang"]),
         )
         assert p.status_code == 200, p.text
@@ -261,8 +248,8 @@ class TestDiscrepancyFlow:
         assert r.status_code == 200
         e = r.json()["entries"][0]
         assert e["merah"] == 0, e
-        assert e["hijau"] == 1, e
-        assert e["hijau_raw"] == 1
+        assert e["hijau"] == 4, e
+        assert e["hijau_raw"] == 4
         assert e["hijau_cleared"] in (False, None) or not e["hijau_cleared"]
 
         # POST clear-hijau as adminA (group A ↔ A1 group A) → 200
@@ -281,13 +268,13 @@ class TestDiscrepancyFlow:
             },
             headers=_auth(tokens["adminA"]),
         )
-        # After clear + hijau_raw=1, entries are still non-noise because hijau_raw>0
+        # After clear + hijau_raw=4, entries are still non-noise because hijau_raw>0
         assert r.status_code == 200
         entries = r.json()["entries"]
         assert len(entries) == 1, entries
         e = entries[0]
         assert e["hijau"] == 0, e
-        assert e["hijau_raw"] == 1, e
+        assert e["hijau_raw"] == 4, e
         assert e["hijau_cleared"] is True, e
 
         # POST restore-hijau as adminA → 200
@@ -308,7 +295,7 @@ class TestDiscrepancyFlow:
         )
         assert r.status_code == 200
         e = r.json()["entries"][0]
-        assert e["hijau"] == 1, e
+        assert e["hijau"] == 4, e
         assert not e.get("hijau_cleared"), e
 
 
@@ -374,39 +361,29 @@ class TestDiscrepancySummary:
     def test_summary_aggregation_two_days(
         self, http: requests.Session, tokens: dict
     ):
-        # Day A → merah=3: sisa=0, prod.galon_ganti=3 → selisih=-3
+        # Day A → merah=3: bawa=2, kembali=5 → selisih=-3
         wh_a = http.post(
             f"{BASE_URL}/warehouse/daily",
             json={
                 "date": DATE_T5_A,
                 "shift": "pagi",
                 "sales_id": SALES_A1_ID,
-                "bawa_pagi": 3,
-                "sisa_pagi": 0,
+                "bawa_pagi": 2,
+                "kosong_kembali_siang": 5,
             },
             headers=_auth(tokens["gudang"]),
         )
         assert wh_a.status_code == 200, wh_a.text
-        pd_a = http.post(
-            f"{BASE_URL}/production/daily",
-            json={
-                "date": DATE_T5_A,
-                "shift": "pagi",
-                "sales_id": SALES_A1_ID,
-                "galon_ganti": 3,
-            },
-            headers=_auth(tokens["produksi"]),
-        )
-        assert pd_a.status_code == 200, pd_a.text
 
-        # Day B → hijau=2: sisa=2, no production
+        # Day B → hijau=2: bawa=10, kembali=8 → selisih=+2
         wh_b = http.post(
             f"{BASE_URL}/warehouse/daily",
             json={
                 "date": DATE_T5_B,
                 "shift": "pagi",
                 "sales_id": SALES_A1_ID,
-                "sisa_pagi": 2,
+                "bawa_pagi": 10,
+                "kosong_kembali_siang": 8,
             },
             headers=_auth(tokens["gudang"]),
         )

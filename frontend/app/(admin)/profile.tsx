@@ -2,11 +2,13 @@ import React from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { theme } from "@/src/theme";
 import { useAuth } from "@/src/AuthContext";
 
 export default function AdminProfile() {
   const { user, logout } = useAuth();
+  const router = useRouter();
 
   return (
     <SafeAreaView style={styles.wrap} edges={["top"]}>
@@ -22,6 +24,11 @@ export default function AdminProfile() {
           <Row label="Wilayah" value={user?.group_letter || "-"} />
           <Row label="No. WA" value={user?.wa_number || "-"} />
         </View>
+
+        <TouchableOpacity onPress={() => router.push("/panduan")} style={styles.panduanBtn} testID="panduan-btn">
+          <Ionicons name="book-outline" size={20} color={theme.color.brand} />
+          <Text style={styles.panduanText}>Buku Panduan</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity onPress={logout} style={styles.logout} testID="logout-btn">
           <Ionicons name="log-out-outline" size={20} color={theme.color.error} />
@@ -51,6 +58,19 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", justifyContent: "space-between", padding: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.color.border },
   rowLabel: { fontSize: 13, color: theme.color.muted },
   rowValue: { fontSize: 14, color: theme.color.onSurface, fontWeight: "500" },
-  logout: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: theme.color.error, marginTop: 24 },
+  logout: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: theme.color.error, marginTop: 12 },
   logoutText: { color: theme.color.error, fontWeight: "600" },
+  panduanBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.color.brand,
+    backgroundColor: theme.color.brandTertiary,
+    marginTop: 20,
+  },
+  panduanText: { color: theme.color.brand, fontWeight: "700" },
 });

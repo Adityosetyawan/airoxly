@@ -112,6 +112,11 @@ export default function Profile() {
           </TouchableOpacity>
         </View>
 
+        <TouchableOpacity onPress={() => router.push("/panduan")} style={styles.panduanBtn} testID="panduan-btn">
+          <Ionicons name="book-outline" size={20} color={theme.color.brand} />
+          <Text style={styles.panduanText}>Buku Panduan</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity onPress={logout} style={styles.logoutBtn} testID="logout-btn">
           <Ionicons name="log-out-outline" size={20} color={theme.color.error} />
           <Text style={styles.logoutText}>Keluar</Text>
@@ -198,9 +203,22 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: theme.color.error,
-    marginTop: 24,
+    marginTop: 12,
   },
   logoutText: { color: theme.color.error, fontWeight: "600" },
+  panduanBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.color.brand,
+    backgroundColor: theme.color.brandTertiary,
+    marginTop: 20,
+  },
+  panduanText: { color: theme.color.brand, fontWeight: "700" },
   depositCard: {
     padding: 16,
     borderRadius: 14,

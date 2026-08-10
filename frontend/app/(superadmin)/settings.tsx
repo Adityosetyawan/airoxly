@@ -255,7 +255,7 @@ export default function SuperSettings() {
           <TouchableOpacity
             onPress={() =>
               Alert.alert(
-                "Reset Data Penjualan?",
+                "HALF RESET — Hapus Semua Kecuali Pelanggan?",
                 "Ini akan menghapus SEMUA transaksi, pengeluaran, laporan bulanan, riwayat GPS, undian, dan input Produksi/Gudang. Data pelanggan & user TETAP tapi hutang & pembelian pelanggan direset ke 0.",
                 [
                   { text: "Batal", style: "cancel" },
@@ -268,16 +268,16 @@ export default function SuperSettings() {
           >
             <Ionicons name="refresh-circle" size={20} color="#fff" />
             <View style={{ flex: 1 }}>
-              <Text style={styles.dangerBtnTitle}>Reset Data Penjualan Saja</Text>
-              <Text style={styles.dangerBtnDesc}>Hapus transaksi, pengeluaran, GPS, undian, produksi & gudang. Pelanggan tetap.</Text>
+              <Text style={styles.dangerBtnTitle}>🟠 HALF RESET (Kecuali Pelanggan)</Text>
+              <Text style={styles.dangerBtnDesc}>Hapus semua data KECUALI data pelanggan. User & produk tetap. Hutang direset ke 0.</Text>
             </View>
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() =>
               Alert.alert(
-                "Reset TOTAL Semua Data?",
-                "PERINGATAN KERAS: ini menghapus SEMUA transaksi, pengeluaran, laporan, GPS, undian, produksi/gudang, DAN JUGA SEMUA DATA PELANGGAN. Hanya user, produk, dan pengaturan yang tersisa. Yakin?",
+                "ALL RESET — Hapus Semua Data?",
+                "PERINGATAN KERAS: ini menghapus SEMUA data termasuk data pelanggan. Hanya user, produk, dan pengaturan yang tersisa. Yakin?",
                 [
                   { text: "Batal", style: "cancel" },
                   { text: "Ya, Reset Total", style: "destructive", onPress: () => openReset("all") },
@@ -289,8 +289,8 @@ export default function SuperSettings() {
           >
             <Ionicons name="trash-bin" size={20} color="#fff" />
             <View style={{ flex: 1 }}>
-              <Text style={styles.dangerBtnTitle}>Reset Total (Termasuk Pelanggan)</Text>
-              <Text style={styles.dangerBtnDesc}>Hapus semua data termasuk data pelanggan. Hanya user & produk yang tersisa.</Text>
+              <Text style={styles.dangerBtnTitle}>🔴 ALL RESET (Termasuk Pelanggan)</Text>
+              <Text style={styles.dangerBtnDesc}>Hapus SEMUA data termasuk data pelanggan. Hanya user & produk yang tersisa.</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -302,7 +302,7 @@ export default function SuperSettings() {
           <View style={styles.modalCard}>
             <Ionicons name="alert-circle" size={40} color={theme.color.error} style={{ alignSelf: "center" }} />
             <Text style={styles.modalTitle}>
-              Konfirmasi {resetType === "sales" ? "Reset Data Penjualan" : "Reset Total"}
+              Konfirmasi {resetType === "sales" ? "HALF RESET" : "ALL RESET"}
             </Text>
             <Text style={styles.modalBody}>
               Ketik <Text style={{ fontWeight: "700", color: theme.color.error }}>

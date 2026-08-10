@@ -402,48 +402,42 @@ Reset hanya bisa dilakukan oleh **Super Admin**.
 - Setelah demo / training (data dummy)
 - Setup ulang dari nol
 
-### Step 3 — Konfirmasi Ganda (2 Langkah!)
+### Step 3 — Konfirmasi (Modal Terbuka)
 
-⚠️ **PENTING:** Ada **2 dialog** yang muncul berturut-turut.
+**Setelah tap tombol 🟠 HALF RESET / 🔴 ALL RESET, LANGSUNG muncul modal peringatan:**
 
-**📋 Dialog 1 — Peringatan**
+![Modal Reset](/panduan-img/51_reset_modal.jpeg)
 
-Setelah tap tombol 🟠 HALF RESET / 🔴 ALL RESET, muncul kotak peringatan native (mirip pop-up sistem):
+Modal menampilkan:
+- ⚠️ Ikon warning besar
+- Judul (🟠 HALF RESET / 🔴 ALL RESET)
+- Peringatan merah: "Aksi ini TIDAK BISA DIBATALKAN"
+- **❌ YANG DIHAPUS** — daftar lengkap data yang akan hilang
+- **✅ YANG TETAP** — daftar data yang tetap aman
+- Kotak dashed berisi teks yang wajib diketik
+- Input untuk mengetik konfirmasi
+- Status real-time: "○ Belum diketik" / "❌ Belum cocok" / "✅ Teks cocok"
 
-- Judul: `"HALF RESET — Hapus Semua Data Transaksi?"` (atau ALL RESET)
-- Isi: daftar data yang akan dihapus dan yang tetap
-- 2 tombol: **[Batal]** dan **[Lanjutkan]**
+### Step 4 — Ketik Teks Konfirmasi
 
-Kalau ragu, tekan **Batal** — data aman, tidak ada yang berubah.
+![Setelah ketik teks](/panduan-img/52_reset_modal_typed.jpeg)
 
-**📝 Dialog 2 — Kotak Ketik Konfirmasi**
-
-Setelah tap **Lanjutkan**, muncul modal kedua di **tengah layar**:
-
-```
-    ⚠️  (ikon merah)
-    Konfirmasi HALF RESET
-
-    Ketik RESET PENJUALAN di bawah untuk melanjutkan.
-    Tindakan ini tidak dapat dibatalkan.
-
-    ┌─────────────────────────────┐
-    │  RESET PENJUALAN            │ ← ketik di kotak ini
-    └─────────────────────────────┘
-
-    [  Batal  ]     [  RESET  ]
-```
-
-**Cara ketik:**
+**Ketik PERSIS SAMA di kotak input:**
 
 | Jenis Reset | Ketik Persis |
 |-------------|--------------|
 | 🟠 HALF RESET | `RESET PENJUALAN` |
 | 🔴 ALL RESET | `RESET SEMUA` |
 
-⚠️ **HARUS TEPAT SAMA** — huruf besar semua, spasi 1×, tidak boleh salah huruf. Tombol **RESET** merah baru aktif kalau teks cocok 100%.
+⚠️ **HARUS PERSIS SAMA** — huruf besar semua, spasi 1×.
 
-Kalau salah ketik → tombol RESET akan tampil error / tidak jalan → tinggal ketik ulang.
+**Tombol RESET otomatis berubah:**
+- 🔵 **Abu-abu** (label: "Ketik dulu ↑") = teks belum cocok, tidak bisa dipencet
+- 🔴 **Merah** (label: "RESET SEKARANG") = teks cocok, siap reset
+
+Setelah teks cocok, tap tombol **[RESET SEKARANG]** merah untuk eksekusi. Data akan langsung terhapus dan muncul notifikasi hijau.
+
+Kalau ragu, tap **[Batal]** — data aman.
 
 ### Step 4 — Verifikasi Setelah Reset
 

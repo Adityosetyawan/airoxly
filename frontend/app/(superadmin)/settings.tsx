@@ -439,16 +439,7 @@ export default function SuperSettings() {
           </Text>
 
           <TouchableOpacity
-            onPress={() =>
-              Alert.alert(
-                "HALF RESET — Hapus Semua Data Transaksi?",
-                "Ini akan menghapus SEMUA transaksi, pengeluaran, laporan bulanan, riwayat GPS, undian, dan input Produksi/Gudang.\n\n✅ TETAP DIPERTAHANKAN:\n• Data pelanggan (hutang & pembelian direset ke 0)\n• Semua user (Super Admin, Admin, Sales, Gudang, Produksi)\n• Produk & pengaturan sistem",
-                [
-                  { text: "Batal", style: "cancel" },
-                  { text: "Lanjutkan", style: "destructive", onPress: () => openReset("sales") },
-                ],
-              )
-            }
+            onPress={() => openReset("sales")}
             style={styles.dangerBtn}
             testID="reset-sales-btn"
           >
@@ -460,16 +451,7 @@ export default function SuperSettings() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() =>
-              Alert.alert(
-                "ALL RESET — Hapus Semua Data Termasuk Pelanggan?",
-                "PERINGATAN KERAS: menghapus SEMUA data termasuk data pelanggan.\n\n✅ HANYA TETAP:\n• Semua user (Super Admin, Admin, Sales, Gudang, Produksi)\n• Produk & pengaturan sistem\n\nData pelanggan, transaksi, laporan, GPS, produksi, gudang — SEMUA HILANG.",
-                [
-                  { text: "Batal", style: "cancel" },
-                  { text: "Ya, Reset Total", style: "destructive", onPress: () => openReset("all") },
-                ],
-              )
-            }
+            onPress={() => openReset("all")}
             style={[styles.dangerBtn, { backgroundColor: "#7f1d1d" }]}
             testID="reset-all-btn"
           >
@@ -482,46 +464,106 @@ export default function SuperSettings() {
         </View>
       </ScrollView>
 
-      {/* Confirmation Modal */}
+      {/* Confirmation Modal — sekarang jadi 1 modal dengan warning + input */}
       <Modal visible={!!resetType} transparent animationType="fade" onRequestClose={closeReset}>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <View style={styles.modalCard}>
-            <Ionicons name="alert-circle" size={40} color={theme.color.error} style={{ alignSelf: "center" }} />
-            <Text style={styles.modalTitle}>
-              Konfirmasi {resetType === "sales" ? "HALF RESET" : "ALL RESET"}
-            </Text>
-            <Text style={styles.modalBody}>
-              Ketik <Text style={{ fontWeight: "700", color: theme.color.error }}>
-                {resetType === "sales" ? "RESET PENJUALAN" : "RESET SEMUA"}
-              </Text> di bawah untuk melanjutkan. Tindakan ini tidak dapat dibatalkan.
-            </Text>
-            <TextInput
-              value={confirmText}
-              onChangeText={setConfirmText}
-              placeholder={resetType === "sales" ? "RESET PENJUALAN" : "RESET SEMUA"}
-              placeholderTextColor={theme.color.muted}
-              autoCapitalize="characters"
-              style={styles.modalInput}
-              testID="reset-confirm-input"
-            />
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <TouchableOpacity onPress={closeReset} style={[styles.modalBtn, { backgroundColor: theme.color.surfaceSecondary }]} testID="reset-cancel-btn">
-                <Text style={{ color: theme.color.onSurface, fontWeight: "600" }}>Batal</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={performReset}
-                disabled={resetting}
-                style={[styles.modalBtn, { backgroundColor: theme.color.error, opacity: resetting ? 0.6 : 1 }]}
-                testID="reset-confirm-btn"
-              >
-                {resetting ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={{ color: "#fff", fontWeight: "700" }}>RESET</Text>
-                )}
-              </TouchableOpacity>
+          <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+            <View style={styles.modalCard}>
+              <Ionicons name="warning" size={44} color={theme.color.error} style={{ alignSelf: "center" }} />
+              <Text style={styles.modalTitle}>
+                {resetType === "sales" ? "🟠 HALF RESET" : "🔴 ALL RESET"}
+              </Text>
+              <Text style={styles.modalWarn}>
+                ⚠️ Aksi ini TIDAK BISA DIBATALKAN
+              </Text>
+
+              {/* Detail apa yang dihapus & tetap */}
+              <View style={styles.detailBox}>
+                <Text style={styles.detailTitleRed}>❌ YANG DIHAPUS:</Text>
+                <Text style={styles.detailText}>
+                  • Semua transaksi{"\n"}
+                  • Semua pengeluaran{"\n"}
+                  • Laporan bulanan{"\n"}
+                  • Riwayat GPS & undian{"\n"}
+                  • Input Produksi & Gudang
+                  {resetType === "all" ? "\n• SEMUA data pelanggan (nama, alamat, foto, barcode)" : ""}
+                </Text>
+                <Text style={[styles.detailTitleGreen, { marginTop: 8 }]}>✅ YANG TETAP:</Text>
+                <Text style={styles.detailText}>
+                  {resetType === "sales"
+                    ? "• Data pelanggan (hutang direset ke 0)\n• Semua user (Admin/Sales/Gudang/Produksi)\n• Master produk & harga\n• Kelola Part / Biaya Penggantian"
+                    : "• Semua user (Admin/Sales/Gudang/Produksi)\n• Master produk & harga"}
+                </Text>
+              </View>
+
+              <Text style={styles.modalBody}>
+                Untuk konfirmasi, ketik teks berikut{" "}
+                <Text style={{ fontWeight: "700", color: theme.color.error }}>
+                  PERSIS SAMA
+                </Text>{" "}
+                di kotak bawah:
+              </Text>
+              <View style={styles.mustTypeBox}>
+                <Text style={styles.mustTypeText}>
+                  {resetType === "sales" ? "RESET PENJUALAN" : "RESET SEMUA"}
+                </Text>
+              </View>
+              <TextInput
+                value={confirmText}
+                onChangeText={setConfirmText}
+                placeholder={resetType === "sales" ? "Ketik: RESET PENJUALAN" : "Ketik: RESET SEMUA"}
+                placeholderTextColor={theme.color.muted}
+                autoCapitalize="characters"
+                style={styles.modalInput}
+                testID="reset-confirm-input"
+              />
+              {(() => {
+                const expected = resetType === "sales" ? "RESET PENJUALAN" : "RESET SEMUA";
+                const typed = confirmText.trim().toUpperCase();
+                const ok = typed === expected;
+                return (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, justifyContent: "center", marginBottom: 4 }}>
+                    <Ionicons
+                      name={ok ? "checkmark-circle" : (typed ? "close-circle" : "ellipse-outline")}
+                      size={16}
+                      color={ok ? theme.color.success : (typed ? theme.color.error : theme.color.muted)}
+                    />
+                    <Text style={{ fontSize: 11, color: ok ? theme.color.success : (typed ? theme.color.error : theme.color.muted) }}>
+                      {ok ? "Teks cocok — tombol RESET aktif" : (typed ? `Belum cocok (${typed.length}/${expected.length} karakter)` : "Belum diketik")}
+                    </Text>
+                  </View>
+                );
+              })()}
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <TouchableOpacity onPress={closeReset} style={[styles.modalBtn, { backgroundColor: theme.color.surfaceSecondary }]} testID="reset-cancel-btn">
+                  <Text style={{ color: theme.color.onSurface, fontWeight: "600" }}>Batal</Text>
+                </TouchableOpacity>
+                {(() => {
+                  const expected = resetType === "sales" ? "RESET PENJUALAN" : "RESET SEMUA";
+                  const ok = confirmText.trim().toUpperCase() === expected;
+                  return (
+                    <TouchableOpacity
+                      onPress={performReset}
+                      disabled={resetting || !ok}
+                      style={[
+                        styles.modalBtn,
+                        { backgroundColor: ok ? theme.color.error : "#94A3B8", opacity: resetting ? 0.6 : 1 },
+                      ]}
+                      testID="reset-confirm-btn"
+                    >
+                      {resetting ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text style={{ color: "#fff", fontWeight: "700" }}>
+                          {ok ? "RESET SEKARANG" : "Ketik dulu ↑"}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })()}
+              </View>
             </View>
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
@@ -617,4 +659,37 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   modalBtn: { flex: 1, padding: 14, borderRadius: 12, alignItems: "center" },
+  modalWarn: {
+    textAlign: "center",
+    color: theme.color.error,
+    fontWeight: "700",
+    fontSize: 13,
+    backgroundColor: "#FEE2E2",
+    padding: 8,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  detailBox: {
+    backgroundColor: theme.color.surfaceSecondary,
+    padding: 12,
+    borderRadius: 10,
+    marginVertical: 10,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+  },
+  detailTitleRed: { fontSize: 12, fontWeight: "800", color: theme.color.error },
+  detailTitleGreen: { fontSize: 12, fontWeight: "800", color: theme.color.success },
+  detailText: { fontSize: 12, color: theme.color.onSurface, lineHeight: 18, marginTop: 4 },
+  mustTypeBox: {
+    borderWidth: 2,
+    borderColor: theme.color.error,
+    borderStyle: "dashed",
+    borderRadius: 8,
+    padding: 12,
+    alignItems: "center",
+    marginBottom: 6,
+    marginTop: 4,
+    backgroundColor: "#FFF7ED",
+  },
+  mustTypeText: { fontSize: 18, fontWeight: "900", letterSpacing: 2, color: theme.color.error },
 });

@@ -255,8 +255,8 @@ export default function SuperSettings() {
           <TouchableOpacity
             onPress={() =>
               Alert.alert(
-                "HALF RESET — Hapus Semua Kecuali Pelanggan?",
-                "Ini akan menghapus SEMUA transaksi, pengeluaran, laporan bulanan, riwayat GPS, undian, dan input Produksi/Gudang. Data pelanggan & user TETAP tapi hutang & pembelian pelanggan direset ke 0.",
+                "HALF RESET — Hapus Semua Data Transaksi?",
+                "Ini akan menghapus SEMUA transaksi, pengeluaran, laporan bulanan, riwayat GPS, undian, dan input Produksi/Gudang.\n\n✅ TETAP DIPERTAHANKAN:\n• Data pelanggan (hutang & pembelian direset ke 0)\n• Semua user (Super Admin, Admin, Sales, Gudang, Produksi)\n• Produk & pengaturan sistem",
                 [
                   { text: "Batal", style: "cancel" },
                   { text: "Lanjutkan", style: "destructive", onPress: () => openReset("sales") },
@@ -268,16 +268,16 @@ export default function SuperSettings() {
           >
             <Ionicons name="refresh-circle" size={20} color="#fff" />
             <View style={{ flex: 1 }}>
-              <Text style={styles.dangerBtnTitle}>🟠 HALF RESET (Kecuali Pelanggan)</Text>
-              <Text style={styles.dangerBtnDesc}>Hapus semua data KECUALI data pelanggan. User & produk tetap. Hutang direset ke 0.</Text>
+              <Text style={styles.dangerBtnTitle}>🟠 HALF RESET</Text>
+              <Text style={styles.dangerBtnDesc}>Hapus transaksi/pengeluaran/laporan/GPS/undian/produksi/gudang. TETAP: pelanggan, semua user (admin/sales/gudang/produksi), produk.</Text>
             </View>
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() =>
               Alert.alert(
-                "ALL RESET — Hapus Semua Data?",
-                "PERINGATAN KERAS: ini menghapus SEMUA data termasuk data pelanggan. Hanya user, produk, dan pengaturan yang tersisa. Yakin?",
+                "ALL RESET — Hapus Semua Data Termasuk Pelanggan?",
+                "PERINGATAN KERAS: menghapus SEMUA data termasuk data pelanggan.\n\n✅ HANYA TETAP:\n• Semua user (Super Admin, Admin, Sales, Gudang, Produksi)\n• Produk & pengaturan sistem\n\nData pelanggan, transaksi, laporan, GPS, produksi, gudang — SEMUA HILANG.",
                 [
                   { text: "Batal", style: "cancel" },
                   { text: "Ya, Reset Total", style: "destructive", onPress: () => openReset("all") },
@@ -289,8 +289,8 @@ export default function SuperSettings() {
           >
             <Ionicons name="trash-bin" size={20} color="#fff" />
             <View style={{ flex: 1 }}>
-              <Text style={styles.dangerBtnTitle}>🔴 ALL RESET (Termasuk Pelanggan)</Text>
-              <Text style={styles.dangerBtnDesc}>Hapus SEMUA data termasuk data pelanggan. Hanya user & produk yang tersisa.</Text>
+              <Text style={styles.dangerBtnTitle}>🔴 ALL RESET</Text>
+              <Text style={styles.dangerBtnDesc}>Hapus SEMUA data termasuk data pelanggan. TETAP: semua user (admin/sales/gudang/produksi) & produk.</Text>
             </View>
           </TouchableOpacity>
         </View>

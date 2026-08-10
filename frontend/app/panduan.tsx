@@ -249,6 +249,110 @@ const SECTIONS: Section[] = [
     ],
   },
   {
+    id: "reset",
+    icon: "warning",
+    title: "🔄 Cara Reset Data",
+    color: "#DC2626",
+    items: [
+      {
+        heading: "⚠️ PENTING — Baca Dulu Sebelum Reset",
+        body:
+          "Reset data adalah aksi PERMANEN dan TIDAK BISA DIBATALKAN.\n\n" +
+          "Sebelum reset, WAJIB:\n" +
+          "1. Backup data via menu Bulanan → Export laporan bulan berjalan\n" +
+          "2. Pastikan semua setoran sales sudah tercatat & diverifikasi\n" +
+          "3. Screenshot dashboard sebagai referensi\n\n" +
+          "Reset hanya bisa dilakukan oleh SUPER ADMIN.",
+      },
+      {
+        heading: "Step 1: Masuk ke Settings Tersembunyi",
+        body:
+          "Settings SuperAdmin adalah menu tersembunyi.\n\n" +
+          "Cara akses:\n" +
+          "1. Login sebagai Super Admin (username: superadmin)\n" +
+          "2. Di halaman Beranda, TAP 7 KALI pada logo/header aplikasi\n" +
+          "3. Menu Settings akan terbuka\n\n" +
+          "Alternatif: dari Quick Access dashboard SuperAdmin, tekan tombol Settings (ikon gear).",
+      },
+      {
+        heading: "Step 2: Scroll ke \"Zona Berbahaya\"",
+        body:
+          "Di halaman Settings, scroll ke paling bawah sampai muncul kotak merah bertuliskan \"⚠️ Zona Berbahaya\".\n\n" +
+          "Anda akan lihat 2 tombol:\n" +
+          "🟠 HALF RESET (kotak oranye)\n" +
+          "🔴 ALL RESET (kotak merah)",
+        img: "50_reset_zona.jpeg",
+      },
+      {
+        heading: "🟠 HALF RESET — Reset Penjualan Saja",
+        body:
+          "Gunakan ini di AWAL BULAN untuk mulai bersih tanpa hilang data master.\n\n" +
+          "YANG DIHAPUS:\n" +
+          "❌ Semua transaksi\n" +
+          "❌ Semua pengeluaran sales\n" +
+          "❌ Laporan bulanan\n" +
+          "❌ Data GPS & undian\n" +
+          "❌ Input produksi & gudang\n\n" +
+          "YANG TETAP:\n" +
+          "✅ Data pelanggan (nama, alamat, foto rumah, barcode)\n" +
+          "✅ Semua user (SuperAdmin, Admin, Sales, Gudang, Produksi)\n" +
+          "✅ Master produk & harga\n" +
+          "✅ Kelola Part / Biaya Penggantian Part",
+      },
+      {
+        heading: "🔴 ALL RESET — Reset Total",
+        body:
+          "PALING BERBAHAYA. Gunakan hanya untuk ganti bisnis / pindah pemilik.\n\n" +
+          "YANG DIHAPUS:\n" +
+          "❌ Semua transaksi\n" +
+          "❌ Semua pengeluaran\n" +
+          "❌ Laporan bulanan\n" +
+          "❌ Data GPS & undian\n" +
+          "❌ Input produksi & gudang\n" +
+          "❌ SEMUA data pelanggan (nama, alamat, foto, barcode)\n\n" +
+          "YANG TETAP HANYA:\n" +
+          "✅ User (SuperAdmin, Admin, Sales, Gudang, Produksi)\n" +
+          "✅ Master produk & harga",
+      },
+      {
+        heading: "Step 3: Konfirmasi Ganda (Anti Iseng)",
+        body:
+          "Setelah tap tombol reset, muncul dialog konfirmasi.\n\n" +
+          "Anda WAJIB ketik teks konfirmasi PERSIS:\n" +
+          "• Untuk HALF RESET: ketik   RESET PENJUALAN\n" +
+          "• Untuk ALL RESET: ketik   RESET SEMUA\n\n" +
+          "Tombol \"Reset Sekarang\" hanya aktif kalau teks cocok 100%.\n\n" +
+          "💡 Kalau ragu, tekan Batal — data aman.",
+      },
+      {
+        heading: "Step 4: Verifikasi Setelah Reset",
+        body:
+          "Setelah reset sukses, akan muncul notifikasi hijau \"Reset sukses. XX record dihapus\".\n\n" +
+          "Cek:\n" +
+          "1. Beranda SuperAdmin — semua angka jadi 0\n" +
+          "2. Menu User — akun masih lengkap (login ulang tidak perlu)\n" +
+          "3. Menu Produk — daftar produk masih ada\n" +
+          "4. Menu Kelola Part — daftar part masih ada\n" +
+          "5. Data Pelanggan — tetap ada (HALF) / kosong (ALL)",
+      },
+      {
+        heading: "💡 Kapan Sebaiknya Reset?",
+        body:
+          "HALF RESET — cocok untuk:\n" +
+          "• Reset awal tahun / awal bulan pembukuan baru\n" +
+          "• Setelah bulan uji coba (data pelanggan tetap terpakai)\n" +
+          "• Sistem terlalu banyak data lama tak terpakai\n\n" +
+          "ALL RESET — cocok untuk:\n" +
+          "• Ganti pemilik bisnis / franchise baru\n" +
+          "• Setelah demo / training internal (data dummy)\n" +
+          "• Setup ulang dari nol\n\n" +
+          "TIDAK PERLU RESET kalau:\n" +
+          "• Sekedar mau lihat laporan bulan lalu (pakai filter tanggal)\n" +
+          "• Ada transaksi salah (edit / hapus 1 item saja lewat menu Transaksi)",
+      },
+    ],
+  },
+  {
     id: "tips",
     icon: "bulb",
     title: "💡 Tips & Trik",

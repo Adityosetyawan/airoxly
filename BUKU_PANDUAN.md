@@ -363,6 +363,75 @@ Riwayat semua barang datang tampil di bawah. Long-press untuk hapus.
 
 ---
 
+## 🔄 7. Cara Reset Data (SuperAdmin)
+
+### ⚠️ PENTING — Baca Dulu Sebelum Reset
+
+Reset data adalah **aksi PERMANEN dan TIDAK BISA DIBATALKAN**.
+
+**Sebelum reset, WAJIB:**
+1. **Backup data** — buka menu **Bulanan** → Export laporan bulan berjalan
+2. Pastikan **semua setoran sales** sudah tercatat & diverifikasi
+3. Screenshot dashboard sebagai referensi visual
+
+Reset hanya bisa dilakukan oleh **Super Admin**.
+
+### Step 1 — Masuk ke Settings
+
+![Zona Berbahaya](/panduan-img/50_reset_zona.jpeg)
+
+1. Login sebagai `superadmin`
+2. **TAP 7 KALI pada logo/header** aplikasi di beranda
+3. Menu Settings akan terbuka
+4. **Scroll ke bawah** sampai muncul kotak merah **"⚠️ Zona Berbahaya"**
+
+### Step 2 — Pilih Jenis Reset
+
+| Tombol | Yang Dihapus | Yang Tetap |
+|--------|--------------|------------|
+| 🟠 **HALF RESET** | Transaksi, pengeluaran, laporan, GPS, undian, produksi, gudang | ✅ Pelanggan (nama, foto, barcode) · Semua user · Produk · Part |
+| 🔴 **ALL RESET** | **Semua di atas + data pelanggan** (nama, alamat, foto, barcode) | ✅ Semua user · Produk (hanya master data) |
+
+**Kapan pakai HALF RESET?**
+- Reset awal tahun / awal bulan pembukuan baru
+- Setelah bulan uji coba
+- Data lama menumpuk
+
+**Kapan pakai ALL RESET?**
+- Ganti pemilik bisnis / franchise baru
+- Setelah demo / training (data dummy)
+- Setup ulang dari nol
+
+### Step 3 — Konfirmasi Ganda (Anti Iseng)
+
+Setelah tap tombol reset, muncul dialog konfirmasi. Anda **WAJIB ketik teks konfirmasi PERSIS**:
+
+- Untuk **HALF RESET**: ketik `RESET PENJUALAN`
+- Untuk **ALL RESET**: ketik `RESET SEMUA`
+
+Tombol **"Reset Sekarang"** hanya aktif kalau teks cocok 100%.
+
+💡 **Kalau ragu, tekan Batal** — data aman.
+
+### Step 4 — Verifikasi Setelah Reset
+
+Setelah reset sukses, muncul notifikasi hijau **"Reset sukses. XX record dihapus"**.
+
+**Cek:**
+1. Beranda SuperAdmin — semua angka jadi 0
+2. Menu **User** — akun masih lengkap (login tidak perlu ulang)
+3. Menu **Produk** — daftar produk masih ada
+4. Menu **Kelola Part** — daftar part masih ada
+5. **Data Pelanggan** — tetap ada (HALF) / kosong (ALL)
+
+### ⚠️ TIDAK PERLU RESET Kalau:
+
+- Sekedar mau lihat laporan bulan lalu → pakai **filter tanggal** di menu Bulanan
+- Ada transaksi salah → edit/hapus **1 item saja** lewat menu Transaksi
+- Salah input harga → langsung edit di **Kelola Part** / **Master Produk**
+
+---
+
 ## 💡 Tips & Trik
 
 ### Untuk Semua Pengguna:

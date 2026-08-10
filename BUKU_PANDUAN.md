@@ -141,10 +141,35 @@ Daftar semua pelanggan yang Anda kelola. Bisa search, filter berdasarkan hutang,
 
 ![Scan / Baru](/panduan-img/12_sales_scan.jpeg)
 
-Scan barcode pelanggan (ID unik OXLY-xxx) atau tambah pelanggan baru dengan:
-- Nama, WhatsApp, alamat
-- Lokasi GPS otomatis
-- Foto lokasi (opsional)
+Scan barcode pelanggan (ID unik OXLY-xxx) atau tambah pelanggan baru.
+
+### 3.3.1 Form "Pelanggan Baru" 🆕
+
+![Form Pelanggan Baru](/panduan-img/14_sales_pelanggan_baru.jpeg)
+
+**Langkah:**
+1. **Nama** (wajib) & **No. WhatsApp**
+2. **Alamat** — tulis lengkap agar mudah dicari
+3. **Barcode/QR** — kosongkan untuk auto-generate (format `[KODE_SALES]-OXLY-[nomor]`)
+4. **Ambil Lokasi GPS Sekarang** — tekan sambil berdiri di depan rumah pelanggan agar akurat
+
+### 3.3.2 Foto Rumah Pelanggan 📸
+
+![Foto Rumah](/panduan-img/15_sales_foto_rumah.jpeg)
+
+**Fitur baru!** Sertakan foto tampak depan rumah pelanggan supaya:
+- Sales lain / sales baru mudah menemukan lokasi
+- Bukti visual untuk Admin & SuperAdmin
+- Membantu pengenalan pelanggan setelah lama tidak dikunjungi
+
+**Cara pakai:**
+1. Tekan tombol besar **"📷 Foto rumah pelanggan"**
+2. Kamera akan aktif (galeri di-disable untuk audit)
+3. Ambil foto tampak depan rumah dengan patokan (pagar, nomor rumah, warna)
+4. **Watermark otomatis** — tanggal & jam tercetak di foto
+5. Foto langsung tersimpan di form
+
+**Kalau ingin ubah/hapus:** buka detail pelanggan → tap **Edit** → ganti foto atau kosongkan.
 
 ### 3.4 Transaksi Baru
 

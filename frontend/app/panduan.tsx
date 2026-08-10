@@ -130,9 +130,21 @@ const SECTIONS: Section[] = [
         img: "11_sales_pelanggan.jpeg",
       },
       {
+        heading: "Tambah Pelanggan Baru (dengan Foto Rumah)",
+        body:
+          "1. Menu Scan/Baru → tab \"+ Pelanggan Baru\"\n2. Isi Nama, WhatsApp, Alamat\n3. Barcode: kosongkan untuk auto-generate (kode unik)\n4. Tekan \"Ambil Lokasi GPS Sekarang\" — berdiri di depan rumah pelanggan\n5. 🏠 Foto Rumah (opsional tapi disarankan):\n   • Kamera aktif dengan watermark otomatis (tanggal/jam)\n   • Foto tampak depan dengan patokan (pagar, nomor rumah)\n6. Tekan \"Simpan Pelanggan\"\n\nFoto akan tampil di detail pelanggan untuk semua role (Sales, Admin, SuperAdmin).",
+        img: "14_sales_pelanggan_baru.jpeg",
+      },
+      {
+        heading: "📸 Foto Rumah — Section Detail",
+        body:
+          "Section Foto Rumah punya tombol kamera besar dengan badge \"auto-stempel 📅\".\n\nTujuan foto rumah:\n• Memudahkan sales lain / sales baru menemukan lokasi pelanggan\n• Bukti visual untuk Admin / SuperAdmin\n• Bisa di-zoom full-screen dari halaman detail\n\nBisa diubah/dihapus kapan saja lewat menu \"Edit Pelanggan\".",
+        img: "15_sales_foto_rumah.jpeg",
+      },
+      {
         heading: "Scan Barcode / Tambah Baru",
         body:
-          "Scan barcode pelanggan (ID unik OXLY-xxx) atau tambah pelanggan baru:\n• Nama, WhatsApp, alamat\n• Lokasi GPS otomatis\n• Foto lokasi (opsional)",
+          "Scan barcode pelanggan (ID unik OXLY-xxx) atau tambah pelanggan baru:\n• Nama, WhatsApp, alamat\n• Lokasi GPS otomatis\n• Foto rumah (opsional, dengan watermark)",
         img: "12_sales_scan.jpeg",
       },
       {

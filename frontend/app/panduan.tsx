@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image, Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -283,6 +283,26 @@ export default function PanduanScreen() {
         <View style={{ width: 40 }} />
       </View>
 
+      <View style={styles.pdfBar}>
+        <Ionicons name="document-text-outline" size={18} color="#065f46" />
+        <Text style={styles.pdfText}>Butuh versi cetak?</Text>
+        <TouchableOpacity
+          onPress={() => {
+            const url = "/BUKU_PANDUAN.pdf";
+            if (Platform.OS === "web" && typeof window !== "undefined") {
+              window.open(url, "_blank");
+            } else {
+              Linking.openURL(url);
+            }
+          }}
+          style={styles.pdfBtn}
+          testID="download-pdf-btn"
+        >
+          <Ionicons name="download-outline" size={16} color="#fff" />
+          <Text style={styles.pdfBtnText}>Download PDF</Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView contentContainerStyle={styles.body}>
         {SECTIONS.map((sec) => (
           <SectionCard
@@ -357,6 +377,27 @@ const styles = StyleSheet.create({
   back: { padding: 8 },
   title: { fontSize: 17, fontWeight: "700", color: theme.color.onSurface },
   subtitle: { fontSize: 11, color: theme.color.muted, marginTop: 2 },
+  pdfBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: "#ecfdf5",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#a7f3d0",
+  },
+  pdfText: { flex: 1, fontSize: 12, color: "#065f46", fontWeight: "600" },
+  pdfBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: "#059669",
+  },
+  pdfBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
   body: { padding: 12, paddingBottom: 60, gap: 10 },
   card: {
     backgroundColor: theme.color.surface,

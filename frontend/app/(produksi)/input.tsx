@@ -12,6 +12,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { AppHeader } from "@/src/components/AppHeader";
 import { PhotoCapture } from "@/src/components/PhotoCapture";
+import { NumStepper } from "@/src/components/NumStepper";
 import { theme } from "@/src/theme";
 import { api } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
@@ -43,8 +44,11 @@ export default function ProduksiInput() {
     shift: "pagi",
     sales_id: "",
     destination: "gudang" as "gudang" | "sales",
-    manual_adjust: "0",         // +/- string agar user bisa ketik "-2"
+    manual_adjust: "0",         // +/- foto SESUDAH (mempengaruhi total)
+    manual_adjust_before: "0",  // +/- foto SEBELUM (referensi saja)
     galon_ganti: "",
+    galon_kran: "",
+    galon_polos: "",
     sil_ganti: "",
     mur_ganti: "",
     kran_ganti: "",
@@ -106,11 +110,14 @@ export default function ProduksiInput() {
         ai_count_before: aiBefore?.count ?? null,
         ai_count_after: aiAfter?.count ?? null,
         manual_adjust: manualN,
+        manual_adjust_before: parseInt(form.manual_adjust_before || "0") || 0,
         produksi_galon: Math.max(0, totalProduksi),
         photo_before: photoBefore || null,
         photo_after: photoAfter || null,
         ai_confidence: aiAfter?.confidence || null,
         galon_ganti: parseInt(form.galon_ganti || "0") || 0,
+        galon_kran: parseInt(form.galon_kran || "0") || 0,
+        galon_polos: parseInt(form.galon_polos || "0") || 0,
         sil_ganti: parseInt(form.sil_ganti || "0") || 0,
         mur_ganti: parseInt(form.mur_ganti || "0") || 0,
         kran_ganti: parseInt(form.kran_ganti || "0") || 0,
@@ -129,7 +136,7 @@ export default function ProduksiInput() {
       setPhotoAfter(null);
       setAiBefore(null);
       setAiAfter(null);
-      setForm((f) => ({ ...f, manual_adjust: "0", galon_ganti: "", sil_ganti: "", mur_ganti: "", kran_ganti: "", stiker_ganti: "", stoper_ganti: "", karet_kran_ganti: "", note: "" }));
+      setForm((f) => ({ ...f, manual_adjust: "0", manual_adjust_before: "0", galon_ganti: "", galon_kran: "", galon_polos: "", sil_ganti: "", mur_ganti: "", kran_ganti: "", stiker_ganti: "", stoper_ganti: "", karet_kran_ganti: "", note: "" }));
     } catch (e: any) {
       toast.show(e?.message || "Gagal simpan", "error");
     } finally {
@@ -238,6 +245,15 @@ export default function ProduksiInput() {
               <Text style={styles.aiDesc}>{aiBefore.reasoning}</Text>
             </View>
           ) : null}
+          {photoBefore ? (
+            <NumStepper
+              label="Penyesuaian +/- (referensi)"
+              value={form.manual_adjust_before}
+              onChange={(v) => setF("manual_adjust_before", v)}
+              hint="Sesuaikan jika jumlah kenyataan berbeda dari AI"
+              testID="adjust-before"
+            />
+          ) : null}
 
           <SectionTitle>2️⃣ Foto Galon Isi (SETELAH diisi)</SectionTitle>
           <PhotoCapture
@@ -258,25 +274,15 @@ export default function ProduksiInput() {
               <Text style={styles.aiDesc}>{aiAfter.reasoning}</Text>
             </View>
           ) : null}
-
-          <SectionTitle>3️⃣ Penyesuaian Manual (+/−)</SectionTitle>
-          <View style={styles.adjustRow}>
-            <TouchableOpacity onPress={() => setF("manual_adjust", String((parseInt(form.manual_adjust || "0") || 0) - 1))} style={styles.adjBtn}>
-              <Ionicons name="remove" size={20} color="#fff" />
-            </TouchableOpacity>
-            <TextInput
+          {photoAfter ? (
+            <NumStepper
+              label="Penyesuaian +/- (mempengaruhi TOTAL)"
               value={form.manual_adjust}
-              onChangeText={(v) => setF("manual_adjust", v.replace(/[^\-\d]/g, ""))}
-              keyboardType={Platform.OS === "ios" ? "numbers-and-punctuation" : "numeric"}
-              placeholder="0"
-              style={styles.adjInput}
-              testID="manual-adjust-input"
+              onChange={(v) => setF("manual_adjust", v)}
+              hint="Contoh: -2 kalau 2 galon rusak / bocor"
+              testID="adjust-after"
             />
-            <TouchableOpacity onPress={() => setF("manual_adjust", String((parseInt(form.manual_adjust || "0") || 0) + 1))} style={[styles.adjBtn, { backgroundColor: theme.color.success }]}>
-              <Ionicons name="add" size={20} color="#fff" />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.adjHint}>Sesuaikan jika jumlah kenyataan di mobil beda dari AI (contoh: -2 kalau 2 galon rusak)</Text>
+          ) : null}
 
           <View style={styles.totalBox}>
             <View style={{ flex: 1 }}>
@@ -287,7 +293,7 @@ export default function ProduksiInput() {
             <Text style={styles.totalUnit}>gln</Text>
           </View>
 
-          <SectionTitle>4️⃣ Destinasi</SectionTitle>
+          <SectionTitle>3️⃣ Destinasi</SectionTitle>
           <View style={styles.destRow}>
             <TouchableOpacity
               onPress={() => setF("destination", "gudang")}
@@ -313,6 +319,12 @@ export default function ProduksiInput() {
             </TouchableOpacity>
           </View>
 
+          <SectionTitle>Penggantian Galon (opsional)</SectionTitle>
+          <View style={styles.rowTwo}>
+            <NumFieldSmall label="Galon Kran (➖ Stok Kran)" value={form.galon_kran} onChange={(v) => setF("galon_kran", v)} />
+            <NumFieldSmall label="Galon Polos (➖ Stok Polos)" value={form.galon_polos} onChange={(v) => setF("galon_polos", v)} />
+          </View>
+
           <SectionTitle>Sparepart Ganti (opsional)</SectionTitle>
           <View style={styles.rowTwo}>
             <NumFieldSmall label="Galon Ganti" value={form.galon_ganti} onChange={(v) => setF("galon_ganti", v)} />
@@ -325,6 +337,10 @@ export default function ProduksiInput() {
           <View style={styles.rowTwo}>
             <NumFieldSmall label="Stiker" value={form.stiker_ganti} onChange={(v) => setF("stiker_ganti", v)} />
             <NumFieldSmall label="Karet Kran" value={form.karet_kran_ganti} onChange={(v) => setF("karet_kran_ganti", v)} />
+          </View>
+          <View style={styles.rowTwo}>
+            <NumFieldSmall label="Stoper" value={form.stoper_ganti} onChange={(v) => setF("stoper_ganti", v)} />
+            <View style={{ flex: 1 }} />
           </View>
 
           <Row label="Catatan (opsional)">

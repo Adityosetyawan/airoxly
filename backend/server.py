@@ -2132,6 +2132,8 @@ class ProductionDailyCreate(BaseModel):
     shift: str  # dinamis — key dari settings shifts (pagi/siang/malam by default)
     sales_id: str  # sales user id (group)
     galon_ganti: int = 0
+    galon_kran: int = 0    # penggantian galon kran (mengurangi stok galon kran)
+    galon_polos: int = 0   # penggantian galon polos (mengurangi stok galon polos)
     sil_ganti: int = 0
     mur_ganti: int = 0
     kran_ganti: int = 0
@@ -2144,7 +2146,8 @@ class ProductionDailyCreate(BaseModel):
     destination: Literal["gudang", "sales"] = "gudang"  # kirim gudang atau langsung jual
     ai_count_before: Optional[int] = None   # dari AI foto galon kosong sebelum diisi
     ai_count_after: Optional[int] = None    # dari AI foto galon isi setelah diisi
-    manual_adjust: int = 0                   # +/- penyesuaian manual (±N)
+    manual_adjust: int = 0                   # +/- penyesuaian manual untuk foto SESUDAH
+    manual_adjust_before: int = 0            # +/- penyesuaian manual untuk foto SEBELUM
     photo_before: Optional[str] = None      # foto galon kosong (watermarked)
     photo_after: Optional[str] = None       # foto galon isi (watermarked)
     ai_confidence: Optional[str] = None     # "low"/"medium"/"high" — reference only
@@ -2189,6 +2192,8 @@ class ProductionDailyUpdate(BaseModel):
     shift: Optional[str] = None  # dinamis — key shift dari settings
     sales_id: Optional[str] = None
     galon_ganti: Optional[int] = None
+    galon_kran: Optional[int] = None
+    galon_polos: Optional[int] = None
     sil_ganti: Optional[int] = None
     mur_ganti: Optional[int] = None
     kran_ganti: Optional[int] = None
@@ -2200,6 +2205,7 @@ class ProductionDailyUpdate(BaseModel):
     ai_count_before: Optional[int] = None
     ai_count_after: Optional[int] = None
     manual_adjust: Optional[int] = None
+    manual_adjust_before: Optional[int] = None
     photo_before: Optional[str] = None  # "" untuk unset
     photo_after: Optional[str] = None
     ai_confidence: Optional[str] = None

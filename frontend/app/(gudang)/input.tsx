@@ -12,6 +12,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { AppHeader } from "@/src/components/AppHeader";
 import { PhotoCapture } from "@/src/components/PhotoCapture";
+import { NumStepper } from "@/src/components/NumStepper";
 import { theme } from "@/src/theme";
 import { api } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
@@ -269,17 +270,15 @@ export default function GudangInput() {
             ) : null}
           </Row>
 
-          <SectionTitle>1️⃣ Bawa Isi (dari foto real)</SectionTitle>
-          <View style={styles.rowTwo}>
-            <NumFieldSmall label="Bawa Isi Pagi" value={form.bawa_pagi} onChange={(v) => setF("bawa_pagi", v)} />
-            <NumFieldSmall label="Bawa Isi Siang" value={form.bawa_siang} onChange={(v) => setF("bawa_siang", v)} />
-          </View>
+          <SectionTitle>1️⃣ Bawa Isi (dari foto real + penyesuaian)</SectionTitle>
           <View style={styles.photoGrid}>
             <View style={{ flex: 1 }}>
               <PhotoCapture value={photoIsiPagi} onChange={setPhotoIsiPagi} label="Isi Pagi" watermark testID="photo-isi-pagi" />
+              <NumStepper value={form.bawa_pagi} onChange={(v) => setF("bawa_pagi", v)} label="Bawa Isi Pagi" allowNegative={false} testID="stepper-bawa-pagi" />
             </View>
             <View style={{ flex: 1 }}>
               <PhotoCapture value={photoIsiSiang} onChange={setPhotoIsiSiang} label="Isi Siang" watermark testID="photo-isi-siang" />
+              <NumStepper value={form.bawa_siang} onChange={(v) => setF("bawa_siang", v)} label="Bawa Isi Siang" allowNegative={false} testID="stepper-bawa-siang" />
             </View>
           </View>
 
@@ -297,17 +296,15 @@ export default function GudangInput() {
             <Text style={styles.terjualValue}>{terjual}</Text>
           </View>
 
-          <SectionTitle>3️⃣ Galon Kembali (dari foto real)</SectionTitle>
-          <View style={styles.rowTwo}>
-            <NumFieldSmall label="Galon Kembali Siang" value={form.kosong_kembali_siang} onChange={(v) => setF("kosong_kembali_siang", v)} />
-            <NumFieldSmall label="Galon Kembali Sore" value={form.kosong_kembali_sore} onChange={(v) => setF("kosong_kembali_sore", v)} />
-          </View>
+          <SectionTitle>3️⃣ Galon Kembali (dari foto real + penyesuaian)</SectionTitle>
           <View style={styles.photoGrid}>
             <View style={{ flex: 1 }}>
               <PhotoCapture value={photoKosongSiang} onChange={setPhotoKosongSiang} label="Galon Siang" watermark testID="photo-galon-siang" />
+              <NumStepper value={form.kosong_kembali_siang} onChange={(v) => setF("kosong_kembali_siang", v)} label="Galon Kembali Siang" allowNegative={false} testID="stepper-kembali-siang" />
             </View>
             <View style={{ flex: 1 }}>
               <PhotoCapture value={photoKosongSore} onChange={setPhotoKosongSore} label="Galon Sore" watermark testID="photo-galon-sore" />
+              <NumStepper value={form.kosong_kembali_sore} onChange={(v) => setF("kosong_kembali_sore", v)} label="Galon Kembali Sore" allowNegative={false} testID="stepper-kembali-sore" />
             </View>
           </View>
           {kosongPulang > 0 || form.sales_id ? (

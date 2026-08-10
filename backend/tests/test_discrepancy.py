@@ -192,15 +192,15 @@ class TestDiscrepancyFlow:
     def test_merah_then_hijau_then_clear_then_restore(
         self, http: requests.Session, tokens: dict
     ):
-        # Skenario MERAH: bawa=5, galon_kembali=8 → selisih=-3, merah=3
+        # Skenario MERAH: bawa=8, galon_kembali=5 → kembali<bawa → merah=3
         wh = http.post(
             f"{BASE_URL}/warehouse/daily",
             json={
                 "date": DATE_T3,
                 "shift": "pagi",
                 "sales_id": SALES_A1_ID,
-                "bawa_pagi": 5,
-                "kosong_kembali_siang": 8,
+                "bawa_pagi": 8,
+                "kosong_kembali_siang": 5,
             },
             headers=_auth(tokens["gudang"]),
         )
@@ -224,14 +224,14 @@ class TestDiscrepancyFlow:
         assert e["sales_id"] == SALES_A1_ID
         assert e["merah"] == 3, e
         assert e["hijau"] == 0, e
-        assert e["bawa_total"] == 5
-        assert e["galon_kembali"] == 8
+        assert e["bawa_total"] == 8
+        assert e["galon_kembali"] == 5
         assert e["selisih"] == -3
 
-        # PATCH bawa_pagi=12 → selisih=+4 → hijau=4
+        # PATCH kosong_kembali_siang=12 → kembali=12 > bawa=8 → hijau=4
         p = http.patch(
             f"{BASE_URL}/warehouse/daily/{wh_id}",
-            json={"bawa_pagi": 12},
+            json={"kosong_kembali_siang": 12},
             headers=_auth(tokens["gudang"]),
         )
         assert p.status_code == 200, p.text
@@ -361,29 +361,29 @@ class TestDiscrepancySummary:
     def test_summary_aggregation_two_days(
         self, http: requests.Session, tokens: dict
     ):
-        # Day A → merah=3: bawa=2, kembali=5 → selisih=-3
+        # Day A → merah=3: bawa=5, kembali=2 → selisih=-3
         wh_a = http.post(
             f"{BASE_URL}/warehouse/daily",
             json={
                 "date": DATE_T5_A,
                 "shift": "pagi",
                 "sales_id": SALES_A1_ID,
-                "bawa_pagi": 2,
-                "kosong_kembali_siang": 5,
+                "bawa_pagi": 5,
+                "kosong_kembali_siang": 2,
             },
             headers=_auth(tokens["gudang"]),
         )
         assert wh_a.status_code == 200, wh_a.text
 
-        # Day B → hijau=2: bawa=10, kembali=8 → selisih=+2
+        # Day B → hijau=2: bawa=8, kembali=10 → selisih=+2
         wh_b = http.post(
             f"{BASE_URL}/warehouse/daily",
             json={
                 "date": DATE_T5_B,
                 "shift": "pagi",
                 "sales_id": SALES_A1_ID,
-                "bawa_pagi": 10,
-                "kosong_kembali_siang": 8,
+                "bawa_pagi": 8,
+                "kosong_kembali_siang": 10,
             },
             headers=_auth(tokens["gudang"]),
         )

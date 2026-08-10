@@ -2552,14 +2552,15 @@ app.include_router(prod_wh)
 # ============================================================
 # WAREHOUSE — DISCREPANCY (Selisih Galon Merah/Hijau)
 # ============================================================
-# Definisi bisnis (dikonfirmasi user, revisi 2):
-#   Bandingkan galon ISI yang dibawa vs galon yang KEMBALI (dari sales).
+# Definisi bisnis (dikonfirmasi user via contoh konkret):
 #   bawa_total    = Σ (bawa_pagi + bawa_siang)                      [galon isi]
 #   galon_kembali = Σ (kosong_kembali_siang + kosong_kembali_sore)  [galon kembali]
-#   selisih       = bawa_total − galon_kembali
-#     selisih > 0 → HIJAU (LEBIH, bawa > kembali)   selisih
-#     selisih < 0 → MERAH (KURANG, bawa < kembali)  |selisih|
-#     selisih = 0 → aman (tidak ada tanda)
+#   selisih       = galon_kembali − bawa_total
+#     Contoh: bawa 70, kembali 50 → selisih=-20 → MERAH (KURANG) 20
+#             bawa 70, kembali 90 → selisih=+20 → HIJAU (LEBIH)  20
+#     selisih > 0 → HIJAU (LEBIH, kembali > bawa)
+#     selisih < 0 → MERAH (KURANG, kembali < bawa)
+#     selisih = 0 → aman
 # Tanda otomatis HILANG saat Gudang mengedit angka sehingga selisih=0.
 # Admin/super_admin bisa memaksa hijau=0 lewat clear-hijau (marker hijau_cleared).
 
@@ -2587,8 +2588,8 @@ async def _compute_discrepancy_for_date(sales_id: str, date: str) -> dict:
         else:
             galon_kembali += int(kk_siang or 0) + int(kk_sore or 0)
     hijau_cleared_any = any(e.get("hijau_cleared") for e in wh_entries)
-    selisih = bawa_total - galon_kembali
-    # LEBIH (hijau) → bawa > kembali ; KURANG (merah) → bawa < kembali
+    selisih = galon_kembali - bawa_total
+    # LEBIH (hijau) → kembali > bawa ; KURANG (merah) → kembali < bawa
     hijau_raw = selisih if selisih > 0 else 0
     merah = -selisih if selisih < 0 else 0
     hijau = 0 if hijau_cleared_any else hijau_raw

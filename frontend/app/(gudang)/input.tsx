@@ -170,6 +170,8 @@ export default function GudangInput() {
               </Text>
               <Text style={styles.discrepancyDesc}>
                 Bawa Isi: {(discrepancy as any).bawa_total ?? discrepancy.galon_ganti_produksi} · Galon Kembali: {(discrepancy as any).galon_kembali ?? discrepancy.kosong_pulang}
+                {" "}·{" "}
+                {discrepancy.merah > 0 ? "Kembali < Bawa" : "Kembali > Bawa"}
               </Text>
             </View>
           </View>

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Platform, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image, Modal, Platform, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
@@ -21,6 +21,7 @@ export default function CustomerDetail() {
   const [showQR, setShowQR] = useState(false);
   const [qrBusy, setQrBusy] = useState<null | "share" | "save">(null);
   const [locBusy, setLocBusy] = useState(false);
+  const [photoZoom, setPhotoZoom] = useState(false);
   const qrShotRef = useRef<ViewShot>(null);
 
   const load = useCallback(async () => {
@@ -218,6 +219,26 @@ export default function CustomerDetail() {
           <Row label="Terakhir beli" value={c.last_purchase_date ? new Date(c.last_purchase_date).toLocaleString("id-ID") : "Belum pernah"} />
         </View>
 
+        {c.photo_rumah ? (
+          <View style={styles.photoCard}>
+            <View style={styles.photoHeader}>
+              <Ionicons name="home" size={16} color={theme.color.brand} />
+              <Text style={styles.photoTitle}>Foto Rumah Pelanggan</Text>
+            </View>
+            <TouchableOpacity onPress={() => setPhotoZoom(true)} activeOpacity={0.8} testID="open-photo-rumah">
+              <Image
+                source={{ uri: c.photo_rumah }}
+                style={styles.photoRumah}
+                resizeMode="cover"
+              />
+              <View style={styles.zoomHint}>
+                <Ionicons name="expand" size={14} color="#fff" />
+                <Text style={styles.zoomHintText}>Tap untuk perbesar</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         <TouchableOpacity
           onPress={setLocation}
           disabled={locBusy}
@@ -280,6 +301,21 @@ export default function CustomerDetail() {
         ))}
         {txns.length === 0 && <Text style={styles.emptyText}>Belum ada transaksi</Text>}
       </ScrollView>
+
+      {/* Modal zoom Foto Rumah */}
+      <Modal visible={photoZoom} transparent animationType="fade" onRequestClose={() => setPhotoZoom(false)}>
+        <TouchableOpacity style={styles.zoomOverlay} activeOpacity={1} onPress={() => setPhotoZoom(false)}>
+          <View style={styles.zoomHeader}>
+            <Text style={styles.zoomHeaderText}>Foto Rumah — {c?.name}</Text>
+            <TouchableOpacity onPress={() => setPhotoZoom(false)} style={styles.zoomClose}>
+              <Ionicons name="close" size={22} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          {c?.photo_rumah ? (
+            <Image source={{ uri: c.photo_rumah }} style={styles.zoomImg} resizeMode="contain" />
+          ) : null}
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -295,6 +331,54 @@ function Row({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: theme.color.surface },
+  photoCard: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+    borderRadius: 14,
+    overflow: "hidden",
+    backgroundColor: theme.color.surfaceSecondary,
+  },
+  photoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    padding: 10,
+    backgroundColor: theme.color.brandTertiary,
+  },
+  photoTitle: { fontSize: 13, fontWeight: "700", color: theme.color.brand },
+  photoRumah: { width: "100%", aspectRatio: 4 / 3, backgroundColor: "#000" },
+  zoomHint: {
+    position: "absolute",
+    right: 8,
+    bottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  zoomHintText: { color: "#fff", fontSize: 10, fontWeight: "600" },
+  zoomOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  zoomHeader: {
+    position: "absolute",
+    top: 40,
+    left: 16,
+    right: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  zoomHeaderText: { color: "#fff", fontSize: 15, fontWeight: "700", flex: 1 },
+  zoomClose: { padding: 8, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.15)" },
+  zoomImg: { width: "100%", height: "80%" },
   header: {
     flexDirection: "row",
     alignItems: "center",

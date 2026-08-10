@@ -16,6 +16,7 @@ import * as Location from "expo-location";
 import { theme } from "@/src/theme";
 import { api } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
+import { PhotoCapture } from "@/src/components/PhotoCapture";
 
 export default function NewCustomer() {
   const params = useLocalSearchParams<{ barcode?: string }>();
@@ -28,6 +29,7 @@ export default function NewCustomer() {
   const [loading, setLoading] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locBusy, setLocBusy] = useState(false);
+  const [photoRumah, setPhotoRumah] = useState<string | null>(null);
 
   const captureLocation = async () => {
     setLocBusy(true);
@@ -68,7 +70,8 @@ export default function NewCustomer() {
         barcode_id: barcode.trim() || undefined,
         lat: coords?.lat,
         lng: coords?.lng,
-      });
+        photo_rumah: photoRumah || undefined,
+      } as any);
       toast.show("Pelanggan disimpan", "success");
       router.replace({ pathname: "/(sales)/customer/[id]", params: { id: c.id } });
     } catch (e: any) {
@@ -125,6 +128,19 @@ export default function NewCustomer() {
           </TouchableOpacity>
           <Text style={styles.hint}>
             Ambil sambil berdiri di depan rumah pelanggan agar akurat. Digunakan untuk overlay peta.
+          </Text>
+
+          <Text style={styles.label}>Foto Rumah Pelanggan (opsional)</Text>
+          <PhotoCapture
+            value={photoRumah}
+            onChange={setPhotoRumah}
+            label="Foto rumah pelanggan"
+            watermark
+            testID="photo-rumah"
+          />
+          <Text style={styles.hint}>
+            Foto tampak depan rumah pelanggan (dengan patokan seperti pagar, nomor rumah).
+            Auto-stempel tanggal & jam untuk audit.
           </Text>
 
           <TouchableOpacity onPress={save} disabled={loading} style={[styles.btn, loading && { opacity: 0.6 }]} testID="save-customer-btn">

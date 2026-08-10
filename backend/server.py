@@ -149,6 +149,7 @@ class CustomerCreate(BaseModel):
     barcode_id: Optional[str] = None  # if empty, auto-generated
     lat: Optional[float] = None
     lng: Optional[float] = None
+    photo_rumah: Optional[str] = None  # base64 / data URI foto rumah pelanggan
 
 
 class CustomerUpdate(BaseModel):
@@ -157,6 +158,7 @@ class CustomerUpdate(BaseModel):
     wa_number: Optional[str] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
+    photo_rumah: Optional[str] = None  # "" untuk hapus foto
 
 
 class TransactionItem(BaseModel):
@@ -844,6 +846,8 @@ async def create_customer(body: CustomerCreate, user=Depends(require_roles("sale
         "lng": body.lng,
         "created_at": now_utc().isoformat(),
     }
+    if body.photo_rumah:
+        doc["photo_rumah"] = body.photo_rumah
     await db.customers.insert_one(doc)
     return strip_id(doc)
 
@@ -857,9 +861,24 @@ async def update_customer(customer_id: str, body: CustomerUpdate, user=Depends(g
         raise HTTPException(403, "Forbidden")
     if user["role"] == "admin" and c.get("group_letter") != user.get("group_letter"):
         raise HTTPException(403, "Forbidden")
-    update = {k: v for k, v in body.dict(exclude_unset=True).items() if v is not None}
+    update_raw = body.dict(exclude_unset=True)
+    update: dict = {}
+    unset: dict = {}
+    for k, v in update_raw.items():
+        if v is None:
+            continue
+        # Kirim "" utk hapus foto
+        if k == "photo_rumah" and v == "":
+            unset["photo_rumah"] = ""
+        else:
+            update[k] = v
+    ops: dict = {}
     if update:
-        await db.customers.update_one({"id": customer_id}, {"$set": update})
+        ops["$set"] = update
+    if unset:
+        ops["$unset"] = unset
+    if ops:
+        await db.customers.update_one({"id": customer_id}, ops)
     updated = await db.customers.find_one({"id": customer_id}, {"_id": 0})
     return updated
 

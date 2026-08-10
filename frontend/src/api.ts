@@ -50,6 +50,7 @@ export type Customer = {
   last_purchase_date?: string | null;
   lat?: number | null;
   lng?: number | null;
+  photo_rumah?: string | null;
 };
 
 export type TransactionItem = {

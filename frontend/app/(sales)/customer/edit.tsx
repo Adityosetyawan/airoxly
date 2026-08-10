@@ -6,6 +6,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { theme } from "@/src/theme";
 import { api } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
+import { PhotoCapture } from "@/src/components/PhotoCapture";
 
 export default function EditCustomer() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -14,6 +15,8 @@ export default function EditCustomer() {
   const [name, setName] = useState("");
   const [wa, setWa] = useState("");
   const [address, setAddress] = useState("");
+  const [photoRumah, setPhotoRumah] = useState<string | null>(null);
+  const [origPhoto, setOrigPhoto] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -24,6 +27,8 @@ export default function EditCustomer() {
         setName(c.name);
         setWa(c.wa_number || "");
         setAddress(c.address || "");
+        setPhotoRumah(c.photo_rumah || null);
+        setOrigPhoto(c.photo_rumah || null);
       } catch (e: any) {
         toast.show(e.message || "Gagal", "error");
       } finally {
@@ -35,7 +40,12 @@ export default function EditCustomer() {
   const save = async () => {
     setSaving(true);
     try {
-      await api.updateCustomer(id!, { name, wa_number: wa, address });
+      const body: any = { name, wa_number: wa, address };
+      // Kirim foto hanya kalau ada perubahan
+      if (photoRumah !== origPhoto) {
+        body.photo_rumah = photoRumah || ""; // "" utk hapus
+      }
+      await api.updateCustomer(id!, body);
       toast.show("Tersimpan", "success");
       router.back();
     } catch (e: any) {
@@ -70,6 +80,14 @@ export default function EditCustomer() {
           <TextInput value={wa} onChangeText={setWa} keyboardType="phone-pad" style={styles.input} testID="wa-input" />
           <Text style={styles.label}>Alamat</Text>
           <TextInput value={address} onChangeText={setAddress} multiline style={[styles.input, { minHeight: 80, textAlignVertical: "top" }]} testID="address-input" />
+          <Text style={styles.label}>Foto Rumah</Text>
+          <PhotoCapture
+            value={photoRumah}
+            onChange={setPhotoRumah}
+            label="Foto rumah pelanggan"
+            watermark
+            testID="photo-rumah-edit"
+          />
           <TouchableOpacity onPress={save} disabled={saving} style={[styles.btn, saving && { opacity: 0.6 }]} testID="save-btn">
             <Text style={styles.btnText}>{saving ? "Menyimpan…" : "Simpan"}</Text>
           </TouchableOpacity>

@@ -1,6 +1,8 @@
 import React, { useCallback, useState } from "react";
 import {
   FlatList,
+  Image,
+  Modal,
   RefreshControl,
   StyleSheet,
   Text,
@@ -23,6 +25,7 @@ export default function CustomerDetailReadonly({ customerId, onOpenTransaction }
   const [c, setC] = useState<Customer | null>(null);
   const [txns, setTxns] = useState<Transaction[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [photoZoom, setPhotoZoom] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -151,6 +154,22 @@ export default function CustomerDetailReadonly({ customerId, onOpenTransaction }
               </View>
             )}
 
+            {c.photo_rumah ? (
+              <TouchableOpacity
+                onPress={() => setPhotoZoom(true)}
+                activeOpacity={0.85}
+                style={styles.photoCard}
+                testID="photo-rumah-view"
+              >
+                <View style={styles.photoHeader}>
+                  <Ionicons name="home" size={14} color={theme.color.brand} />
+                  <Text style={styles.photoTitle}>Foto Rumah Pelanggan</Text>
+                  <Ionicons name="expand" size={14} color={theme.color.muted} />
+                </View>
+                <Image source={{ uri: c.photo_rumah }} style={styles.photoRumah} resizeMode="cover" />
+              </TouchableOpacity>
+            ) : null}
+
             <Text style={styles.section}>Riwayat Transaksi ({txns.length})</Text>
           </>
         }
@@ -204,6 +223,21 @@ export default function CustomerDetailReadonly({ customerId, onOpenTransaction }
           <Text style={styles.empty}>Belum ada transaksi</Text>
         }
       />
+
+      {/* Modal zoom Foto Rumah */}
+      <Modal visible={photoZoom} transparent animationType="fade" onRequestClose={() => setPhotoZoom(false)}>
+        <TouchableOpacity style={styles.zoomOverlay} activeOpacity={1} onPress={() => setPhotoZoom(false)}>
+          <View style={styles.zoomHeader}>
+            <Text style={styles.zoomHeaderText}>Foto Rumah — {c?.name}</Text>
+            <TouchableOpacity onPress={() => setPhotoZoom(false)} style={styles.zoomClose}>
+              <Ionicons name="close" size={22} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          {c?.photo_rumah ? (
+            <Image source={{ uri: c.photo_rumah }} style={styles.zoomImg} resizeMode="contain" />
+          ) : null}
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -230,6 +264,40 @@ function MiniCard({
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: theme.color.surface },
+  photoCard: {
+    marginTop: 12,
+    borderRadius: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: theme.color.border,
+  },
+  photoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    padding: 8,
+    backgroundColor: theme.color.brandTertiary,
+  },
+  photoTitle: { flex: 1, fontSize: 12, fontWeight: "700", color: theme.color.brand },
+  photoRumah: { width: "100%", aspectRatio: 4 / 3, backgroundColor: "#000" },
+  zoomOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  zoomHeader: {
+    position: "absolute",
+    top: 40,
+    left: 16,
+    right: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  zoomHeaderText: { color: "#fff", fontSize: 15, fontWeight: "700", flex: 1 },
+  zoomClose: { padding: 8, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.15)" },
+  zoomImg: { width: "100%", height: "80%" },
   header: {
     flexDirection: "row",
     alignItems: "center",

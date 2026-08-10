@@ -27,6 +27,8 @@ export default function SuperSettings() {
   const [savingGps, setSavingGps] = useState(false);
   const [radius, setRadius] = useState("100");
   const [gpsMin, setGpsMin] = useState("20");
+  const [shifts, setShifts] = useState<{ key: string; label: string; order?: number }[]>([]);
+  const [savingShifts, setSavingShifts] = useState(false);
 
   // Reset flows
   const [resetType, setResetType] = useState<null | "sales" | "all">(null);
@@ -36,12 +38,14 @@ export default function SuperSettings() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [r, g] = await Promise.all([
+      const [r, g, sh] = await Promise.all([
         api.getSetting("visit_radius_m").catch(() => null),
         api.getSetting("gps_min_move_m").catch(() => null),
+        api.getShifts().catch(() => null),
       ]);
       if (r?.value) setRadius(String(r.value));
       if (g?.value) setGpsMin(String(g.value));
+      if (sh?.shifts) setShifts(sh.shifts);
     } catch (e: any) {
       toast.show(e.message || "Gagal memuat pengaturan", "error");
     } finally {
@@ -178,6 +182,64 @@ export default function SuperSettings() {
         </View>
         <TouchableOpacity onPress={saveGpsMin} disabled={savingGps} style={[styles.btn, savingGps && { opacity: 0.6 }]} testID="save-gps-btn">
           <Text style={styles.btnText}>{savingGps ? "Menyimpan…" : "Simpan Filter GPS"}</Text>
+        </TouchableOpacity>
+
+        {/* Shifts CRUD */}
+        <Text style={styles.section}>Shift Produksi & Gudang</Text>
+        <Text style={styles.desc}>
+          Atur nama shift yang tersedia untuk input Produksi & Gudang. Default: Pagi, Siang, Malam.
+          Bisa tambah shift kustom seperti Lembur atau Subuh.
+        </Text>
+        {shifts.map((s, idx) => (
+          <View key={idx} style={styles.shiftRow}>
+            <TextInput
+              value={s.label}
+              onChangeText={(v) => setShifts((arr) => arr.map((x, i) => i === idx ? { ...x, label: v } : x))}
+              placeholder="Nama shift"
+              style={[styles.input, { flex: 1 }]}
+              testID={`shift-label-${idx}`}
+            />
+            <TextInput
+              value={s.key}
+              onChangeText={(v) => setShifts((arr) => arr.map((x, i) => i === idx ? { ...x, key: v.replace(/[^a-z0-9_]/g, "") } : x))}
+              placeholder="key"
+              autoCapitalize="none"
+              style={[styles.input, { width: 90 }]}
+              testID={`shift-key-${idx}`}
+            />
+            <TouchableOpacity onPress={() => setShifts((arr) => arr.filter((_, i) => i !== idx))} style={styles.shiftDel} testID={`shift-del-${idx}`}>
+              <Ionicons name="trash" size={16} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        ))}
+        <TouchableOpacity
+          onPress={() => setShifts((arr) => [...arr, { key: `shift${arr.length + 1}`, label: "Shift Baru" }])}
+          style={styles.addShiftBtn}
+          testID="add-shift-btn"
+        >
+          <Ionicons name="add-circle" size={18} color={theme.color.brandPrimary} />
+          <Text style={{ color: theme.color.brandPrimary, fontWeight: "700", fontSize: 13 }}>Tambah Shift</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={async () => {
+            if (shifts.length === 0) { toast.show("Minimal 1 shift", "error"); return; }
+            setSavingShifts(true);
+            try {
+              const payload = shifts.map((s, i) => ({ key: s.key || `shift${i + 1}`, label: s.label || `Shift ${i + 1}`, order: i + 1 }));
+              const r = await api.setShifts(payload);
+              setShifts(r.shifts || payload);
+              toast.show("Daftar shift tersimpan", "success");
+            } catch (e: any) {
+              toast.show(e.message || "Gagal simpan shift", "error");
+            } finally {
+              setSavingShifts(false);
+            }
+          }}
+          disabled={savingShifts}
+          style={[styles.btn, savingShifts && { opacity: 0.6 }]}
+          testID="save-shifts-btn"
+        >
+          <Text style={styles.btnText}>{savingShifts ? "Menyimpan…" : "Simpan Shift"}</Text>
         </TouchableOpacity>
 
         {/* Danger zone */}
@@ -317,6 +379,9 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   btnText: { color: "#fff", fontSize: 14, fontWeight: "600" },
+  shiftRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 },
+  shiftDel: { padding: 10, backgroundColor: theme.color.error, borderRadius: 8 },
+  addShiftBtn: { flexDirection: "row", alignItems: "center", gap: 4, padding: 10, marginBottom: 6 },
   dangerBox: {
     marginTop: 16,
     borderRadius: 16,

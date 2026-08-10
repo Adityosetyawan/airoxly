@@ -2129,7 +2129,7 @@ prod_wh = APIRouter(prefix="/api")
 # ---------- Models ----------
 class ProductionDailyCreate(BaseModel):
     date: str  # YYYY-MM-DD
-    shift: Literal["pagi", "siang"]
+    shift: str  # dinamis — key dari settings shifts (pagi/siang/malam by default)
     sales_id: str  # sales user id (group)
     galon_ganti: int = 0
     sil_ganti: int = 0
@@ -2138,14 +2138,22 @@ class ProductionDailyCreate(BaseModel):
     stiker_ganti: int = 0
     stoper_ganti: int = 0
     karet_kran_ganti: int = 0
-    produksi_galon: int = 0  # NOT reduce stock
-    stok_galon_baru: int = 0  # ADD to galon stock
+    produksi_galon: int = 0  # jumlah galon isi yang diproduksi (dihitung AI + manual)
+    stok_galon_baru: int = 0  # ADD to galon stock (legacy)
+    # NEW: AI + manual + destinasi
+    destination: Literal["gudang", "sales"] = "gudang"  # kirim gudang atau langsung jual
+    ai_count_before: Optional[int] = None   # dari AI foto galon kosong sebelum diisi
+    ai_count_after: Optional[int] = None    # dari AI foto galon isi setelah diisi
+    manual_adjust: int = 0                   # +/- penyesuaian manual (±N)
+    photo_before: Optional[str] = None      # foto galon kosong (watermarked)
+    photo_after: Optional[str] = None       # foto galon isi (watermarked)
+    ai_confidence: Optional[str] = None     # "low"/"medium"/"high" — reference only
     note: Optional[str] = None
 
 
 class WarehouseDailyCreate(BaseModel):
     date: str  # YYYY-MM-DD
-    shift: Literal["pagi", "siang"]
+    shift: str  # dinamis — key shift
     sales_id: str
     galon_ganti: int = 0
     galon_kran: int = 0  # reduce galon + kran
@@ -2178,7 +2186,7 @@ class WarehouseDailyCreate(BaseModel):
 
 
 class ProductionDailyUpdate(BaseModel):
-    shift: Optional[Literal["pagi", "siang"]] = None
+    shift: Optional[str] = None  # dinamis — key shift dari settings
     sales_id: Optional[str] = None
     galon_ganti: Optional[int] = None
     sil_ganti: Optional[int] = None
@@ -2188,11 +2196,18 @@ class ProductionDailyUpdate(BaseModel):
     stoper_ganti: Optional[int] = None
     karet_kran_ganti: Optional[int] = None
     produksi_galon: Optional[int] = None
+    destination: Optional[Literal["gudang", "sales"]] = None
+    ai_count_before: Optional[int] = None
+    ai_count_after: Optional[int] = None
+    manual_adjust: Optional[int] = None
+    photo_before: Optional[str] = None  # "" untuk unset
+    photo_after: Optional[str] = None
+    ai_confidence: Optional[str] = None
     note: Optional[str] = None
 
 
 class WarehouseDailyUpdate(BaseModel):
-    shift: Optional[Literal["pagi", "siang"]] = None
+    shift: Optional[str] = None  # dinamis
     sales_id: Optional[str] = None
     galon_ganti: Optional[int] = None
     galon_kran: Optional[int] = None
@@ -2544,6 +2559,146 @@ async def validate_sales_bawa_sisa(sales_id: str, date: str, user=Depends(requir
         "match": match,
         "diff": galon_sold_txn - terjual_by_gudang,
     }
+
+
+# ============================================================
+# SETTINGS — SHIFTS (dinamis, Super Admin bisa CRUD)
+# ============================================================
+DEFAULT_SHIFTS = [
+    {"key": "pagi", "label": "Pagi", "order": 1},
+    {"key": "siang", "label": "Siang", "order": 2},
+    {"key": "malam", "label": "Malam", "order": 3},
+]
+
+
+class ShiftItem(BaseModel):
+    key: str          # slug unik (a-z0-9_)
+    label: str        # nama tampilan
+    order: Optional[int] = None
+
+
+class ShiftsPayload(BaseModel):
+    shifts: list[ShiftItem]
+
+
+async def _get_shifts() -> list[dict]:
+    doc = await db.settings.find_one({"key": "shifts"}, {"_id": 0})
+    if not doc or not doc.get("value"):
+        return list(DEFAULT_SHIFTS)
+    val = doc["value"]
+    if isinstance(val, list) and val:
+        return val
+    return list(DEFAULT_SHIFTS)
+
+
+@app.get("/api/shifts")
+async def get_shifts_list(user=Depends(get_current_user)):
+    """Semua role bisa baca daftar shift."""
+    return {"shifts": await _get_shifts()}
+
+
+@app.put("/api/shifts")
+async def set_shifts_list(body: ShiftsPayload, user=Depends(require_roles("super_admin"))):
+    """Super Admin update daftar shift. Minimum 1 shift."""
+    if not body.shifts:
+        raise HTTPException(400, "Minimal 1 shift")
+    # Normalisasi & unique key
+    seen = set()
+    payload: list[dict] = []
+    for i, s in enumerate(body.shifts, start=1):
+        k = (s.key or "").strip().lower()
+        if not k or not all(c.isalnum() or c == "_" for c in k):
+            raise HTTPException(400, f"Key shift '{s.key}' harus alfanumerik (a-z0-9_)")
+        if k in seen:
+            raise HTTPException(400, f"Key '{k}' duplikat")
+        seen.add(k)
+        payload.append({"key": k, "label": s.label.strip() or k.title(), "order": s.order or i})
+    payload.sort(key=lambda x: x["order"])
+    await db.settings.update_one(
+        {"key": "shifts"},
+        {"$set": {"value": payload, "updated_at": now_utc().isoformat(), "updated_by": user["id"]}},
+        upsert=True,
+    )
+    return {"ok": True, "shifts": payload}
+
+
+# ============================================================
+# AI VISION — Count Gallons in Photo (GPT-5 vision)
+# ============================================================
+class AICountRequest(BaseModel):
+    image_base64: str            # data URI atau base64 murni
+    hint: Optional[str] = None   # opsional: "kosong" / "isi" / "sedang diisi"
+
+
+@app.post("/api/ai/count-gallons")
+async def ai_count_gallons(body: AICountRequest, user=Depends(get_current_user)):
+    """Hitung jumlah galon dalam foto pakai GPT-5 Vision (Emergent LLM key).
+    Response: { count: int, confidence: str, reasoning: str }.
+    """
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+    except Exception as e:
+        raise HTTPException(500, f"AI library tidak tersedia: {e}")
+
+    emergent_key = os.getenv("EMERGENT_LLM_KEY")
+    if not emergent_key:
+        raise HTTPException(500, "EMERGENT_LLM_KEY tidak diset di server")
+
+    # Bersihkan data URI prefix jika ada
+    img_raw = body.image_base64.strip()
+    if "," in img_raw and img_raw.startswith("data:"):
+        img_raw = img_raw.split(",", 1)[1]
+
+    hint = (body.hint or "").strip().lower()
+    hint_text = (
+        f"Konteks foto: {hint}. " if hint else ""
+    )
+    system = (
+        "You are a strict counting assistant for water gallons (galon 19 liter) in a photo. "
+        "Return ONLY a valid JSON object with this schema and nothing else: "
+        '{"count": <integer>, "confidence": "low"|"medium"|"high", "reasoning": "<short reason>"}. '
+        "Rules: count only visible gallon containers. If some are stacked/occluded, estimate "
+        "and set confidence accordingly. If image is unclear or has no gallons, count=0 confidence=low."
+    )
+    user_prompt = (
+        hint_text
+        + "Berapa jumlah galon air yang terlihat di foto ini? "
+        + 'Balas hanya JSON: {"count": N, "confidence": "high|medium|low", "reasoning": "..."}'
+    )
+
+    try:
+        chat = LlmChat(
+            api_key=emergent_key,
+            session_id=f"count-gallons-{user['id']}-{int(datetime.now().timestamp())}",
+            system_message=system,
+        ).with_model("openai", "gpt-5")
+        image_content = ImageContent(image_base64=img_raw)
+        reply = await chat.send_message(UserMessage(text=user_prompt, file_contents=[image_content]))
+    except Exception as e:
+        logging.exception("AI vision failed")
+        raise HTTPException(502, f"AI vision gagal: {e}")
+
+    # Parse JSON dari reply — LLM kadang bungkus dengan ```json fences
+    import re, json as _json
+    txt = (reply or "").strip()
+    m = re.search(r"\{[\s\S]*\}", txt)
+    parsed = None
+    if m:
+        try:
+            parsed = _json.loads(m.group(0))
+        except Exception:
+            parsed = None
+    if not parsed:
+        return {"count": 0, "confidence": "low", "reasoning": txt[:200] or "Tidak bisa parse jawaban AI"}
+    try:
+        count = int(parsed.get("count", 0) or 0)
+    except Exception:
+        count = 0
+    conf = str(parsed.get("confidence") or "low").lower()
+    if conf not in ("low", "medium", "high"):
+        conf = "low"
+    reasoning = str(parsed.get("reasoning") or "")[:200]
+    return {"count": max(0, count), "confidence": conf, "reasoning": reasoning}
 
 
 app.include_router(prod_wh)

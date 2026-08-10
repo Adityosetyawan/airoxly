@@ -276,10 +276,10 @@ export default function GudangInput() {
           </View>
           <View style={styles.photoGrid}>
             <View style={{ flex: 1 }}>
-              <PhotoCapture value={photoIsiPagi} onChange={setPhotoIsiPagi} label="Isi Pagi" testID="photo-isi-pagi" />
+              <PhotoCapture value={photoIsiPagi} onChange={setPhotoIsiPagi} label="Isi Pagi" watermark testID="photo-isi-pagi" />
             </View>
             <View style={{ flex: 1 }}>
-              <PhotoCapture value={photoIsiSiang} onChange={setPhotoIsiSiang} label="Isi Siang" testID="photo-isi-siang" />
+              <PhotoCapture value={photoIsiSiang} onChange={setPhotoIsiSiang} label="Isi Siang" watermark testID="photo-isi-siang" />
             </View>
           </View>
 
@@ -304,10 +304,10 @@ export default function GudangInput() {
           </View>
           <View style={styles.photoGrid}>
             <View style={{ flex: 1 }}>
-              <PhotoCapture value={photoKosongSiang} onChange={setPhotoKosongSiang} label="Galon Siang" testID="photo-galon-siang" />
+              <PhotoCapture value={photoKosongSiang} onChange={setPhotoKosongSiang} label="Galon Siang" watermark testID="photo-galon-siang" />
             </View>
             <View style={{ flex: 1 }}>
-              <PhotoCapture value={photoKosongSore} onChange={setPhotoKosongSore} label="Galon Sore" testID="photo-galon-sore" />
+              <PhotoCapture value={photoKosongSore} onChange={setPhotoKosongSore} label="Galon Sore" watermark testID="photo-galon-sore" />
             </View>
           </View>
           {kosongPulang > 0 || form.sales_id ? (

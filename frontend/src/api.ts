@@ -412,6 +412,18 @@ export const api = {
       }>;
     }>(`/warehouse/discrepancy${s ? "?" + s : ""}`);
   },
+  // AI Vision — hitung galon dari foto
+  aiCountGallons: (image_base64: string, hint?: string) =>
+    req<{ count: number; confidence: "low" | "medium" | "high"; reasoning: string }>(
+      "/ai/count-gallons",
+      { method: "POST", body: JSON.stringify({ image_base64, hint }) },
+    ),
+
+  // Shifts (default: pagi, siang, malam) — Super Admin bisa custom
+  getShifts: () => req<{ shifts: Array<{ key: string; label: string; order?: number }> }>("/shifts"),
+  setShifts: (shifts: Array<{ key: string; label: string; order?: number }>) =>
+    req<{ ok: boolean; shifts: any[] }>("/shifts", { method: "PUT", body: JSON.stringify({ shifts }) }),
+
   clearHijau: (entry_id: string) =>
     req<{ ok: boolean }>(`/warehouse/daily/${entry_id}/clear-hijau`, { method: "POST" }),
   restoreHijau: (entry_id: string) =>

@@ -315,14 +315,29 @@ const SECTIONS: Section[] = [
           "✅ Master produk & harga",
       },
       {
-        heading: "Step 3: Konfirmasi Ganda (Anti Iseng)",
+        heading: "Step 3: Konfirmasi Ganda (2 Langkah)",
         body:
-          "Setelah tap tombol reset, muncul dialog konfirmasi.\n\n" +
-          "Anda WAJIB ketik teks konfirmasi PERSIS:\n" +
-          "• Untuk HALF RESET: ketik   RESET PENJUALAN\n" +
-          "• Untuk ALL RESET: ketik   RESET SEMUA\n\n" +
-          "Tombol \"Reset Sekarang\" hanya aktif kalau teks cocok 100%.\n\n" +
-          "💡 Kalau ragu, tekan Batal — data aman.",
+          "⚠️ PENTING: Ada 2 dialog yang muncul berturut-turut.\n\n" +
+          "📋 DIALOG 1 — Peringatan\n" +
+          "Setelah tap tombol reset, muncul kotak peringatan:\n" +
+          "\"HALF RESET — Hapus Semua Data Transaksi?\" (atau ALL RESET)\n" +
+          "→ Pilih [Batal] untuk keluar\n" +
+          "→ Pilih [Lanjutkan] untuk ke langkah berikut\n\n" +
+          "📝 DIALOG 2 — Kotak Ketik Konfirmasi\n" +
+          "Setelah tap Lanjutkan, muncul modal kedua di TENGAH LAYAR dengan:\n\n" +
+          "  ⚠️ Ikon peringatan merah\n" +
+          "  \"Konfirmasi HALF RESET\"\n" +
+          "  \n" +
+          "  Ketik RESET PENJUALAN di bawah:\n" +
+          "  ┌─────────────────────────────────┐\n" +
+          "  │  RESET PENJUALAN                │ ← ketik di sini\n" +
+          "  └─────────────────────────────────┘\n" +
+          "  \n" +
+          "  [ Batal ]     [ RESET ]\n\n" +
+          "Ketik TEPAT (huruf besar semua, dengan spasi):\n" +
+          "• HALF RESET → ketik: RESET PENJUALAN\n" +
+          "• ALL RESET → ketik: RESET SEMUA\n\n" +
+          "Kalau salah ketik, tombol RESET akan muncul error (tidak berjalan). Coba ketik ulang.",
       },
       {
         heading: "Step 4: Verifikasi Setelah Reset",

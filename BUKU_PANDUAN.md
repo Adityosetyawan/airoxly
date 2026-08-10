@@ -402,16 +402,48 @@ Reset hanya bisa dilakukan oleh **Super Admin**.
 - Setelah demo / training (data dummy)
 - Setup ulang dari nol
 
-### Step 3 — Konfirmasi Ganda (Anti Iseng)
+### Step 3 — Konfirmasi Ganda (2 Langkah!)
 
-Setelah tap tombol reset, muncul dialog konfirmasi. Anda **WAJIB ketik teks konfirmasi PERSIS**:
+⚠️ **PENTING:** Ada **2 dialog** yang muncul berturut-turut.
 
-- Untuk **HALF RESET**: ketik `RESET PENJUALAN`
-- Untuk **ALL RESET**: ketik `RESET SEMUA`
+**📋 Dialog 1 — Peringatan**
 
-Tombol **"Reset Sekarang"** hanya aktif kalau teks cocok 100%.
+Setelah tap tombol 🟠 HALF RESET / 🔴 ALL RESET, muncul kotak peringatan native (mirip pop-up sistem):
 
-💡 **Kalau ragu, tekan Batal** — data aman.
+- Judul: `"HALF RESET — Hapus Semua Data Transaksi?"` (atau ALL RESET)
+- Isi: daftar data yang akan dihapus dan yang tetap
+- 2 tombol: **[Batal]** dan **[Lanjutkan]**
+
+Kalau ragu, tekan **Batal** — data aman, tidak ada yang berubah.
+
+**📝 Dialog 2 — Kotak Ketik Konfirmasi**
+
+Setelah tap **Lanjutkan**, muncul modal kedua di **tengah layar**:
+
+```
+    ⚠️  (ikon merah)
+    Konfirmasi HALF RESET
+
+    Ketik RESET PENJUALAN di bawah untuk melanjutkan.
+    Tindakan ini tidak dapat dibatalkan.
+
+    ┌─────────────────────────────┐
+    │  RESET PENJUALAN            │ ← ketik di kotak ini
+    └─────────────────────────────┘
+
+    [  Batal  ]     [  RESET  ]
+```
+
+**Cara ketik:**
+
+| Jenis Reset | Ketik Persis |
+|-------------|--------------|
+| 🟠 HALF RESET | `RESET PENJUALAN` |
+| 🔴 ALL RESET | `RESET SEMUA` |
+
+⚠️ **HARUS TEPAT SAMA** — huruf besar semua, spasi 1×, tidak boleh salah huruf. Tombol **RESET** merah baru aktif kalau teks cocok 100%.
+
+Kalau salah ketik → tombol RESET akan tampil error / tidak jalan → tinggal ketik ulang.
 
 ### Step 4 — Verifikasi Setelah Reset
 

@@ -19,23 +19,25 @@ import { useToast } from "@/src/components/Toast";
 
 type SalesUser = { id: string; sales_code?: string; name?: string; group_letter?: string };
 type Shift = { key: string; label: string };
+type PartPrice = { id: string; name: string; rp_per_pcs: number; order?: number };
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
 /**
- * Produksi Input — flow baru sesuai spec Aug 2026:
+ * Produksi Input — flow spec Aug 2026 + part_qtys dinamis:
  *  1. Pilih Sales (search)
  *  2. Pilih Shift (dinamis, dari settings)
- *  3. Foto SEBELUM (galon kosong sebelum diisi) → AI hitung otomatis → readonly count
- *  4. Foto SESUDAH (galon isi setelah diisi)   → AI hitung otomatis → readonly count
- *  5. Manual +/- adjust  (kolom terpisah)
+ *  3. Foto SEBELUM (galon kosong sebelum diisi) → AI hitung otomatis
+ *  4. Foto SESUDAH (galon isi setelah diisi) → AI hitung otomatis
+ *  5. Manual +/- adjust
  *  6. Destinasi: Kirim Gudang | Langsung Jual
- *  7. Total produksi = ai_count_after + manual_adjust (auto-computed, ditampilkan)
+ *  7. Penggantian Galon & Sparepart — DINAMIS dari SuperAdmin (part_prices).
  */
 export default function ProduksiInput() {
   const toast = useToast();
   const [sales, setSales] = useState<SalesUser[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [parts, setParts] = useState<PartPrice[]>([]);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -44,19 +46,13 @@ export default function ProduksiInput() {
     shift: "pagi",
     sales_id: "",
     destination: "gudang" as "gudang" | "sales",
-    manual_adjust: "0",         // +/- foto SESUDAH (mempengaruhi total)
-    manual_adjust_before: "0",  // +/- foto SEBELUM (referensi saja)
-    galon_ganti: "",
-    galon_kran: "",
-    galon_polos: "",
-    sil_ganti: "",
-    mur_ganti: "",
-    kran_ganti: "",
-    stiker_ganti: "",
-    stoper_ganti: "",
-    karet_kran_ganti: "",
+    manual_adjust: "0",
+    manual_adjust_before: "0",
     note: "",
   });
+
+  // Peta dinamis nama part → qty (string utk input)
+  const [partQtys, setPartQtys] = useState<Record<string, string>>({});
 
   const [photoBefore, setPhotoBefore] = useState<string | null>(null);
   const [photoAfter, setPhotoAfter] = useState<string | null>(null);
@@ -80,10 +76,16 @@ export default function ProduksiInput() {
         setShifts(list);
         if (list[0]) setForm((f) => ({ ...f, shift: list[0].key }));
       } catch {}
+      try {
+        const p = await api.listPartPrices();
+        const sorted = [...(p || [])].sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+        setParts(sorted);
+      } catch {}
     })();
   }, []);
 
   const setF = (k: string, v: any) => setForm((s) => ({ ...s, [k]: v }));
+  const setPartQty = (name: string, v: string) => setPartQtys((s) => ({ ...s, [name]: v }));
 
   const filteredSales = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -93,7 +95,6 @@ export default function ProduksiInput() {
 
   const selectedSales = sales.find((s) => s.id === form.sales_id);
 
-  // Total produksi = AI (setelah) + manual adjust
   const manualN = parseInt(form.manual_adjust || "0") || 0;
   const totalProduksi = (aiAfter?.count || 0) + manualN;
 
@@ -102,6 +103,13 @@ export default function ProduksiInput() {
     if (!aiAfter) return toast.show("Foto galon isi (setelah) wajib untuk hitung produksi", "error");
     setSaving(true);
     try {
+      // Bangun part_qtys dict (hanya nilai > 0)
+      const partQtysBody: Record<string, number> = {};
+      for (const p of parts) {
+        const n = parseInt(partQtys[p.name] || "0") || 0;
+        if (n > 0) partQtysBody[p.name] = n;
+      }
+
       const body: any = {
         date: form.date,
         shift: form.shift,
@@ -115,15 +123,7 @@ export default function ProduksiInput() {
         photo_before: photoBefore || null,
         photo_after: photoAfter || null,
         ai_confidence: aiAfter?.confidence || null,
-        galon_ganti: parseInt(form.galon_ganti || "0") || 0,
-        galon_kran: parseInt(form.galon_kran || "0") || 0,
-        galon_polos: parseInt(form.galon_polos || "0") || 0,
-        sil_ganti: parseInt(form.sil_ganti || "0") || 0,
-        mur_ganti: parseInt(form.mur_ganti || "0") || 0,
-        kran_ganti: parseInt(form.kran_ganti || "0") || 0,
-        stiker_ganti: parseInt(form.stiker_ganti || "0") || 0,
-        stoper_ganti: parseInt(form.stoper_ganti || "0") || 0,
-        karet_kran_ganti: parseInt(form.karet_kran_ganti || "0") || 0,
+        part_qtys: partQtysBody,
         note: form.note || null,
       };
       await api.createProductionDaily(body);
@@ -136,7 +136,8 @@ export default function ProduksiInput() {
       setPhotoAfter(null);
       setAiBefore(null);
       setAiAfter(null);
-      setForm((f) => ({ ...f, manual_adjust: "0", manual_adjust_before: "0", galon_ganti: "", galon_kran: "", galon_polos: "", sil_ganti: "", mur_ganti: "", kran_ganti: "", stiker_ganti: "", stoper_ganti: "", karet_kran_ganti: "", note: "" }));
+      setPartQtys({});
+      setForm((f) => ({ ...f, manual_adjust: "0", manual_adjust_before: "0", note: "" }));
     } catch (e: any) {
       toast.show(e?.message || "Gagal simpan", "error");
     } finally {
@@ -319,29 +320,27 @@ export default function ProduksiInput() {
             </TouchableOpacity>
           </View>
 
-          <SectionTitle>Penggantian Galon (opsional)</SectionTitle>
-          <View style={styles.rowTwo}>
-            <NumFieldSmall label="Galon Kran (➖ Stok Kran)" value={form.galon_kran} onChange={(v) => setF("galon_kran", v)} />
-            <NumFieldSmall label="Galon Polos (➖ Stok Polos)" value={form.galon_polos} onChange={(v) => setF("galon_polos", v)} />
-          </View>
-
-          <SectionTitle>Sparepart Ganti (opsional)</SectionTitle>
-          <View style={styles.rowTwo}>
-            <NumFieldSmall label="Galon Ganti" value={form.galon_ganti} onChange={(v) => setF("galon_ganti", v)} />
-            <NumFieldSmall label="Kran Ganti" value={form.kran_ganti} onChange={(v) => setF("kran_ganti", v)} />
-          </View>
-          <View style={styles.rowTwo}>
-            <NumFieldSmall label="Sil / Seal" value={form.sil_ganti} onChange={(v) => setF("sil_ganti", v)} />
-            <NumFieldSmall label="Mur" value={form.mur_ganti} onChange={(v) => setF("mur_ganti", v)} />
-          </View>
-          <View style={styles.rowTwo}>
-            <NumFieldSmall label="Stiker" value={form.stiker_ganti} onChange={(v) => setF("stiker_ganti", v)} />
-            <NumFieldSmall label="Karet Kran" value={form.karet_kran_ganti} onChange={(v) => setF("karet_kran_ganti", v)} />
-          </View>
-          <View style={styles.rowTwo}>
-            <NumFieldSmall label="Stoper" value={form.stoper_ganti} onChange={(v) => setF("stoper_ganti", v)} />
-            <View style={{ flex: 1 }} />
-          </View>
+          {/* === DINAMIS: Penggantian Galon & Sparepart (mengikuti daftar SuperAdmin) === */}
+          <SectionTitle>Penggantian Galon & Sparepart (opsional)</SectionTitle>
+          {parts.length === 0 ? (
+            <Text style={styles.emptyChip}>
+              Belum ada daftar Part. Minta SuperAdmin menambah item di menu
+              &quot;Kelola Part / Biaya Penggantian Part&quot;.
+            </Text>
+          ) : (
+            <View style={styles.partsGrid}>
+              {parts.map((p) => (
+                <View key={p.id} style={styles.partCol}>
+                  <NumFieldSmall
+                    label={p.name}
+                    value={partQtys[p.name] || ""}
+                    onChange={(v) => setPartQty(p.name, v)}
+                    testID={`part-${p.name}`}
+                  />
+                </View>
+              ))}
+            </View>
+          )}
 
           <Row label="Catatan (opsional)">
             <TextInput
@@ -377,11 +376,18 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return <Text style={styles.sectionTitle}>{children}</Text>;
 }
-function NumFieldSmall({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function NumFieldSmall({ label, value, onChange, testID }: { label: string; value: string; onChange: (v: string) => void; testID?: string }) {
   return (
     <View style={{ flex: 1, gap: 4 }}>
       <Text style={styles.smallLabel}>{label}</Text>
-      <TextInput value={value} onChangeText={onChange} keyboardType="number-pad" placeholder="0" style={styles.smallInput} />
+      <TextInput
+        value={value}
+        onChangeText={onChange}
+        keyboardType="number-pad"
+        placeholder="0"
+        style={styles.smallInput}
+        testID={testID}
+      />
     </View>
   );
 }
@@ -417,10 +423,6 @@ const styles = StyleSheet.create({
   aiBox: { padding: 10, borderRadius: 10, gap: 4 },
   aiTitle: { fontSize: 13, fontWeight: "700" },
   aiDesc: { fontSize: 11, color: theme.color.onSurfaceSecondary },
-  adjustRow: { flexDirection: "row", alignItems: "center", gap: 12, justifyContent: "center" },
-  adjBtn: { padding: 14, borderRadius: 999, backgroundColor: theme.color.error, alignItems: "center", justifyContent: "center" },
-  adjInput: { minWidth: 100, borderWidth: 2, borderColor: theme.color.border, borderRadius: 12, padding: 12, textAlign: "center", fontSize: 24, fontWeight: "900", backgroundColor: "#fff" },
-  adjHint: { fontSize: 10, color: theme.color.muted, textAlign: "center", fontStyle: "italic" },
   totalBox: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: theme.color.brand, padding: 14, borderRadius: 12 },
   totalLabel: { color: "#fff", fontSize: 11, fontWeight: "800", letterSpacing: 1 },
   totalSub: { color: "#fff", fontSize: 10, opacity: 0.85, marginTop: 2 },
@@ -432,6 +434,8 @@ const styles = StyleSheet.create({
   destBtnOnAlt: { backgroundColor: "#F59E0B", borderColor: "#F59E0B" },
   destTitle: { fontSize: 13, fontWeight: "800", color: theme.color.onSurface },
   destDesc: { fontSize: 10, color: theme.color.muted, marginTop: 2 },
+  partsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  partCol: { width: "48%" },
   smallLabel: { fontSize: 11, color: theme.color.muted, fontWeight: "600" },
   smallInput: { borderWidth: 1, borderColor: theme.color.border, borderRadius: 8, padding: 10, fontSize: 15, textAlign: "center", backgroundColor: "#fff", fontWeight: "700" },
   saveBtn: { backgroundColor: theme.color.brand, padding: 16, borderRadius: 14, alignItems: "center" },

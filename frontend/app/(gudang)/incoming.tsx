@@ -2,19 +2,19 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator, FlatList, Platform, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { AppHeader } from "@/src/components/AppHeader";
 import { theme } from "@/src/theme";
 import { api } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
-import { itemLabel } from "./dashboard";
 
-const ITEMS = ["galon", "galon_kran", "kran", "seal", "mur", "stiker", "karet_kran", "stoper"];
+type PartPrice = { id: string; name: string; rp_per_pcs: number; order?: number };
+
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
 export default function GudangIncoming() {
   const toast = useToast();
-  const [item, setItem] = useState<string>("galon");
+  const [parts, setParts] = useState<PartPrice[]>([]);
+  const [item, setItem] = useState<string>("");
   const [qty, setQty] = useState("");
   const [date, setDate] = useState(todayStr());
   const [note, setNote] = useState("");
@@ -24,20 +24,28 @@ export default function GudangIncoming() {
 
   const load = useCallback(async () => {
     try {
-      const list = await api.listWarehouseIncoming({});
+      const [list, p] = await Promise.all([
+        api.listWarehouseIncoming({}),
+        api.listPartPrices().catch(() => []),
+      ]);
       setRows(list || []);
+      const sorted = [...(p || [])].sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+      setParts(sorted);
+      if (!item && sorted[0]) setItem(sorted[0].name);
     } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
   const onSave = async () => {
     const q = parseInt(qty || "0") || 0;
+    if (!item) return toast.show("Pilih item dulu", "error");
     if (q <= 0) return toast.show("Isi jumlah barang > 0", "error");
     setSaving(true);
     try {
-      await api.createWarehouseIncoming({ date, item, qty: q, note: note || null });
-      toast.show(`✅ Stok ${itemLabel(item)} bertambah +${q}`, "success");
+      await api.createWarehouseIncoming({ date, item, qty: q, note: note || null } as any);
+      toast.show(`✅ Stok ${item} bertambah +${q}`, "success");
       setQty("");
       setNote("");
       load();
@@ -84,13 +92,25 @@ export default function GudangIncoming() {
             <TextInput value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" style={styles.input} />
 
             <Text style={styles.label}>Item</Text>
-            <View style={styles.chipWrap}>
-              {ITEMS.map((k) => (
-                <TouchableOpacity key={k} onPress={() => setItem(k)} style={[styles.chip, item === k && styles.chipOn]}>
-                  <Text style={[styles.chipText, item === k && { color: "#fff" }]}>{itemLabel(k)}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {parts.length === 0 ? (
+              <Text style={styles.hint}>
+                Belum ada daftar Part. Minta SuperAdmin menambah item dulu di menu
+                &quot;Kelola Part / Biaya Penggantian Part&quot;.
+              </Text>
+            ) : (
+              <View style={styles.chipWrap}>
+                {parts.map((p) => (
+                  <TouchableOpacity
+                    key={p.id}
+                    onPress={() => setItem(p.name)}
+                    style={[styles.chip, item === p.name && styles.chipOn]}
+                    testID={`incoming-item-${p.name}`}
+                  >
+                    <Text style={[styles.chipText, item === p.name && { color: "#fff" }]}>{p.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
 
             <Text style={styles.label}>Jumlah</Text>
             <TextInput value={qty} onChangeText={setQty} keyboardType="number-pad" placeholder="0" style={styles.input} />
@@ -98,7 +118,7 @@ export default function GudangIncoming() {
             <Text style={styles.label}>Catatan (opsional)</Text>
             <TextInput value={note} onChangeText={setNote} placeholder="Supplier, PO, dsb" style={styles.input} />
 
-            <TouchableOpacity style={styles.saveBtn} onPress={onSave} disabled={saving}>
+            <TouchableOpacity style={styles.saveBtn} onPress={onSave} disabled={saving || parts.length === 0}>
               {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>SIMPAN & ➕ STOK</Text>}
             </TouchableOpacity>
 
@@ -107,13 +127,13 @@ export default function GudangIncoming() {
         }
         ListEmptyComponent={<Text style={{ textAlign: "center", color: theme.color.muted, marginTop: 12 }}>Belum ada entry</Text>}
         renderItem={({ item: r }) => (
-          <View style={styles.rowCard}>
+          <TouchableOpacity onLongPress={() => onDelete(r.id)} style={styles.rowCard}>
             <View style={{ flex: 1 }}>
               <Text style={styles.rowDate}>{r.date}</Text>
-              <Text style={styles.rowItem}>{itemLabel(r.item)} • +{r.qty}</Text>
+              <Text style={styles.rowItem}>{r.item} • +{r.qty}</Text>
               {r.note ? <Text style={styles.rowNote}>{r.note}</Text> : null}
             </View>
-          </View>
+          </TouchableOpacity>
         )}
       />
     </View>
@@ -124,6 +144,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: theme.color.surface, borderRadius: 14, padding: 14, gap: 8, marginBottom: 10 },
   title: { fontSize: 16, fontWeight: "800", color: theme.color.onSurface },
   label: { fontSize: 12, fontWeight: "600", color: theme.color.onSurfaceSecondary, marginTop: 4 },
+  hint: { fontSize: 12, color: theme.color.muted, fontStyle: "italic" },
   input: {
     borderWidth: 1,
     borderColor: theme.color.border,

@@ -30,6 +30,11 @@ export default function SuperSettings() {
   const [shifts, setShifts] = useState<{ key: string; label: string; order?: number }[]>([]);
   const [savingShifts, setSavingShifts] = useState(false);
 
+  // Part prices (Biaya Penggantian Part)
+  const [parts, setParts] = useState<{ id: string; name: string; rp_per_pcs: number; order?: number }[]>([]);
+  const [savingPart, setSavingPart] = useState<string | null>(null);
+  const [newPart, setNewPart] = useState({ name: "", rp: "" });
+
   // Reset flows
   const [resetType, setResetType] = useState<null | "sales" | "all">(null);
   const [confirmText, setConfirmText] = useState("");
@@ -38,14 +43,19 @@ export default function SuperSettings() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [r, g, sh] = await Promise.all([
+      const [r, g, sh, pp] = await Promise.all([
         api.getSetting("visit_radius_m").catch(() => null),
         api.getSetting("gps_min_move_m").catch(() => null),
         api.getShifts().catch(() => null),
+        api.listPartPrices().catch(() => null),
       ]);
       if (r?.value) setRadius(String(r.value));
       if (g?.value) setGpsMin(String(g.value));
       if (sh?.shifts) setShifts(sh.shifts);
+      if (Array.isArray(pp)) {
+        const sorted = [...pp].sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+        setParts(sorted);
+      }
     } catch (e: any) {
       toast.show(e.message || "Gagal memuat pengaturan", "error");
     } finally {
@@ -121,6 +131,92 @@ export default function SuperSettings() {
       toast.show(e.message || "Gagal reset", "error");
     } finally {
       setResetting(false);
+    }
+  };
+
+  const savePart = async (id: string, patch: { name?: string; rp_per_pcs?: number; order?: number }) => {
+    const target = parts.find((p) => p.id === id);
+    if (!target) return;
+    setSavingPart(id);
+    try {
+      const body = {
+        name: patch.name ?? target.name,
+        rp_per_pcs: patch.rp_per_pcs !== undefined ? patch.rp_per_pcs : Number(target.rp_per_pcs || 0),
+        order: patch.order !== undefined ? patch.order : (target.order || 0),
+      };
+      const updated = await api.updatePartPrice(id, body);
+      setParts((arr) => arr.map((p) => (p.id === id ? { ...p, ...(updated || body) } : p)));
+      toast.show(`Part "${body.name}" tersimpan`, "success");
+    } catch (e: any) {
+      toast.show(e.message || "Gagal simpan part", "error");
+    } finally {
+      setSavingPart(null);
+    }
+  };
+
+  const deletePart = async (id: string) => {
+    const target = parts.find((p) => p.id === id);
+    if (!target) return;
+    Alert.alert(
+      "Hapus Item Part?",
+      `Item "${target.name}" akan dihapus dari daftar Biaya Penggantian Part. Input Produksi & Gudang tidak akan menampilkannya lagi.`,
+      [
+        { text: "Batal", style: "cancel" },
+        {
+          text: "Hapus",
+          style: "destructive",
+          onPress: async () => {
+            setSavingPart(id);
+            try {
+              await api.deletePartPrice(id);
+              setParts((arr) => arr.filter((p) => p.id !== id));
+              toast.show(`Part "${target.name}" dihapus`, "success");
+            } catch (e: any) {
+              toast.show(e.message || "Gagal hapus", "error");
+            } finally {
+              setSavingPart(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const addPart = async () => {
+    const name = newPart.name.trim();
+    const rp = parseInt(newPart.rp || "0", 10) || 0;
+    if (!name) { toast.show("Nama part wajib diisi", "error"); return; }
+    setSavingPart("__new__");
+    try {
+      const created = await api.createPartPrice({ name, rp_per_pcs: rp, order: parts.length + 1 });
+      setParts((arr) => [...arr, created]);
+      setNewPart({ name: "", rp: "" });
+      toast.show(`Part "${name}" ditambahkan`, "success");
+    } catch (e: any) {
+      toast.show(e.message || "Gagal tambah part", "error");
+    } finally {
+      setSavingPart(null);
+    }
+  };
+
+  const movePart = async (id: string, direction: -1 | 1) => {
+    const idx = parts.findIndex((p) => p.id === id);
+    if (idx < 0) return;
+    const newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= parts.length) return;
+    const arr = [...parts];
+    [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+    // Reassign order numbers
+    const reordered = arr.map((p, i) => ({ ...p, order: i + 1 }));
+    setParts(reordered);
+    // Persist both moved items
+    try {
+      await Promise.all([
+        api.updatePartPrice(arr[idx].id, { name: arr[idx].name, rp_per_pcs: arr[idx].rp_per_pcs, order: idx + 1 }),
+        api.updatePartPrice(arr[newIdx].id, { name: arr[newIdx].name, rp_per_pcs: arr[newIdx].rp_per_pcs, order: newIdx + 1 }),
+      ]);
+    } catch (e: any) {
+      toast.show(e.message || "Gagal ubah urutan", "error");
     }
   };
 
@@ -241,6 +337,96 @@ export default function SuperSettings() {
         >
           <Text style={styles.btnText}>{savingShifts ? "Menyimpan…" : "Simpan Shift"}</Text>
         </TouchableOpacity>
+
+        {/* ===== Kelola Part (Biaya Penggantian Part) ===== */}
+        <Text style={styles.section}>Kelola Part / Biaya Penggantian Part</Text>
+        <Text style={styles.desc}>
+          Item di daftar ini otomatis muncul di form Produksi & Gudang, Stok Gudang, dan
+          Laporan Bulanan. Urutan bisa diubah dengan tombol ↑↓.
+        </Text>
+        {parts.map((p, idx) => (
+          <View key={p.id} style={styles.partRow}>
+            <View style={{ flexDirection: "column", gap: 2 }}>
+              <TouchableOpacity
+                onPress={() => movePart(p.id, -1)}
+                disabled={idx === 0 || savingPart === p.id}
+                style={[styles.moveBtn, idx === 0 && { opacity: 0.3 }]}
+                testID={`part-up-${idx}`}
+              >
+                <Ionicons name="chevron-up" size={16} color={theme.color.brandPrimary} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => movePart(p.id, 1)}
+                disabled={idx === parts.length - 1 || savingPart === p.id}
+                style={[styles.moveBtn, idx === parts.length - 1 && { opacity: 0.3 }]}
+                testID={`part-down-${idx}`}
+              >
+                <Ionicons name="chevron-down" size={16} color={theme.color.brandPrimary} />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              value={p.name}
+              onChangeText={(v) => setParts((arr) => arr.map((x, i) => (i === idx ? { ...x, name: v } : x)))}
+              onEndEditing={() => savePart(p.id, { name: p.name })}
+              placeholder="Nama part"
+              style={[styles.input, { flex: 1 }]}
+              testID={`part-name-${idx}`}
+            />
+            <TextInput
+              value={String(p.rp_per_pcs || 0)}
+              onChangeText={(v) => setParts((arr) => arr.map((x, i) => (i === idx ? { ...x, rp_per_pcs: parseInt(v.replace(/[^\d]/g, ""), 10) || 0 } : x)))}
+              onEndEditing={() => savePart(p.id, { rp_per_pcs: Number(p.rp_per_pcs || 0) })}
+              placeholder="Rp/pcs"
+              keyboardType="number-pad"
+              style={[styles.input, { width: 110 }]}
+              testID={`part-rp-${idx}`}
+            />
+            <TouchableOpacity
+              onPress={() => deletePart(p.id)}
+              disabled={savingPart === p.id}
+              style={styles.shiftDel}
+              testID={`part-del-${idx}`}
+            >
+              {savingPart === p.id ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="trash" size={16} color="#fff" />
+              )}
+            </TouchableOpacity>
+          </View>
+        ))}
+        {parts.length === 0 ? (
+          <Text style={[styles.desc, { fontStyle: "italic" }]}>Belum ada item part.</Text>
+        ) : null}
+        <View style={styles.partRow}>
+          <TextInput
+            value={newPart.name}
+            onChangeText={(v) => setNewPart((s) => ({ ...s, name: v }))}
+            placeholder="Nama part baru (contoh: Bearing)"
+            style={[styles.input, { flex: 1 }]}
+            testID="new-part-name"
+          />
+          <TextInput
+            value={newPart.rp}
+            onChangeText={(v) => setNewPart((s) => ({ ...s, rp: v.replace(/[^\d]/g, "") }))}
+            placeholder="Rp/pcs"
+            keyboardType="number-pad"
+            style={[styles.input, { width: 110 }]}
+            testID="new-part-rp"
+          />
+          <TouchableOpacity
+            onPress={addPart}
+            disabled={savingPart === "__new__" || !newPart.name.trim()}
+            style={[styles.addShiftBtn, { paddingHorizontal: 10, opacity: !newPart.name.trim() ? 0.5 : 1 }]}
+            testID="add-part-btn"
+          >
+            {savingPart === "__new__" ? (
+              <ActivityIndicator size="small" color={theme.color.brandPrimary} />
+            ) : (
+              <Ionicons name="add-circle" size={20} color={theme.color.brandPrimary} />
+            )}
+          </TouchableOpacity>
+        </View>
 
         {/* Danger zone */}
         <View style={styles.dangerBox}>
@@ -382,6 +568,15 @@ const styles = StyleSheet.create({
   shiftRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 },
   shiftDel: { padding: 10, backgroundColor: theme.color.error, borderRadius: 8 },
   addShiftBtn: { flexDirection: "row", alignItems: "center", gap: 4, padding: 10, marginBottom: 6 },
+  partRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 },
+  moveBtn: {
+    width: 26,
+    height: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 4,
+    backgroundColor: theme.color.surfaceSecondary,
+  },
   dangerBox: {
     marginTop: 16,
     borderRadius: 16,

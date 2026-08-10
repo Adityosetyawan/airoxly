@@ -155,10 +155,12 @@ class TestWarehouseFlow:
         r = requests.get(f"{API}/warehouse/stock", headers=_h(tokens["gudang1"]["token"]))
         assert r.status_code == 200
         js = r.json()
-        assert "galon" in js
-        TestWarehouseFlow._stock_before = int(js.get("galon", 0))
+        # Stock is now keyed by Part Name (dinamis). Legacy key "galon" dinormalisasi ke "Galon Polos".
+        assert "Galon Polos" in js
+        TestWarehouseFlow._stock_before = int(js.get("Galon Polos", 0))
 
     def test_add_incoming_galon(self, tokens):
+        # Kirim key legacy "galon" — backend akan normalisasi ke "Galon Polos"
         payload = {"date": TEST_DATE, "item": "galon", "qty": 50, "note": "TEST_pytest incoming"}
         r = requests.post(f"{API}/warehouse/incoming", json=payload, headers=_h(tokens["gudang1"]["token"]))
         assert r.status_code == 200, r.text
@@ -167,7 +169,7 @@ class TestWarehouseFlow:
     def test_stock_increased(self, tokens):
         r = requests.get(f"{API}/warehouse/stock", headers=_h(tokens["gudang1"]["token"]))
         assert r.status_code == 200
-        after = int(r.json().get("galon", 0))
+        after = int(r.json().get("Galon Polos", 0))
         assert after >= TestWarehouseFlow._stock_before + 50, (
             f"expected stock to grow by 50 -> {TestWarehouseFlow._stock_before + 50}, got {after}"
         )

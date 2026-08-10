@@ -8,7 +8,7 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List, Optional, Literal, Any
+from typing import List, Optional, Literal, Any, Dict
 import uuid
 import random
 import secrets
@@ -1411,7 +1411,7 @@ async def monthly_report(
     def _sum(rows, key):
         return sum(int(r.get(key, 0) or 0) for r in rows)
 
-    # Map part_name -> auto qty from prod + wh entries
+    # Map part_name -> auto qty from prod + wh entries (legacy hardcoded fields)
     auto_part_qtys: dict = {
         "Seal": _sum(prod_entries, "sil_ganti") + _sum(wh_entries, "seal_ganti"),
         "Mur": _sum(prod_entries, "mur_ganti") + _sum(wh_entries, "mur_ganti"),
@@ -1422,6 +1422,21 @@ async def monthly_report(
         "Galon Kran": _sum(wh_entries, "galon_kran"),
         "Galon Polos": _sum(wh_entries, "galon_polos") + _sum(wh_entries, "galon_ganti") + _sum(prod_entries, "galon_ganti"),
     }
+
+    # Tambah kontribusi dari part_qtys dict dinamis (dari Produksi & Gudang)
+    def _accumulate_part_qtys(rows):
+        for r in rows:
+            pq = r.get("part_qtys") or {}
+            if not isinstance(pq, dict):
+                continue
+            for name, qty in pq.items():
+                try:
+                    auto_part_qtys[name] = int(auto_part_qtys.get(name, 0) or 0) + int(qty or 0)
+                except (TypeError, ValueError):
+                    pass
+
+    _accumulate_part_qtys(prod_entries)
+    _accumulate_part_qtys(wh_entries)
 
     parts = []
     parts_total = 0.0
@@ -2142,6 +2157,8 @@ class ProductionDailyCreate(BaseModel):
     karet_kran_ganti: int = 0
     produksi_galon: int = 0  # jumlah galon isi yang diproduksi (dihitung AI + manual)
     stok_galon_baru: int = 0  # ADD to galon stock (legacy)
+    # Dinamis — dari part_prices SuperAdmin. Peta {part_name: qty}
+    part_qtys: Optional[Dict[str, int]] = None
     # NEW: AI + manual + destinasi
     destination: Literal["gudang", "sales"] = "gudang"  # kirim gudang atau langsung jual
     ai_count_before: Optional[int] = None   # dari AI foto galon kosong sebelum diisi
@@ -2167,6 +2184,8 @@ class WarehouseDailyCreate(BaseModel):
     stiker_ganti: int = 0
     karet_kran_ganti: int = 0
     stoper_ganti: int = 0
+    # Dinamis — dari part_prices SuperAdmin. Peta {part_name: qty}
+    part_qtys: Optional[Dict[str, int]] = None
     # -- Aktivitas Sales (jumlah galon)
     bawa_pagi: int = 0    # galon ISI dibawa berangkat pagi (dari foto)
     bawa_siang: int = 0   # galon ISI dibawa berangkat siang (dari foto)
@@ -2201,6 +2220,7 @@ class ProductionDailyUpdate(BaseModel):
     stoper_ganti: Optional[int] = None
     karet_kran_ganti: Optional[int] = None
     produksi_galon: Optional[int] = None
+    part_qtys: Optional[Dict[str, int]] = None  # dinamis — {part_name: qty}
     destination: Optional[Literal["gudang", "sales"]] = None
     ai_count_before: Optional[int] = None
     ai_count_after: Optional[int] = None
@@ -2224,6 +2244,7 @@ class WarehouseDailyUpdate(BaseModel):
     stiker_ganti: Optional[int] = None
     karet_kran_ganti: Optional[int] = None
     stoper_ganti: Optional[int] = None
+    part_qtys: Optional[Dict[str, int]] = None  # dinamis — {part_name: qty}
     bawa_pagi: Optional[int] = None
     bawa_siang: Optional[int] = None
     kosong_kembali_siang: Optional[int] = None
@@ -2241,57 +2262,115 @@ class WarehouseDailyUpdate(BaseModel):
 
 class WarehouseIncomingCreate(BaseModel):
     date: str
-    item: Literal["galon", "galon_kran", "seal", "mur", "kran", "stiker", "karet_kran", "stoper", "galon_polos"]
+    # DINAMIS — nama part apa saja dari SuperAdmin. Legacy keys tetap kompatibel.
+    item: str
     qty: int
     note: Optional[str] = None
 
 
-STOCK_ITEMS = ["galon", "galon_kran", "kran", "seal", "mur", "stiker", "karet_kran", "stoper"]
+# Mapping legacy incoming keys → canonical Part Name
+LEGACY_ITEM_TO_PART_NAME = {
+    "galon": "Galon Polos",
+    "galon_polos": "Galon Polos",
+    "galon_kran": "Galon Kran",
+    "seal": "Seal",
+    "mur": "Mur",
+    "kran": "Kran",
+    "stiker": "Stiker",
+    "karet_kran": "Karet Kran",
+    "stoper": "Stoper",
+}
+
+# Mapping legacy hardcoded qty fields → canonical Part Name
+# (used when computing stock reduction from production_daily / warehouse_daily rows)
+LEGACY_FIELD_TO_PART_NAME_PRODUKSI = {
+    "galon_ganti": "Galon Polos",  # produksi mengganti galon polos
+    "galon_kran": "Galon Kran",
+    "galon_polos": "Galon Polos",
+    "sil_ganti": "Seal",
+    "mur_ganti": "Mur",
+    "kran_ganti": "Kran",
+    "stiker_ganti": "Stiker",
+    "karet_kran_ganti": "Karet Kran",
+    "stoper_ganti": "Stoper",
+}
+LEGACY_FIELD_TO_PART_NAME_GUDANG = {
+    "galon_ganti": "Galon Polos",
+    "galon_kran": "Galon Kran",
+    "galon_polos": "Galon Polos",
+    "seal_ganti": "Seal",
+    "mur_ganti": "Mur",
+    "kran_ganti": "Kran",
+    "stiker_ganti": "Stiker",
+    "karet_kran_ganti": "Karet Kran",
+    "stoper_ganti": "Stoper",
+}
+
+
+def _canonical_item(item: str) -> str:
+    """Map any incoming/legacy item key to canonical Part Name."""
+    if not item:
+        return item
+    return LEGACY_ITEM_TO_PART_NAME.get(item, item)
 
 
 async def _compute_stock() -> dict:
-    """Compute current stock levels from incoming + outgoing entries.
+    """Compute current stock levels — DYNAMIC based on SuperAdmin's part_prices.
 
-    Stock rules (per user requirement):
+    Stock rules:
     - Only WAREHOUSE INCOMING adds stock. Production does NOT add stock.
-    - galon_kran is a distinct SKU (jenis galon khusus), does NOT reduce/add galon + kran.
-    - galon_polos = galon (SKU galon).
+    - part_qtys (dict dinamis) mengurangi stok berdasarkan nama part.
+    - Legacy hardcoded fields (sil_ganti, mur_ganti, dll) tetap dihitung via mapping.
+    - Legacy incoming items ("galon", "seal", dll) di-remap ke Part Name canonical.
+    - Return dict keyed by Part Name (mengikuti daftar SuperAdmin).
     """
-    stock = {k: 0 for k in STOCK_ITEMS}
+    # Base stock keys — semua nama part dari SuperAdmin
+    parts_docs = await db.part_prices.find({}, {"_id": 0, "name": 1}).to_list(200)
+    part_names = [p.get("name") for p in parts_docs if p.get("name")]
+    stock: dict = {n: 0 for n in part_names}
 
-    # ---- INCOMING adds (from Gudang only) ----
+    def _bump(name: str, delta: int):
+        if not name:
+            return
+        # Auto-add key if not yet present (untuk item legacy yang belum ada di part_prices)
+        stock[name] = int(stock.get(name, 0) or 0) + int(delta or 0)
+
+    # ---- INCOMING adds ----
     async for row in db.warehouse_incoming.find({}, {"_id": 0}):
-        item = row.get("item")
+        item = row.get("item") or ""
         qty = int(row.get("qty", 0) or 0)
-        if item in stock:
-            stock[item] += qty
-        elif item == "galon_polos":
-            stock["galon"] += qty
+        _bump(_canonical_item(item), qty)
 
-    # ---- PRODUCTION reduces sparepart only (no stock addition) ----
+    # ---- PRODUCTION reduces ----
     async for row in db.production_daily.find({}, {"_id": 0}):
-        stock["galon"] -= int(row.get("galon_ganti", 0) or 0)
-        stock["seal"] -= int(row.get("sil_ganti", 0) or 0)
-        stock["mur"] -= int(row.get("mur_ganti", 0) or 0)
-        stock["kran"] -= int(row.get("kran_ganti", 0) or 0)
-        stock["stiker"] -= int(row.get("stiker_ganti", 0) or 0)
-        stock["stoper"] -= int(row.get("stoper_ganti", 0) or 0)
-        stock["karet_kran"] -= int(row.get("karet_kran_ganti", 0) or 0)
+        # Legacy hardcoded fields
+        for f, name in LEGACY_FIELD_TO_PART_NAME_PRODUKSI.items():
+            v = int(row.get(f, 0) or 0)
+            if v:
+                _bump(name, -v)
+        # Dinamis part_qtys
+        pq = row.get("part_qtys") or {}
+        if isinstance(pq, dict):
+            for name, qty in pq.items():
+                try:
+                    _bump(name, -int(qty or 0))
+                except (TypeError, ValueError):
+                    pass
         # NOTE: stok_galon_baru is IGNORED per user request (produksi tidak menambah stok)
 
     # ---- WAREHOUSE daily reduces ----
     async for row in db.warehouse_daily.find({}, {"_id": 0}):
-        stock["galon"] -= int(row.get("galon_ganti", 0) or 0)
-        # galon_kran is its own SKU (jenis galon khusus)
-        stock["galon_kran"] -= int(row.get("galon_kran", 0) or 0)
-        # galon_polos = jenis galon polos = SKU galon
-        stock["galon"] -= int(row.get("galon_polos", 0) or 0)
-        stock["kran"] -= int(row.get("kran_ganti", 0) or 0)
-        stock["seal"] -= int(row.get("seal_ganti", 0) or 0)
-        stock["mur"] -= int(row.get("mur_ganti", 0) or 0)
-        stock["stiker"] -= int(row.get("stiker_ganti", 0) or 0)
-        stock["stoper"] -= int(row.get("stoper_ganti", 0) or 0)
-        stock["karet_kran"] -= int(row.get("karet_kran_ganti", 0) or 0)
+        for f, name in LEGACY_FIELD_TO_PART_NAME_GUDANG.items():
+            v = int(row.get(f, 0) or 0)
+            if v:
+                _bump(name, -v)
+        pq = row.get("part_qtys") or {}
+        if isinstance(pq, dict):
+            for name, qty in pq.items():
+                try:
+                    _bump(name, -int(qty or 0))
+                except (TypeError, ValueError):
+                    pass
 
     return stock
 
@@ -2486,6 +2565,8 @@ async def update_warehouse_daily(entry_id: str, body: WarehouseDailyUpdate, user
 @prod_wh.post("/warehouse/incoming")
 async def create_warehouse_incoming(body: WarehouseIncomingCreate, user=Depends(require_roles("gudang", "super_admin"))):
     doc = body.dict()
+    # Normalize legacy item keys ke Part Name canonical
+    doc["item"] = _canonical_item(doc.get("item") or "")
     doc.update({
         "id": str(uuid.uuid4()),
         "kelompok": user.get("kelompok"),

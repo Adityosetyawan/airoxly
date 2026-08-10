@@ -421,9 +421,9 @@ class TestRegressionPriorEndpoints:
         )
         assert r.status_code == 200, r.text
         data = r.json()
-        # Response is a dict of stock counts per item — assert some expected keys
+        # Response is dict keyed by Part Name (SuperAdmin's part_prices)
         assert isinstance(data, dict)
-        for key in ("galon", "seal", "mur", "kran"):
+        for key in ("Galon Polos", "Seal", "Mur", "Kran"):
             assert key in data, f"missing stock key {key}: {data}"
 
     def test_expenses_sales(self, http: requests.Session, tokens: dict):

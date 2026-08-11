@@ -111,36 +111,89 @@ export default function GudangInput() {
     doValidate(form.sales_id, form.date);
   }, [form.sales_id, form.date]);
 
+  // Auto-load draft
+  useEffect(() => {
+    if (!form.sales_id || !form.date || !form.shift) return;
+    (async () => {
+      try {
+        const d = await api.getWarehouseDraft(form.sales_id, form.date, form.shift);
+        if (d && d.id) {
+          setForm((f) => ({
+            ...f,
+            bawa_pagi: String(d.bawa_pagi || ""),
+            bawa_siang: String(d.bawa_siang || ""),
+            kosong_pagi: String(d.kosong_pagi || ""),
+            kosong_siang: String(d.kosong_siang || ""),
+            kosong_kembali_siang: String(d.kosong_kembali_siang || ""),
+            kosong_kembali_sore: String(d.kosong_kembali_sore || ""),
+            sisa_pagi: String(d.sisa_pagi || ""),
+            sisa_siang: String(d.sisa_siang || ""),
+            note: d.note || "",
+          }));
+          setPhotoIsiPagi(d.photo_isi_pagi || null);
+          setPhotoIsiSiang(d.photo_isi_siang || null);
+          setPhotoKosongSiang(d.photo_kosong_siang || null);
+          setPhotoKosongSore(d.photo_kosong_sore || null);
+          if (d.part_qtys && typeof d.part_qtys === "object") {
+            const pq: Record<string, string> = {};
+            Object.entries(d.part_qtys).forEach(([k, v]) => { pq[k] = String(v); });
+            setPartQtys(pq);
+          }
+          toast.show("Draft dimuat — lanjutkan input", "success");
+        }
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.sales_id, form.date, form.shift]);
+
+  const buildBody = (isDraft: boolean) => {
+    const partQtysBody: Record<string, number> = {};
+    for (const p of parts) {
+      const n = parseInt(partQtys[p.name] || "0") || 0;
+      if (n > 0) partQtysBody[p.name] = n;
+    }
+    const body: any = {
+      date: form.date,
+      shift: form.shift,
+      sales_id: form.sales_id,
+      bawa_pagi: parseInt(form.bawa_pagi || "0") || 0,
+      bawa_siang: parseInt(form.bawa_siang || "0") || 0,
+      kosong_pagi: parseInt(form.kosong_pagi || "0") || 0,
+      kosong_siang: parseInt(form.kosong_siang || "0") || 0,
+      kosong_kembali_siang: parseInt(form.kosong_kembali_siang || "0") || 0,
+      kosong_kembali_sore: parseInt(form.kosong_kembali_sore || "0") || 0,
+      sisa_pagi: parseInt(form.sisa_pagi || "0") || 0,
+      sisa_siang: parseInt(form.sisa_siang || "0") || 0,
+      part_qtys: partQtysBody,
+      note: form.note || null,
+      is_draft: isDraft,
+    };
+    if (photoIsiPagi) body.photo_isi_pagi = photoIsiPagi;
+    if (photoIsiSiang) body.photo_isi_siang = photoIsiSiang;
+    if (photoKosongSiang) body.photo_kosong_siang = photoKosongSiang;
+    if (photoKosongSore) body.photo_kosong_sore = photoKosongSore;
+    return body;
+  };
+
+  const onSaveDraft = async () => {
+    if (!form.sales_id) return toast.show("Pilih Sales dulu", "error");
+    setSaving(true);
+    try {
+      await api.createWarehouseDaily(buildBody(true));
+      toast.show("💾 Draft tersimpan — bisa dilanjutkan nanti", "success");
+    } catch (e: any) {
+      toast.show(e?.message || "Gagal simpan draft", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const onSave = async () => {
     if (!form.sales_id) return toast.show("Pilih Sales dulu", "error");
     setSaving(true);
     try {
-      const partQtysBody: Record<string, number> = {};
-      for (const p of parts) {
-        const n = parseInt(partQtys[p.name] || "0") || 0;
-        if (n > 0) partQtysBody[p.name] = n;
-      }
-      const body: any = {
-        date: form.date,
-        shift: form.shift,
-        sales_id: form.sales_id,
-        bawa_pagi: parseInt(form.bawa_pagi || "0") || 0,
-        bawa_siang: parseInt(form.bawa_siang || "0") || 0,
-        kosong_pagi: parseInt(form.kosong_pagi || "0") || 0,
-        kosong_siang: parseInt(form.kosong_siang || "0") || 0,
-        kosong_kembali_siang: parseInt(form.kosong_kembali_siang || "0") || 0,
-        kosong_kembali_sore: parseInt(form.kosong_kembali_sore || "0") || 0,
-        sisa_pagi: parseInt(form.sisa_pagi || "0") || 0,
-        sisa_siang: parseInt(form.sisa_siang || "0") || 0,
-        part_qtys: partQtysBody,
-        note: form.note || null,
-      };
-      if (photoIsiPagi) body.photo_isi_pagi = photoIsiPagi;
-      if (photoIsiSiang) body.photo_isi_siang = photoIsiSiang;
-      if (photoKosongSiang) body.photo_kosong_siang = photoKosongSiang;
-      if (photoKosongSore) body.photo_kosong_sore = photoKosongSore;
-      await api.createWarehouseDaily(body);
-      toast.show("Input Gudang tersimpan", "success");
+      await api.createWarehouseDaily(buildBody(false));
+      toast.show("✅ Input Gudang tersimpan (FINAL)", "success");
       await doValidate(form.sales_id, form.date);
     } catch (e: any) {
       toast.show(e?.message || "Gagal simpan", "error");
@@ -345,9 +398,33 @@ export default function GudangInput() {
           </Row>
         </View>
 
-        <TouchableOpacity style={styles.saveBtn} onPress={onSave} disabled={saving} testID="gudang-save-btn">
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>SIMPAN</Text>}
-        </TouchableOpacity>
+        <View style={styles.btnRow}>
+          <TouchableOpacity
+            style={[styles.draftBtn, saving && { opacity: 0.6 }]}
+            onPress={onSaveDraft}
+            disabled={saving || !form.sales_id}
+            testID="gudang-save-draft-btn"
+          >
+            {saving ? <ActivityIndicator color="#F59E0B" /> : (
+              <>
+                <Ionicons name="save-outline" size={18} color="#F59E0B" />
+                <Text style={styles.draftText}>SIMPAN SEMENTARA</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.saveBtn} onPress={onSave} disabled={saving} testID="gudang-save-btn">
+            {saving ? <ActivityIndicator color="#fff" /> : (
+              <>
+                <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                <Text style={styles.saveText}>SIMPAN FINAL</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.hintFooter}>
+          💡 Kalau input belum lengkap (mis. sales lain datang), tap &quot;SIMPAN SEMENTARA&quot;.
+          Nanti pilih Sales & Shift yang sama untuk lanjutkan.
+        </Text>
       </ScrollView>
     </View>
   );
@@ -457,6 +534,29 @@ const styles = StyleSheet.create({
   alertRed: { backgroundColor: "#FEE2E2", borderRadius: 12, padding: 12, borderLeftWidth: 4, borderLeftColor: theme.color.error, gap: 4 },
   alertTitle: { fontSize: 13, fontWeight: "800", color: theme.color.onSurface },
   alertText: { fontSize: 12, color: theme.color.onSurface },
-  saveBtn: { backgroundColor: "#F59E0B", padding: 16, borderRadius: 14, alignItems: "center" },
-  saveText: { color: "#fff", fontWeight: "800", fontSize: 18, letterSpacing: 1 },
+  saveBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#F59E0B", padding: 16, borderRadius: 14 },
+  saveText: { color: "#fff", fontWeight: "800", fontSize: 15, letterSpacing: 0.5 },
+  draftBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    padding: 16,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: "#F59E0B",
+    backgroundColor: "#FEF3C7",
+  },
+  draftText: { color: "#F59E0B", fontWeight: "800", fontSize: 14, letterSpacing: 0.5 },
+  btnRow: { flexDirection: "row", gap: 10 },
+  hintFooter: {
+    fontSize: 11,
+    color: theme.color.muted,
+    textAlign: "center",
+    marginTop: 6,
+    lineHeight: 16,
+    paddingHorizontal: 8,
+    fontStyle: "italic",
+  },
 });

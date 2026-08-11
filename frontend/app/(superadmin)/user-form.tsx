@@ -222,20 +222,42 @@ export default function UserForm() {
 }
 
 function Field({ label, value, onChange, testID, keyboard, secure, multiline, autoCap }: any) {
+  const [visible, setVisible] = React.useState(false);
+  const showToggle = !!secure;
   return (
     <View>
       <Text style={styles.label}>{label}</Text>
-      <TextInput
-        value={value}
-        onChangeText={onChange}
-        keyboardType={keyboard}
-        secureTextEntry={secure}
-        multiline={multiline}
-        autoCapitalize={autoCap || "sentences"}
-        placeholderTextColor={theme.color.muted}
-        style={[styles.input, multiline && { minHeight: 60, textAlignVertical: "top" }]}
-        testID={testID}
-      />
+      <View style={showToggle ? styles.inputWithIcon : undefined}>
+        <TextInput
+          value={value}
+          onChangeText={onChange}
+          keyboardType={keyboard}
+          secureTextEntry={secure && !visible}
+          multiline={multiline}
+          autoCapitalize={autoCap || "sentences"}
+          placeholderTextColor={theme.color.muted}
+          style={[
+            styles.input,
+            multiline && { minHeight: 60, textAlignVertical: "top" },
+            showToggle && { paddingRight: 46 },
+          ]}
+          testID={testID}
+        />
+        {showToggle ? (
+          <TouchableOpacity
+            onPress={() => setVisible((v) => !v)}
+            style={styles.eyeBtn}
+            testID={`${testID}-eye`}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons
+              name={visible ? "eye-off-outline" : "eye-outline"}
+              size={20}
+              color={theme.color.muted}
+            />
+          </TouchableOpacity>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -247,6 +269,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 17, fontWeight: "600", color: theme.color.onSurface },
   label: { fontSize: 13, fontWeight: "500", color: theme.color.onSurfaceSecondary, marginBottom: 6, marginTop: 12 },
   input: { borderWidth: 1, borderColor: theme.color.border, borderRadius: 12, padding: 14, fontSize: 15, color: theme.color.onSurface, backgroundColor: theme.color.surfaceSecondary },
+  inputWithIcon: { position: "relative", justifyContent: "center" },
+  eyeBtn: { position: "absolute", right: 12, top: 0, bottom: 0, alignItems: "center", justifyContent: "center", padding: 4 },
   roleRow: { flexDirection: "row", gap: 8 },
   roleChip: { flex: 1, padding: 10, borderRadius: 999, backgroundColor: theme.color.surfaceSecondary, alignItems: "center" },
   roleChipActive: { backgroundColor: theme.color.brandPrimary },

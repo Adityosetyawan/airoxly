@@ -337,10 +337,18 @@ export const api = {
   deleteProductionDaily: (id: string) => req(`/production/daily/${id}`, { method: "DELETE" }),
   updateProductionDaily: (id: string, body: any) =>
     req<any>(`/production/daily/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  getProductionDraft: (sales_id: string, date: string, shift: string) => {
+    const q = new URLSearchParams({ sales_id, date, shift });
+    return req<any>(`/production/daily/draft?${q.toString()}`);
+  },
 
   // Warehouse daily
   createWarehouseDaily: (body: any) =>
     req<any>("/warehouse/daily", { method: "POST", body: JSON.stringify(body) }),
+  getWarehouseDraft: (sales_id: string, date: string, shift: string) => {
+    const q = new URLSearchParams({ sales_id, date, shift });
+    return req<any>(`/warehouse/daily/draft?${q.toString()}`);
+  },
   listWarehouseDaily: (params: { date_from?: string; date_to?: string; sales_id?: string } = {}) => {
     const q = new URLSearchParams();
     if (params.date_from) q.set("date_from", params.date_from);

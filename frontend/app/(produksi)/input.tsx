@@ -87,6 +87,45 @@ export default function ProduksiInput() {
   const setF = (k: string, v: any) => setForm((s) => ({ ...s, [k]: v }));
   const setPartQty = (name: string, v: string) => setPartQtys((s) => ({ ...s, [name]: v }));
 
+  // Auto-load draft ketika sales/date/shift berubah
+  useEffect(() => {
+    if (!form.sales_id || !form.date || !form.shift) return;
+    (async () => {
+      try {
+        const d = await api.getProductionDraft(form.sales_id, form.date, form.shift);
+        if (d && d.id) {
+          // Ada draft → prefill semua field
+          setForm((f) => ({
+            ...f,
+            destination: d.destination || f.destination,
+            manual_adjust: String(d.manual_adjust || 0),
+            manual_adjust_before: String(d.manual_adjust_before || 0),
+            note: d.note || "",
+          }));
+          setPhotoBefore(d.photo_before || null);
+          setPhotoAfter(d.photo_after || null);
+          if (d.ai_count_before != null) setAiBefore({ count: d.ai_count_before, confidence: d.ai_confidence || "medium", reasoning: "Draft tersimpan sebelumnya" });
+          if (d.ai_count_after != null) setAiAfter({ count: d.ai_count_after, confidence: d.ai_confidence || "medium", reasoning: "Draft tersimpan sebelumnya" });
+          if (d.part_qtys && typeof d.part_qtys === "object") {
+            const pq: Record<string, string> = {};
+            Object.entries(d.part_qtys).forEach(([k, v]) => { pq[k] = String(v); });
+            setPartQtys(pq);
+          }
+          toast.show("Draft dimuat — lanjutkan input", "success");
+        } else {
+          // Reset ke kosong
+          setPhotoBefore(null);
+          setPhotoAfter(null);
+          setAiBefore(null);
+          setAiAfter(null);
+          setPartQtys({});
+          setForm((f) => ({ ...f, manual_adjust: "0", manual_adjust_before: "0", note: "" }));
+        }
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.sales_id, form.date, form.shift]);
+
   const filteredSales = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return [] as SalesUser[];
@@ -98,46 +137,64 @@ export default function ProduksiInput() {
   const manualN = parseInt(form.manual_adjust || "0") || 0;
   const totalProduksi = (aiAfter?.count || 0) + manualN;
 
-  const onSave = async () => {
+  const buildBody = (isDraft: boolean) => {
+    const partQtysBody: Record<string, number> = {};
+    for (const p of parts) {
+      const n = parseInt(partQtys[p.name] || "0") || 0;
+      if (n > 0) partQtysBody[p.name] = n;
+    }
+    return {
+      date: form.date,
+      shift: form.shift,
+      sales_id: form.sales_id,
+      destination: form.destination,
+      ai_count_before: aiBefore?.count ?? null,
+      ai_count_after: aiAfter?.count ?? null,
+      manual_adjust: manualN,
+      manual_adjust_before: parseInt(form.manual_adjust_before || "0") || 0,
+      produksi_galon: Math.max(0, totalProduksi),
+      photo_before: photoBefore || null,
+      photo_after: photoAfter || null,
+      ai_confidence: aiAfter?.confidence || null,
+      part_qtys: partQtysBody,
+      note: form.note || null,
+      is_draft: isDraft,
+    };
+  };
+
+  const resetForm = () => {
+    setPhotoBefore(null);
+    setPhotoAfter(null);
+    setAiBefore(null);
+    setAiAfter(null);
+    setPartQtys({});
+    setForm((f) => ({ ...f, manual_adjust: "0", manual_adjust_before: "0", note: "" }));
+  };
+
+  const onSaveDraft = async () => {
     if (!form.sales_id) return toast.show("Pilih Sales dulu", "error");
-    if (!aiAfter) return toast.show("Foto galon isi (setelah) wajib untuk hitung produksi", "error");
     setSaving(true);
     try {
-      // Bangun part_qtys dict (hanya nilai > 0)
-      const partQtysBody: Record<string, number> = {};
-      for (const p of parts) {
-        const n = parseInt(partQtys[p.name] || "0") || 0;
-        if (n > 0) partQtysBody[p.name] = n;
-      }
+      await api.createProductionDaily(buildBody(true) as any);
+      toast.show("💾 Draft tersimpan — bisa dilanjutkan nanti", "success");
+    } catch (e: any) {
+      toast.show(e?.message || "Gagal simpan draft", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
 
-      const body: any = {
-        date: form.date,
-        shift: form.shift,
-        sales_id: form.sales_id,
-        destination: form.destination,
-        ai_count_before: aiBefore?.count ?? null,
-        ai_count_after: aiAfter?.count ?? null,
-        manual_adjust: manualN,
-        manual_adjust_before: parseInt(form.manual_adjust_before || "0") || 0,
-        produksi_galon: Math.max(0, totalProduksi),
-        photo_before: photoBefore || null,
-        photo_after: photoAfter || null,
-        ai_confidence: aiAfter?.confidence || null,
-        part_qtys: partQtysBody,
-        note: form.note || null,
-      };
-      await api.createProductionDaily(body);
+  const onSave = async () => {
+    if (!form.sales_id) return toast.show("Pilih Sales dulu", "error");
+    if (!aiAfter) return toast.show("Foto galon isi (setelah) wajib untuk final. Gunakan Simpan Sementara jika belum lengkap.", "error");
+    setSaving(true);
+    try {
+      await api.createProductionDaily(buildBody(false) as any);
       toast.show(
         `Produksi tersimpan: ${totalProduksi} galon (${form.destination === "gudang" ? "Kirim Gudang" : "Langsung Jual"})`,
         "success",
       );
-      // Reset foto & AI supaya tidak accidental double-save
-      setPhotoBefore(null);
-      setPhotoAfter(null);
-      setAiBefore(null);
-      setAiAfter(null);
-      setPartQtys({});
-      setForm((f) => ({ ...f, manual_adjust: "0", manual_adjust_before: "0", note: "" }));
+      resetForm();
     } catch (e: any) {
       toast.show(e?.message || "Gagal simpan", "error");
     } finally {
@@ -353,13 +410,38 @@ export default function ProduksiInput() {
           </Row>
         </View>
 
-        <TouchableOpacity style={styles.saveBtn} onPress={onSave} disabled={saving || !aiAfter} testID="produksi-save-btn">
-          {saving ? <ActivityIndicator color="#fff" /> : (
-            <Text style={styles.saveText}>
-              {aiAfter ? "SIMPAN PRODUKSI" : "Foto galon ISI dulu"}
-            </Text>
-          )}
-        </TouchableOpacity>
+        <View style={styles.btnRow}>
+          <TouchableOpacity
+            style={[styles.draftBtn, saving && { opacity: 0.6 }]}
+            onPress={onSaveDraft}
+            disabled={saving || !form.sales_id}
+            testID="produksi-save-draft-btn"
+          >
+            {saving ? <ActivityIndicator color={theme.color.brand} /> : (
+              <>
+                <Ionicons name="save-outline" size={18} color={theme.color.brand} />
+                <Text style={styles.draftText}>SIMPAN SEMENTARA</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.saveBtn, (!aiAfter || saving) && { opacity: 0.5 }]}
+            onPress={onSave}
+            disabled={saving || !aiAfter}
+            testID="produksi-save-btn"
+          >
+            {saving ? <ActivityIndicator color="#fff" /> : (
+              <>
+                <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                <Text style={styles.saveText}>SIMPAN FINAL</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.hintFooter}>
+          💡 Kalau input belum lengkap (mis. sales lain datang), tap &quot;SIMPAN SEMENTARA&quot;.
+          Nanti pilih Sales & Shift yang sama untuk lanjutkan.
+        </Text>
       </ScrollView>
     </View>
   );
@@ -438,6 +520,29 @@ const styles = StyleSheet.create({
   partCol: { width: "48%" },
   smallLabel: { fontSize: 11, color: theme.color.muted, fontWeight: "600" },
   smallInput: { borderWidth: 1, borderColor: theme.color.border, borderRadius: 8, padding: 10, fontSize: 15, textAlign: "center", backgroundColor: "#fff", fontWeight: "700" },
-  saveBtn: { backgroundColor: theme.color.brand, padding: 16, borderRadius: 14, alignItems: "center" },
-  saveText: { color: "#fff", fontWeight: "800", fontSize: 18, letterSpacing: 1 },
+  saveBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: theme.color.brand, padding: 16, borderRadius: 14 },
+  saveText: { color: "#fff", fontWeight: "800", fontSize: 15, letterSpacing: 0.5 },
+  draftBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    padding: 16,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: theme.color.brand,
+    backgroundColor: theme.color.brandTertiary,
+  },
+  draftText: { color: theme.color.brand, fontWeight: "800", fontSize: 14, letterSpacing: 0.5 },
+  btnRow: { flexDirection: "row", gap: 10 },
+  hintFooter: {
+    fontSize: 11,
+    color: theme.color.muted,
+    textAlign: "center",
+    marginTop: 6,
+    lineHeight: 16,
+    paddingHorizontal: 8,
+    fontStyle: "italic",
+  },
 });

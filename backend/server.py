@@ -1418,12 +1418,13 @@ async def monthly_report(
     part_qtys = admin.get("part_qtys", {}) or {}
 
     # ---- AUTO-COMPUTE part quantities from production_daily & warehouse_daily ----
+    # Exclude drafts — hanya data final yang masuk laporan.
     prod_entries = await db.production_daily.find(
-        {"sales_id": sales_id, "date": {"$gte": start, "$lte": end}},
+        {"sales_id": sales_id, "date": {"$gte": start, "$lte": end}, "is_draft": {"$ne": True}},
         {"_id": 0},
     ).to_list(2000)
     wh_entries = await db.warehouse_daily.find(
-        {"sales_id": sales_id, "date": {"$gte": start, "$lte": end}},
+        {"sales_id": sales_id, "date": {"$gte": start, "$lte": end}, "is_draft": {"$ne": True}},
         {"_id": 0},
     ).to_list(2000)
 
@@ -2188,6 +2189,7 @@ class ProductionDailyCreate(BaseModel):
     photo_after: Optional[str] = None       # foto galon isi (watermarked)
     ai_confidence: Optional[str] = None     # "low"/"medium"/"high" — reference only
     note: Optional[str] = None
+    is_draft: bool = False  # true = simpan sementara, boleh dilanjutkan; false = final
 
 
 class WarehouseDailyCreate(BaseModel):
@@ -2224,6 +2226,7 @@ class WarehouseDailyCreate(BaseModel):
     photo_kosong_siang: Optional[str] = None  # foto galon kosong pulang siang
     photo_kosong_sore: Optional[str] = None   # foto galon kosong pulang sore
     note: Optional[str] = None
+    is_draft: bool = False  # true = simpan sementara, boleh dilanjutkan; false = final
 
 
 class ProductionDailyUpdate(BaseModel):
@@ -2361,7 +2364,7 @@ async def _compute_stock() -> dict:
         _bump(_canonical_item(item), qty)
 
     # ---- PRODUCTION reduces ----
-    async for row in db.production_daily.find({}, {"_id": 0}):
+    async for row in db.production_daily.find({"is_draft": {"$ne": True}}, {"_id": 0}):
         # Legacy hardcoded fields
         for f, name in LEGACY_FIELD_TO_PART_NAME_PRODUKSI.items():
             v = int(row.get(f, 0) or 0)
@@ -2378,7 +2381,7 @@ async def _compute_stock() -> dict:
         # NOTE: stok_galon_baru is IGNORED per user request (produksi tidak menambah stok)
 
     # ---- WAREHOUSE daily reduces ----
-    async for row in db.warehouse_daily.find({}, {"_id": 0}):
+    async for row in db.warehouse_daily.find({"is_draft": {"$ne": True}}, {"_id": 0}):
         for f, name in LEGACY_FIELD_TO_PART_NAME_GUDANG.items():
             v = int(row.get(f, 0) or 0)
             if v:
@@ -2401,6 +2404,25 @@ async def create_production_daily(body: ProductionDailyCreate, user=Depends(requ
     if not sales:
         raise HTTPException(404, "Sales not found")
     doc = body.dict()
+
+    # ---- Draft upsert: kalau sudah ada draft untuk (sales_id, date, shift), UPDATE bukan insert ----
+    if doc.get("is_draft"):
+        existing = await db.production_daily.find_one(
+            {
+                "sales_id": body.sales_id,
+                "date": body.date,
+                "shift": body.shift,
+                "is_draft": True,
+            },
+            {"_id": 0},
+        )
+        if existing:
+            update_fields = {k: v for k, v in doc.items() if v is not None}
+            update_fields["updated_at"] = now_utc().isoformat()
+            await db.production_daily.update_one({"id": existing["id"]}, {"$set": update_fields})
+            merged = await db.production_daily.find_one({"id": existing["id"]}, {"_id": 0})
+            return merged
+
     doc.update({
         "id": str(uuid.uuid4()),
         "sales_code": sales.get("sales_code"),
@@ -2413,6 +2435,21 @@ async def create_production_daily(body: ProductionDailyCreate, user=Depends(requ
     await db.production_daily.insert_one(doc)
     doc.pop("_id", None)
     return doc
+
+
+@prod_wh.get("/production/daily/draft")
+async def get_production_draft(
+    sales_id: str,
+    date: str,
+    shift: str,
+    user=Depends(require_roles("produksi", "super_admin")),
+):
+    """Ambil draft produksi (jika ada) untuk (sales, tanggal, shift)."""
+    d = await db.production_daily.find_one(
+        {"sales_id": sales_id, "date": date, "shift": shift, "is_draft": True},
+        {"_id": 0},
+    )
+    return d or {}
 
 
 @prod_wh.get("/production/daily")
@@ -2495,6 +2532,25 @@ async def create_warehouse_daily(body: WarehouseDailyCreate, user=Depends(requir
     for k in ("kosong_kembali_siang", "kosong_kembali_sore"):
         if doc.get(k) is None:
             doc.pop(k, None)
+
+    # ---- Draft upsert: kalau sudah ada draft untuk (sales_id, date, shift), UPDATE bukan insert ----
+    if doc.get("is_draft"):
+        existing = await db.warehouse_daily.find_one(
+            {
+                "sales_id": body.sales_id,
+                "date": body.date,
+                "shift": body.shift,
+                "is_draft": True,
+            },
+            {"_id": 0},
+        )
+        if existing:
+            update_fields = {k: v for k, v in doc.items() if v is not None}
+            update_fields["updated_at"] = now_utc().isoformat()
+            await db.warehouse_daily.update_one({"id": existing["id"]}, {"$set": update_fields})
+            merged = await db.warehouse_daily.find_one({"id": existing["id"]}, {"_id": 0})
+            return merged
+
     doc.update({
         "id": str(uuid.uuid4()),
         "sales_code": sales.get("sales_code"),
@@ -2507,6 +2563,21 @@ async def create_warehouse_daily(body: WarehouseDailyCreate, user=Depends(requir
     await db.warehouse_daily.insert_one(doc)
     doc.pop("_id", None)
     return doc
+
+
+@prod_wh.get("/warehouse/daily/draft")
+async def get_warehouse_draft(
+    sales_id: str,
+    date: str,
+    shift: str,
+    user=Depends(require_roles("gudang", "super_admin")),
+):
+    """Ambil draft gudang (jika ada) untuk (sales, tanggal, shift)."""
+    d = await db.warehouse_daily.find_one(
+        {"sales_id": sales_id, "date": date, "shift": shift, "is_draft": True},
+        {"_id": 0},
+    )
+    return d or {}
 
 
 @prod_wh.get("/warehouse/daily")

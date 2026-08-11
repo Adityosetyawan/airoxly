@@ -319,15 +319,33 @@ export default function GudangInput() {
             ) : null}
           </Row>
 
-          <SectionTitle>1️⃣ Bawa Isi (dari foto real + penyesuaian)</SectionTitle>
+          <SectionTitle>1️⃣ Bawa Isi (dari foto real + AI + penyesuaian)</SectionTitle>
           <View style={styles.photoGrid}>
             <View style={{ flex: 1 }}>
-              <PhotoCapture value={photoIsiPagi} onChange={setPhotoIsiPagi} label="Isi Pagi" watermark testID="photo-isi-pagi" />
-              <NumStepper value={form.bawa_pagi} onChange={(v) => setF("bawa_pagi", v)} label="Bawa Isi Pagi" allowNegative={false} testID="stepper-bawa-pagi" />
+              <PhotoCapture
+                value={photoIsiPagi}
+                onChange={setPhotoIsiPagi}
+                label="Isi Pagi"
+                watermark
+                aiCount
+                hintForAI="galon air isi"
+                onAICount={(c) => setF("bawa_pagi", String(c))}
+                testID="photo-isi-pagi"
+              />
+              <NumStepper value={form.bawa_pagi} onChange={(v) => setF("bawa_pagi", v)} label="Bawa Isi Pagi (AI + koreksi)" allowNegative={false} testID="stepper-bawa-pagi" />
             </View>
             <View style={{ flex: 1 }}>
-              <PhotoCapture value={photoIsiSiang} onChange={setPhotoIsiSiang} label="Isi Siang" watermark testID="photo-isi-siang" />
-              <NumStepper value={form.bawa_siang} onChange={(v) => setF("bawa_siang", v)} label="Bawa Isi Siang" allowNegative={false} testID="stepper-bawa-siang" />
+              <PhotoCapture
+                value={photoIsiSiang}
+                onChange={setPhotoIsiSiang}
+                label="Isi Siang"
+                watermark
+                aiCount
+                hintForAI="galon air isi"
+                onAICount={(c) => setF("bawa_siang", String(c))}
+                testID="photo-isi-siang"
+              />
+              <NumStepper value={form.bawa_siang} onChange={(v) => setF("bawa_siang", v)} label="Bawa Isi Siang (AI + koreksi)" allowNegative={false} testID="stepper-bawa-siang" />
             </View>
           </View>
 
@@ -345,15 +363,33 @@ export default function GudangInput() {
             <Text style={styles.terjualValue}>{terjual}</Text>
           </View>
 
-          <SectionTitle>3️⃣ Galon Kembali (dari foto real + penyesuaian)</SectionTitle>
+          <SectionTitle>3️⃣ Galon Kembali (dari foto real + AI + penyesuaian)</SectionTitle>
           <View style={styles.photoGrid}>
             <View style={{ flex: 1 }}>
-              <PhotoCapture value={photoKosongSiang} onChange={setPhotoKosongSiang} label="Galon Siang" watermark testID="photo-galon-siang" />
-              <NumStepper value={form.kosong_kembali_siang} onChange={(v) => setF("kosong_kembali_siang", v)} label="Galon Kembali Siang" allowNegative={false} testID="stepper-kembali-siang" />
+              <PhotoCapture
+                value={photoKosongSiang}
+                onChange={setPhotoKosongSiang}
+                label="Galon Siang"
+                watermark
+                aiCount
+                hintForAI="galon air kosong"
+                onAICount={(c) => setF("kosong_kembali_siang", String(c))}
+                testID="photo-galon-siang"
+              />
+              <NumStepper value={form.kosong_kembali_siang} onChange={(v) => setF("kosong_kembali_siang", v)} label="Galon Kembali Siang (AI + koreksi)" allowNegative={false} testID="stepper-kembali-siang" />
             </View>
             <View style={{ flex: 1 }}>
-              <PhotoCapture value={photoKosongSore} onChange={setPhotoKosongSore} label="Galon Sore" watermark testID="photo-galon-sore" />
-              <NumStepper value={form.kosong_kembali_sore} onChange={(v) => setF("kosong_kembali_sore", v)} label="Galon Kembali Sore" allowNegative={false} testID="stepper-kembali-sore" />
+              <PhotoCapture
+                value={photoKosongSore}
+                onChange={setPhotoKosongSore}
+                label="Galon Sore"
+                watermark
+                aiCount
+                hintForAI="galon air kosong"
+                onAICount={(c) => setF("kosong_kembali_sore", String(c))}
+                testID="photo-galon-sore"
+              />
+              <NumStepper value={form.kosong_kembali_sore} onChange={(v) => setF("kosong_kembali_sore", v)} label="Galon Kembali Sore (AI + koreksi)" allowNegative={false} testID="stepper-kembali-sore" />
             </View>
           </View>
           {kosongPulang > 0 || form.sales_id ? (

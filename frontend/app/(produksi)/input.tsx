@@ -195,12 +195,17 @@ export default function ProduksiInput() {
 
   const onSave = async () => {
     if (!form.sales_id) return toast.show("Pilih Sales dulu", "error");
-    if (!aiAfter) return toast.show("Foto galon isi (setelah) wajib untuk final. Gunakan Simpan Sementara jika belum lengkap.", "error");
+    if (totalProduksi <= 0) {
+      return toast.show(
+        "Foto galon isi atau masukkan koreksi manual dulu (produksi 0)",
+        "error",
+      );
+    }
     setSaving(true);
     try {
       await api.createProductionDaily(buildBody(false) as any);
       toast.show(
-        `Produksi tersimpan: ${totalProduksi} galon (${form.destination === "gudang" ? "Kirim Gudang" : "Langsung Jual"})`,
+        `✅ Produksi tersimpan: ${totalProduksi} galon (${form.destination === "gudang" ? "Kirim Gudang" : "Langsung Jual"})`,
         "success",
       );
       resetForm();
@@ -457,9 +462,9 @@ export default function ProduksiInput() {
             )}
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.saveBtn, (!aiAfter || saving) && { opacity: 0.5 }]}
+            style={[styles.saveBtn, saving && { opacity: 0.5 }]}
             onPress={onSave}
-            disabled={saving || !aiAfter}
+            disabled={saving}
             testID="produksi-save-btn"
           >
             {saving ? <ActivityIndicator color="#fff" /> : (

@@ -62,6 +62,10 @@ export default function ProduksiInput() {
   const [photoAfterAt, setPhotoAfterAt] = useState<Date | null>(null);
   const [aiBefore, setAiBefore] = useState<{ count: number; confidence: string; reasoning: string } | null>(null);
   const [aiAfter, setAiAfter] = useState<{ count: number; confidence: string; reasoning: string } | null>(null);
+  const [aiBeforeStatus, setAiBeforeStatus] = useState<"idle" | "processing" | "error">("idle");
+  const [aiAfterStatus, setAiAfterStatus] = useState<"idle" | "processing" | "error">("idle");
+  const [aiBeforeErr, setAiBeforeErr] = useState("");
+  const [aiAfterErr, setAiAfterErr] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -303,13 +307,21 @@ export default function ProduksiInput() {
           <SectionTitle>1️⃣ Foto Galon Kosong (SEBELUM diisi)</SectionTitle>
           <PhotoCapture
             value={photoBefore}
-            onChange={(v) => { setPhotoBefore(v); setPhotoBeforeAt(v ? new Date() : null); if (!v) setAiBefore(null); }}
+            onChange={(v) => {
+              setPhotoBefore(v);
+              setPhotoBeforeAt(v ? new Date() : null);
+              if (!v) { setAiBefore(null); setAiBeforeStatus("idle"); }
+              else if (!aiBefore) setAiBeforeStatus("processing");
+            }}
             label="Foto galon kosong"
             watermark
             aiCount
             hintForAI="galon kosong sebelum diisi"
-            onAICount={(count, confidence, reasoning) => setAiBefore({ count, confidence, reasoning })}
-            caption={photoBefore ? `${aiBefore ? `🤖 AI: ${aiBefore.count} galon\n` : ""}📅 ${photoBeforeAt ? photoBeforeAt.toLocaleString("id-ID") : ""}` : null}
+            onAICount={(count, confidence, reasoning) => { setAiBefore({ count, confidence, reasoning }); setAiBeforeStatus("idle"); }}
+            onAIError={(m) => { setAiBeforeErr(m); setAiBeforeStatus("error"); }}
+            caption={photoBefore ? (
+              <PhotoMeta status={aiBeforeStatus} aiCount={aiBefore?.count} err={aiBeforeErr} at={photoBeforeAt} unit="galon" />
+            ) : null}
             testID="photo-produksi-before"
           />
           {aiBefore ? (
@@ -333,13 +345,21 @@ export default function ProduksiInput() {
           <SectionTitle>2️⃣ Foto Galon Isi (SETELAH diisi)</SectionTitle>
           <PhotoCapture
             value={photoAfter}
-            onChange={(v) => { setPhotoAfter(v); setPhotoAfterAt(v ? new Date() : null); if (!v) setAiAfter(null); }}
+            onChange={(v) => {
+              setPhotoAfter(v);
+              setPhotoAfterAt(v ? new Date() : null);
+              if (!v) { setAiAfter(null); setAiAfterStatus("idle"); }
+              else if (!aiAfter) setAiAfterStatus("processing");
+            }}
             label="Foto galon isi (produk jadi)"
             watermark
             aiCount
             hintForAI="galon air isi setelah diisi"
-            onAICount={(count, confidence, reasoning) => setAiAfter({ count, confidence, reasoning })}
-            caption={photoAfter ? `${aiAfter ? `🤖 AI: ${aiAfter.count} galon\n` : ""}📅 ${photoAfterAt ? photoAfterAt.toLocaleString("id-ID") : ""}` : null}
+            onAICount={(count, confidence, reasoning) => { setAiAfter({ count, confidence, reasoning }); setAiAfterStatus("idle"); }}
+            onAIError={(m) => { setAiAfterErr(m); setAiAfterStatus("error"); }}
+            caption={photoAfter ? (
+              <PhotoMeta status={aiAfterStatus} aiCount={aiAfter?.count} err={aiAfterErr} at={photoAfterAt} unit="galon" />
+            ) : null}
             testID="photo-produksi-after"
           />
           {aiAfter ? (
@@ -499,6 +519,40 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return <Text style={styles.sectionTitle}>{children}</Text>;
 }
+
+function PhotoMeta({ status, aiCount, err, at, unit }: {
+  status: "idle" | "processing" | "error";
+  aiCount?: number;
+  err?: string;
+  at: Date | null;
+  unit: string;
+}) {
+  const dateStr = at ? at.toLocaleString("id-ID", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-";
+  return (
+    <View style={{ gap: 4 }}>
+      {status === "processing" ? (
+        <View style={photoMetaStyles.rowCenter}>
+          <ActivityIndicator size="small" color="#059669" />
+          <Text style={photoMetaStyles.aiText}>AI sedang menghitung…</Text>
+        </View>
+      ) : aiCount != null ? (
+        <View style={photoMetaStyles.rowCenter}>
+          <Ionicons name="sparkles" size={13} color="#059669" />
+          <Text style={photoMetaStyles.aiText}>AI: <Text style={{ fontWeight: "900" }}>{aiCount}</Text> {unit}</Text>
+        </View>
+      ) : status === "error" ? (
+        <View style={photoMetaStyles.rowCenter}>
+          <Ionicons name="alert-circle" size={13} color="#DC2626" />
+          <Text style={photoMetaStyles.errText}>AI gagal: {err || "coba manual"}</Text>
+        </View>
+      ) : null}
+      <View style={photoMetaStyles.rowCenter}>
+        <Ionicons name="time-outline" size={12} color="#065F46" />
+        <Text style={photoMetaStyles.dateText}>{dateStr}</Text>
+      </View>
+    </View>
+  );
+}
 function NumFieldSmall({ label, value, onChange, testID }: { label: string; value: string; onChange: (v: string) => void; testID?: string }) {
   return (
     <View style={{ flex: 1, gap: 4 }}>
@@ -514,6 +568,13 @@ function NumFieldSmall({ label, value, onChange, testID }: { label: string; valu
     </View>
   );
 }
+
+const photoMetaStyles = StyleSheet.create({
+  rowCenter: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 },
+  aiText: { fontSize: 12, color: "#065F46", fontWeight: "700" },
+  errText: { fontSize: 11, color: "#DC2626", fontWeight: "600" },
+  dateText: { fontSize: 10, color: "#065F46", fontWeight: "600" },
+});
 
 const styles = StyleSheet.create({
   body: { padding: 16, gap: 12, paddingBottom: 60 },

@@ -55,11 +55,16 @@ export default function GudangInput() {
   const [photoIsiSiangAt, setPhotoIsiSiangAt] = useState<Date | null>(null);
   const [photoKosongSiangAt, setPhotoKosongSiangAt] = useState<Date | null>(null);
   const [photoKosongSoreAt, setPhotoKosongSoreAt] = useState<Date | null>(null);
-  // AI count per foto
+  // AI count per foto + status
   const [aiIsiPagi, setAiIsiPagi] = useState<number | null>(null);
   const [aiIsiSiang, setAiIsiSiang] = useState<number | null>(null);
   const [aiKosongSiang, setAiKosongSiang] = useState<number | null>(null);
   const [aiKosongSore, setAiKosongSore] = useState<number | null>(null);
+  type AiState = "idle" | "processing" | "error";
+  const [aiIsiPagiStatus, setAiIsiPagiStatus] = useState<AiState>("idle");
+  const [aiIsiSiangStatus, setAiIsiSiangStatus] = useState<AiState>("idle");
+  const [aiKosongSiangStatus, setAiKosongSiangStatus] = useState<AiState>("idle");
+  const [aiKosongSoreStatus, setAiKosongSoreStatus] = useState<AiState>("idle");
 
   useEffect(() => {
     (async () => {
@@ -334,13 +339,21 @@ export default function GudangInput() {
             <View style={{ flex: 1 }}>
               <PhotoCapture
                 value={photoIsiPagi}
-                onChange={(v) => { setPhotoIsiPagi(v); setPhotoIsiPagiAt(v ? new Date() : null); if (!v) setAiIsiPagi(null); }}
+                onChange={(v) => {
+                  setPhotoIsiPagi(v);
+                  setPhotoIsiPagiAt(v ? new Date() : null);
+                  if (!v) { setAiIsiPagi(null); setAiIsiPagiStatus("idle"); }
+                  else if (aiIsiPagi == null) setAiIsiPagiStatus("processing");
+                }}
                 label="Isi Pagi"
                 watermark
                 aiCount
                 hintForAI="galon air isi"
-                onAICount={(c) => { setAiIsiPagi(c); setF("bawa_pagi", String(c)); }}
-                caption={photoIsiPagi ? `${aiIsiPagi != null ? `🤖 AI: ${aiIsiPagi} galon\n` : ""}📅 ${photoIsiPagiAt ? photoIsiPagiAt.toLocaleString("id-ID") : ""}` : null}
+                onAICount={(c) => { setAiIsiPagi(c); setAiIsiPagiStatus("idle"); setF("bawa_pagi", String(c)); }}
+                onAIError={() => setAiIsiPagiStatus("error")}
+                caption={photoIsiPagi ? (
+                  <PhotoMeta status={aiIsiPagiStatus} aiCount={aiIsiPagi ?? undefined} at={photoIsiPagiAt} unit="galon" />
+                ) : null}
                 testID="photo-isi-pagi"
               />
               <NumStepper value={form.bawa_pagi} onChange={(v) => setF("bawa_pagi", v)} label="Bawa Isi Pagi (AI + koreksi)" allowNegative={false} testID="stepper-bawa-pagi" />
@@ -348,13 +361,21 @@ export default function GudangInput() {
             <View style={{ flex: 1 }}>
               <PhotoCapture
                 value={photoIsiSiang}
-                onChange={(v) => { setPhotoIsiSiang(v); setPhotoIsiSiangAt(v ? new Date() : null); if (!v) setAiIsiSiang(null); }}
+                onChange={(v) => {
+                  setPhotoIsiSiang(v);
+                  setPhotoIsiSiangAt(v ? new Date() : null);
+                  if (!v) { setAiIsiSiang(null); setAiIsiSiangStatus("idle"); }
+                  else if (aiIsiSiang == null) setAiIsiSiangStatus("processing");
+                }}
                 label="Isi Siang"
                 watermark
                 aiCount
                 hintForAI="galon air isi"
-                onAICount={(c) => { setAiIsiSiang(c); setF("bawa_siang", String(c)); }}
-                caption={photoIsiSiang ? `${aiIsiSiang != null ? `🤖 AI: ${aiIsiSiang} galon\n` : ""}📅 ${photoIsiSiangAt ? photoIsiSiangAt.toLocaleString("id-ID") : ""}` : null}
+                onAICount={(c) => { setAiIsiSiang(c); setAiIsiSiangStatus("idle"); setF("bawa_siang", String(c)); }}
+                onAIError={() => setAiIsiSiangStatus("error")}
+                caption={photoIsiSiang ? (
+                  <PhotoMeta status={aiIsiSiangStatus} aiCount={aiIsiSiang ?? undefined} at={photoIsiSiangAt} unit="galon" />
+                ) : null}
                 testID="photo-isi-siang"
               />
               <NumStepper value={form.bawa_siang} onChange={(v) => setF("bawa_siang", v)} label="Bawa Isi Siang (AI + koreksi)" allowNegative={false} testID="stepper-bawa-siang" />
@@ -380,13 +401,21 @@ export default function GudangInput() {
             <View style={{ flex: 1 }}>
               <PhotoCapture
                 value={photoKosongSiang}
-                onChange={(v) => { setPhotoKosongSiang(v); setPhotoKosongSiangAt(v ? new Date() : null); if (!v) setAiKosongSiang(null); }}
+                onChange={(v) => {
+                  setPhotoKosongSiang(v);
+                  setPhotoKosongSiangAt(v ? new Date() : null);
+                  if (!v) { setAiKosongSiang(null); setAiKosongSiangStatus("idle"); }
+                  else if (aiKosongSiang == null) setAiKosongSiangStatus("processing");
+                }}
                 label="Galon Siang"
                 watermark
                 aiCount
                 hintForAI="galon air kosong"
-                onAICount={(c) => { setAiKosongSiang(c); setF("kosong_kembali_siang", String(c)); }}
-                caption={photoKosongSiang ? `${aiKosongSiang != null ? `🤖 AI: ${aiKosongSiang} galon\n` : ""}📅 ${photoKosongSiangAt ? photoKosongSiangAt.toLocaleString("id-ID") : ""}` : null}
+                onAICount={(c) => { setAiKosongSiang(c); setAiKosongSiangStatus("idle"); setF("kosong_kembali_siang", String(c)); }}
+                onAIError={() => setAiKosongSiangStatus("error")}
+                caption={photoKosongSiang ? (
+                  <PhotoMeta status={aiKosongSiangStatus} aiCount={aiKosongSiang ?? undefined} at={photoKosongSiangAt} unit="galon" />
+                ) : null}
                 testID="photo-galon-siang"
               />
               <NumStepper value={form.kosong_kembali_siang} onChange={(v) => setF("kosong_kembali_siang", v)} label="Galon Kembali Siang (AI + koreksi)" allowNegative={false} testID="stepper-kembali-siang" />
@@ -394,13 +423,21 @@ export default function GudangInput() {
             <View style={{ flex: 1 }}>
               <PhotoCapture
                 value={photoKosongSore}
-                onChange={(v) => { setPhotoKosongSore(v); setPhotoKosongSoreAt(v ? new Date() : null); if (!v) setAiKosongSore(null); }}
+                onChange={(v) => {
+                  setPhotoKosongSore(v);
+                  setPhotoKosongSoreAt(v ? new Date() : null);
+                  if (!v) { setAiKosongSore(null); setAiKosongSoreStatus("idle"); }
+                  else if (aiKosongSore == null) setAiKosongSoreStatus("processing");
+                }}
                 label="Galon Sore"
                 watermark
                 aiCount
                 hintForAI="galon air kosong"
-                onAICount={(c) => { setAiKosongSore(c); setF("kosong_kembali_sore", String(c)); }}
-                caption={photoKosongSore ? `${aiKosongSore != null ? `🤖 AI: ${aiKosongSore} galon\n` : ""}📅 ${photoKosongSoreAt ? photoKosongSoreAt.toLocaleString("id-ID") : ""}` : null}
+                onAICount={(c) => { setAiKosongSore(c); setAiKosongSoreStatus("idle"); setF("kosong_kembali_sore", String(c)); }}
+                onAIError={() => setAiKosongSoreStatus("error")}
+                caption={photoKosongSore ? (
+                  <PhotoMeta status={aiKosongSoreStatus} aiCount={aiKosongSore ?? undefined} at={photoKosongSoreAt} unit="galon" />
+                ) : null}
                 testID="photo-galon-sore"
               />
               <NumStepper value={form.kosong_kembali_sore} onChange={(v) => setF("kosong_kembali_sore", v)} label="Galon Kembali Sore (AI + koreksi)" allowNegative={false} testID="stepper-kembali-sore" />
@@ -506,6 +543,46 @@ function NumFieldSmall({ label, value, onChange, testID }: { label: string; valu
     </View>
   );
 }
+
+function PhotoMeta({ status, aiCount, at, unit }: {
+  status: "idle" | "processing" | "error";
+  aiCount?: number;
+  at: Date | null;
+  unit: string;
+}) {
+  const dateStr = at ? at.toLocaleString("id-ID", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-";
+  return (
+    <View style={{ gap: 4 }}>
+      {status === "processing" ? (
+        <View style={photoMetaStyles.rowCenter}>
+          <ActivityIndicator size="small" color="#059669" />
+          <Text style={photoMetaStyles.aiText}>AI menghitung…</Text>
+        </View>
+      ) : aiCount != null ? (
+        <View style={photoMetaStyles.rowCenter}>
+          <Ionicons name="sparkles" size={13} color="#059669" />
+          <Text style={photoMetaStyles.aiText}>AI: <Text style={{ fontWeight: "900" }}>{aiCount}</Text> {unit}</Text>
+        </View>
+      ) : status === "error" ? (
+        <View style={photoMetaStyles.rowCenter}>
+          <Ionicons name="alert-circle" size={13} color="#DC2626" />
+          <Text style={photoMetaStyles.errText}>AI gagal — koreksi manual</Text>
+        </View>
+      ) : null}
+      <View style={photoMetaStyles.rowCenter}>
+        <Ionicons name="time-outline" size={12} color="#065F46" />
+        <Text style={photoMetaStyles.dateText}>{dateStr}</Text>
+      </View>
+    </View>
+  );
+}
+
+const photoMetaStyles = StyleSheet.create({
+  rowCenter: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 },
+  aiText: { fontSize: 12, color: "#065F46", fontWeight: "700" },
+  errText: { fontSize: 11, color: "#DC2626", fontWeight: "600" },
+  dateText: { fontSize: 10, color: "#065F46", fontWeight: "600" },
+});
 
 const styles = StyleSheet.create({
   body: { padding: 16, gap: 12, paddingBottom: 60 },

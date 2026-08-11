@@ -25,6 +25,7 @@ export function PhotoCapture({
   aiCount = false,
   hintForAI,
   onAICount,
+  onAIError,
   caption,
 }: {
   value: string | null | undefined;
@@ -36,7 +37,8 @@ export function PhotoCapture({
   aiCount?: boolean;
   hintForAI?: string;
   onAICount?: (count: number, confidence: "low" | "medium" | "high", reasoning: string) => void;
-  caption?: string | null;
+  onAIError?: (msg: string) => void;
+  caption?: React.ReactNode;
 }) {
   const [processing, setProcessing] = useState(false);
 
@@ -84,7 +86,9 @@ export function PhotoCapture({
           const r = await api.aiCountGallons(dataUri, hintForAI || label);
           onAICount(r.count, r.confidence, r.reasoning);
         } catch (e: any) {
-          Alert.alert("AI gagal menghitung", e?.message || "Coba manual saja");
+          const msg = e?.message || "Gagal hitung AI";
+          if (onAIError) onAIError(msg);
+          else Alert.alert("AI gagal menghitung", msg + " — coba manual saja");
         }
       }
     } catch (e: any) {
@@ -107,7 +111,9 @@ export function PhotoCapture({
         <Image source={{ uri: value }} style={compact ? styles.compactImg : styles.img} resizeMode="cover" />
         {caption ? (
           <View style={styles.captionBox}>
-            <Text style={styles.captionText} numberOfLines={2}>{caption}</Text>
+            {typeof caption === "string" ? (
+              <Text style={styles.captionText} numberOfLines={3}>{caption}</Text>
+            ) : caption}
           </View>
         ) : null}
         <View style={styles.actions}>

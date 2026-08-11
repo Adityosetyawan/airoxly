@@ -1,0 +1,62 @@
+{
+  "summary": "Backend regression after AI-count caption UI fix (iter 19). Verified draft upsert + is_draft + sisa_pagi/sisa_siang on POST/GET /api/{production,warehouse}/daily, and reachability of AI endpoint. All 11 new tests + 33 existing regression tests (produksi_gudang, discrepancy, new_features) PASS = 44/44 (100%). Frontend skipped per request (camera not automatable). One doc discrepancy: review says AI route is /api/production/daily/ai-count but actual route is /api/ai/count-gallons — frontend uses correct one.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/ai/count-gallons", "issue": "Review request referenced endpoint as POST /api/production/daily/ai-count but actual server route is POST /api/ai/count-gallons (server.py:2815). Not a bug — just doc mismatch. Frontend PhotoCapture.tsx must be pointed at the correct URL."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ai_draft_iter19.py",
+    "/app/test_reports/pytest/iteration_19_ai_draft.xml"
+  ],
+  "test_details": {
+    "new_tests_iter19 (11 PASS)": {
+      "TestProductionDraft": [
+        "POST /api/production/daily is_draft=True + sisa_pagi/sisa_siang persisted",
+        "GET  /api/production/daily/draft?sales_id&date&shift returns the draft",
+        "Draft upsert: second POST with same (sales,date,shift,is_draft) UPDATES same id (produksi_galon 20→35, only 1 row in list)",
+        "is_draft=False on a different shift INSERTs a new row"
+      ],
+      "TestWarehouseDraft": [
+        "POST /api/warehouse/daily is_draft=True with photo_isi_pagi + sisa_pagi persisted",
+        "GET  /api/warehouse/daily/draft returns the draft",
+        "Draft upsert: same (sales,date,shift) UPDATES (bawa_pagi 30→45)",
+        "GET draft for non-matching date returns {} (empty object)"
+      ],
+      "TestAiCountReachable": [
+        "POST /api/ai/count-gallons without token → 401/403",
+        "POST /api/ai/count-gallons with token but missing image_base64 → 422",
+        "POST /api/ai/count-gallons with token + empty string → route reachable (not 404)"
+      ]
+    },
+    "regression_suites (33 PASS)": {
+      "test_produksi_gudang.py": "18/18 — production/warehouse daily CRUD, edit-once limit, monthly report auto-fill",
+      "test_discrepancy.py": "6/6 — merah/hijau discrepancy + clear-hijau/restore-hijau + RBAC",
+      "test_new_features.py": "9/9 — expense photo edit, GPS filter, settings RBAC, reset guards, create-user without google_email"
+    }
+  },
+  "action_items": [
+    "(Doc-only) Update review-request wording so it matches the actual AI endpoint POST /api/ai/count-gallons; the frontend already targets the correct URL."
+  ],
+  "critical_code_review_comments": [
+    "Draft upsert in server.py:2413-2429 and 2541-2557 uses find_one + update_one — safe for single-writer but not fully atomic under concurrent posts. Consider find_one_and_update with upsert=True if the same (sales,date,shift) can be posted from two devices at once. Not blocking.",
+    "sisa_pagi / sisa_siang are now present on both ProductionDailyCreate (server.py:2192-2193) and WarehouseDailyCreate models — confirmed via response payload.",
+    "Server.py is 3107 lines — monolithic; not blocking but worth splitting into modules (auth, production, warehouse, reports, ai)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_ai_draft_iter19.py (new — 11 tests)"
+  ],
+  "success_rate": {"backend": "100% (44/44 — 11 new + 33 regression)", "frontend": "n/a (skipped per request)"},
+  "seed_data_creation": "Tests write to isolated past date 2020-02-19 for sales A1; per-module autouse fixture wipes production_daily + warehouse_daily rows for that (sales,date) before + after the class runs, keeping the DB clean.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: pytest backend/tests/test_ai_draft_iter19.py backend/tests/test_produksi_gudang.py backend/tests/test_discrepancy.py backend/tests/test_new_features.py -v -o addopts=''. All 44 tests must remain green. AI endpoint is POST /api/ai/count-gallons (NOT /api/production/daily/ai-count).",
+  "rca_of_issue": "n/a — this iteration is a UI-cosmetic fix (Ionicons-based caption replacing emoji + PhotoMeta status label). Backend was not modified; only regression verification was requested. All requested endpoints (draft POST/GET, sisa_pagi/sisa_siang in response, photo_rumah, AI reachability) verified functional."
+}

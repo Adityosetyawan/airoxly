@@ -1,0 +1,169 @@
+"""Customer endpoints (scoped by sales; admins see own group; super admin sees all)."""
+from __future__ import annotations
+
+import uuid
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from core.config import db
+from core.security import get_current_user, require_roles
+from core.utils import now_utc, strip_id
+from models import CustomerCreate, CustomerUpdate
+
+router = APIRouter(prefix="/api/customers", tags=["customers"])
+
+
+async def next_customer_no_for(sales_id: str) -> int:
+    last = await db.customers.find(
+        {"created_by": sales_id},
+        {"_id": 0, "customer_no": 1},
+    ).sort("customer_no", -1).limit(1).to_list(1)
+    if not last:
+        return 1
+    return int(last[0].get("customer_no", 0)) + 1
+
+
+@router.get("")
+async def list_customers(
+    sort: str = Query("no", pattern="^(no|ranking|last|recent|loans|debt)$"),
+    q: Optional[str] = None,
+    sales_id: Optional[str] = None,
+    user=Depends(get_current_user),
+):
+    filt: dict = {}
+    if user["role"] == "sales":
+        filt["created_by"] = user["id"]
+    elif user["role"] == "admin":
+        filt["group_letter"] = user.get("group_letter")
+        if sales_id:
+            filt["created_by"] = sales_id
+    else:
+        if sales_id:
+            filt["created_by"] = sales_id
+    if q:
+        filt["$or"] = [
+            {"name": {"$regex": q, "$options": "i"}},
+            {"barcode_id": {"$regex": q, "$options": "i"}},
+        ]
+
+    direct_sort_map = {
+        "no": [("customer_no", 1)],
+        "ranking": [("total_purchases", -1), ("purchase_count", -1)],
+        "loans": [("gallon_loans", -1), ("total_debt", -1)],
+        "debt": [("total_debt", -1)],
+        "recent": [("last_purchase_date", -1)],
+    }
+    if sort in direct_sort_map:
+        cursor = db.customers.find(filt, {"_id": 0}).sort(direct_sort_map[sort])
+        items = await cursor.to_list(2000)
+        if sort == "recent":
+            has_date = [c for c in items if c.get("last_purchase_date")]
+            no_date = [c for c in items if not c.get("last_purchase_date")]
+            no_date.sort(key=lambda c: c.get("customer_no", 0))
+            items = has_date + no_date
+        return items
+
+    cursor = db.customers.find(filt, {"_id": 0})
+    items = await cursor.to_list(2000)
+    if sort == "last":
+        has_date = [c for c in items if c.get("last_purchase_date")]
+        no_date = [c for c in items if not c.get("last_purchase_date")]
+        has_date.sort(key=lambda c: c.get("last_purchase_date") or "")
+        no_date.sort(key=lambda c: c.get("customer_no", 0))
+        items = has_date + no_date
+    return items
+
+
+@router.get("/lookup/{barcode_id}")
+async def lookup_customer(barcode_id: str, user=Depends(get_current_user)):
+    c = await db.customers.find_one({"barcode_id": barcode_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "Pelanggan tidak ditemukan")
+    if user["role"] == "sales" and c.get("created_by") != user["id"]:
+        raise HTTPException(403, "Bukan pelanggan Anda")
+    if user["role"] == "admin" and c.get("group_letter") != user.get("group_letter"):
+        raise HTTPException(403, "Bukan pelanggan wilayah Anda")
+    return c
+
+
+@router.get("/{customer_id}")
+async def get_customer(customer_id: str, user=Depends(get_current_user)):
+    c = await db.customers.find_one({"id": customer_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "Not found")
+    if user["role"] == "sales" and c.get("created_by") != user["id"]:
+        raise HTTPException(403, "Forbidden")
+    if user["role"] == "admin" and c.get("group_letter") != user.get("group_letter"):
+        raise HTTPException(403, "Forbidden")
+    return c
+
+
+@router.post("")
+async def create_customer(body: CustomerCreate, user=Depends(require_roles("sales", "super_admin"))):
+    if user["role"] != "sales":
+        raise HTTPException(403, "Hanya Sales yang bisa menambah pelanggan baru")
+    sales_code = (user.get("sales_code") or user.get("username") or "SALES").upper()
+    group = user.get("group_letter")
+    customer_no = await next_customer_no_for(user["id"])
+    barcode = (body.barcode_id or f"{sales_code}-OXLY-{customer_no}").strip()
+    if await db.customers.find_one({"barcode_id": barcode}):
+        raise HTTPException(409, "Barcode sudah dipakai")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "customer_no": customer_no,
+        "name": body.name,
+        "address": body.address or "",
+        "wa_number": body.wa_number or "",
+        "barcode_id": barcode,
+        "group_letter": group,
+        "sales_code": sales_code,
+        "created_by": user["id"],
+        "gallon_loans": 0,
+        "total_debt": 0.0,
+        "total_purchases": 0.0,
+        "purchase_count": 0,
+        "last_purchase_date": None,
+        "lat": body.lat,
+        "lng": body.lng,
+        "created_at": now_utc().isoformat(),
+    }
+    if body.photo_rumah:
+        doc["photo_rumah"] = body.photo_rumah
+    await db.customers.insert_one(doc)
+    return strip_id(doc)
+
+
+@router.patch("/{customer_id}")
+async def update_customer(customer_id: str, body: CustomerUpdate, user=Depends(get_current_user)):
+    c = await db.customers.find_one({"id": customer_id})
+    if not c:
+        raise HTTPException(404, "Not found")
+    if user["role"] == "sales" and c.get("created_by") != user["id"]:
+        raise HTTPException(403, "Forbidden")
+    if user["role"] == "admin" and c.get("group_letter") != user.get("group_letter"):
+        raise HTTPException(403, "Forbidden")
+    update_raw = body.dict(exclude_unset=True)
+    update: dict = {}
+    unset: dict = {}
+    for k, v in update_raw.items():
+        if v is None:
+            continue
+        if k == "photo_rumah" and v == "":
+            unset["photo_rumah"] = ""
+        else:
+            update[k] = v
+    ops: dict = {}
+    if update:
+        ops["$set"] = update
+    if unset:
+        ops["$unset"] = unset
+    if ops:
+        await db.customers.update_one({"id": customer_id}, ops)
+    return await db.customers.find_one({"id": customer_id}, {"_id": 0})
+
+
+@router.delete("/{customer_id}")
+async def delete_customer(customer_id: str, user=Depends(require_roles("super_admin"))):
+    await db.customers.delete_one({"id": customer_id})
+    return {"ok": True}

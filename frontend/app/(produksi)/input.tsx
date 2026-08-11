@@ -58,6 +58,8 @@ export default function ProduksiInput() {
 
   const [photoBefore, setPhotoBefore] = useState<string | null>(null);
   const [photoAfter, setPhotoAfter] = useState<string | null>(null);
+  const [photoBeforeAt, setPhotoBeforeAt] = useState<Date | null>(null);
+  const [photoAfterAt, setPhotoAfterAt] = useState<Date | null>(null);
   const [aiBefore, setAiBefore] = useState<{ count: number; confidence: string; reasoning: string } | null>(null);
   const [aiAfter, setAiAfter] = useState<{ count: number; confidence: string; reasoning: string } | null>(null);
 
@@ -301,12 +303,13 @@ export default function ProduksiInput() {
           <SectionTitle>1️⃣ Foto Galon Kosong (SEBELUM diisi)</SectionTitle>
           <PhotoCapture
             value={photoBefore}
-            onChange={(v) => { setPhotoBefore(v); if (!v) setAiBefore(null); }}
+            onChange={(v) => { setPhotoBefore(v); setPhotoBeforeAt(v ? new Date() : null); if (!v) setAiBefore(null); }}
             label="Foto galon kosong"
             watermark
             aiCount
             hintForAI="galon kosong sebelum diisi"
             onAICount={(count, confidence, reasoning) => setAiBefore({ count, confidence, reasoning })}
+            caption={photoBefore ? `${aiBefore ? `🤖 AI: ${aiBefore.count} galon\n` : ""}📅 ${photoBeforeAt ? photoBeforeAt.toLocaleString("id-ID") : ""}` : null}
             testID="photo-produksi-before"
           />
           {aiBefore ? (
@@ -330,12 +333,13 @@ export default function ProduksiInput() {
           <SectionTitle>2️⃣ Foto Galon Isi (SETELAH diisi)</SectionTitle>
           <PhotoCapture
             value={photoAfter}
-            onChange={(v) => { setPhotoAfter(v); if (!v) setAiAfter(null); }}
+            onChange={(v) => { setPhotoAfter(v); setPhotoAfterAt(v ? new Date() : null); if (!v) setAiAfter(null); }}
             label="Foto galon isi (produk jadi)"
             watermark
             aiCount
             hintForAI="galon air isi setelah diisi"
             onAICount={(count, confidence, reasoning) => setAiAfter({ count, confidence, reasoning })}
+            caption={photoAfter ? `${aiAfter ? `🤖 AI: ${aiAfter.count} galon\n` : ""}📅 ${photoAfterAt ? photoAfterAt.toLocaleString("id-ID") : ""}` : null}
             testID="photo-produksi-after"
           />
           {aiAfter ? (

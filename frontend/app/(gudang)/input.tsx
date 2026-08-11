@@ -50,6 +50,16 @@ export default function GudangInput() {
   const [photoIsiSiang, setPhotoIsiSiang] = useState<string | null>(null);
   const [photoKosongSiang, setPhotoKosongSiang] = useState<string | null>(null);
   const [photoKosongSore, setPhotoKosongSore] = useState<string | null>(null);
+  // Timestamp per foto (untuk caption)
+  const [photoIsiPagiAt, setPhotoIsiPagiAt] = useState<Date | null>(null);
+  const [photoIsiSiangAt, setPhotoIsiSiangAt] = useState<Date | null>(null);
+  const [photoKosongSiangAt, setPhotoKosongSiangAt] = useState<Date | null>(null);
+  const [photoKosongSoreAt, setPhotoKosongSoreAt] = useState<Date | null>(null);
+  // AI count per foto
+  const [aiIsiPagi, setAiIsiPagi] = useState<number | null>(null);
+  const [aiIsiSiang, setAiIsiSiang] = useState<number | null>(null);
+  const [aiKosongSiang, setAiKosongSiang] = useState<number | null>(null);
+  const [aiKosongSore, setAiKosongSore] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -324,12 +334,13 @@ export default function GudangInput() {
             <View style={{ flex: 1 }}>
               <PhotoCapture
                 value={photoIsiPagi}
-                onChange={setPhotoIsiPagi}
+                onChange={(v) => { setPhotoIsiPagi(v); setPhotoIsiPagiAt(v ? new Date() : null); if (!v) setAiIsiPagi(null); }}
                 label="Isi Pagi"
                 watermark
                 aiCount
                 hintForAI="galon air isi"
-                onAICount={(c) => setF("bawa_pagi", String(c))}
+                onAICount={(c) => { setAiIsiPagi(c); setF("bawa_pagi", String(c)); }}
+                caption={photoIsiPagi ? `${aiIsiPagi != null ? `🤖 AI: ${aiIsiPagi} galon\n` : ""}📅 ${photoIsiPagiAt ? photoIsiPagiAt.toLocaleString("id-ID") : ""}` : null}
                 testID="photo-isi-pagi"
               />
               <NumStepper value={form.bawa_pagi} onChange={(v) => setF("bawa_pagi", v)} label="Bawa Isi Pagi (AI + koreksi)" allowNegative={false} testID="stepper-bawa-pagi" />
@@ -337,12 +348,13 @@ export default function GudangInput() {
             <View style={{ flex: 1 }}>
               <PhotoCapture
                 value={photoIsiSiang}
-                onChange={setPhotoIsiSiang}
+                onChange={(v) => { setPhotoIsiSiang(v); setPhotoIsiSiangAt(v ? new Date() : null); if (!v) setAiIsiSiang(null); }}
                 label="Isi Siang"
                 watermark
                 aiCount
                 hintForAI="galon air isi"
-                onAICount={(c) => setF("bawa_siang", String(c))}
+                onAICount={(c) => { setAiIsiSiang(c); setF("bawa_siang", String(c)); }}
+                caption={photoIsiSiang ? `${aiIsiSiang != null ? `🤖 AI: ${aiIsiSiang} galon\n` : ""}📅 ${photoIsiSiangAt ? photoIsiSiangAt.toLocaleString("id-ID") : ""}` : null}
                 testID="photo-isi-siang"
               />
               <NumStepper value={form.bawa_siang} onChange={(v) => setF("bawa_siang", v)} label="Bawa Isi Siang (AI + koreksi)" allowNegative={false} testID="stepper-bawa-siang" />
@@ -368,12 +380,13 @@ export default function GudangInput() {
             <View style={{ flex: 1 }}>
               <PhotoCapture
                 value={photoKosongSiang}
-                onChange={setPhotoKosongSiang}
+                onChange={(v) => { setPhotoKosongSiang(v); setPhotoKosongSiangAt(v ? new Date() : null); if (!v) setAiKosongSiang(null); }}
                 label="Galon Siang"
                 watermark
                 aiCount
                 hintForAI="galon air kosong"
-                onAICount={(c) => setF("kosong_kembali_siang", String(c))}
+                onAICount={(c) => { setAiKosongSiang(c); setF("kosong_kembali_siang", String(c)); }}
+                caption={photoKosongSiang ? `${aiKosongSiang != null ? `🤖 AI: ${aiKosongSiang} galon\n` : ""}📅 ${photoKosongSiangAt ? photoKosongSiangAt.toLocaleString("id-ID") : ""}` : null}
                 testID="photo-galon-siang"
               />
               <NumStepper value={form.kosong_kembali_siang} onChange={(v) => setF("kosong_kembali_siang", v)} label="Galon Kembali Siang (AI + koreksi)" allowNegative={false} testID="stepper-kembali-siang" />
@@ -381,12 +394,13 @@ export default function GudangInput() {
             <View style={{ flex: 1 }}>
               <PhotoCapture
                 value={photoKosongSore}
-                onChange={setPhotoKosongSore}
+                onChange={(v) => { setPhotoKosongSore(v); setPhotoKosongSoreAt(v ? new Date() : null); if (!v) setAiKosongSore(null); }}
                 label="Galon Sore"
                 watermark
                 aiCount
                 hintForAI="galon air kosong"
-                onAICount={(c) => setF("kosong_kembali_sore", String(c))}
+                onAICount={(c) => { setAiKosongSore(c); setF("kosong_kembali_sore", String(c)); }}
+                caption={photoKosongSore ? `${aiKosongSore != null ? `🤖 AI: ${aiKosongSore} galon\n` : ""}📅 ${photoKosongSoreAt ? photoKosongSoreAt.toLocaleString("id-ID") : ""}` : null}
                 testID="photo-galon-sore"
               />
               <NumStepper value={form.kosong_kembali_sore} onChange={(v) => setF("kosong_kembali_sore", v)} label="Galon Kembali Sore (AI + koreksi)" allowNegative={false} testID="stepper-kembali-sore" />

@@ -25,6 +25,7 @@ export function PhotoCapture({
   aiCount = false,
   hintForAI,
   onAICount,
+  caption,
 }: {
   value: string | null | undefined;
   onChange: (v: string | null) => void;
@@ -35,6 +36,7 @@ export function PhotoCapture({
   aiCount?: boolean;
   hintForAI?: string;
   onAICount?: (count: number, confidence: "low" | "medium" | "high", reasoning: string) => void;
+  caption?: string | null;
 }) {
   const [processing, setProcessing] = useState(false);
 
@@ -103,6 +105,11 @@ export function PhotoCapture({
     return (
       <View style={compact ? styles.compactWrap : styles.wrap}>
         <Image source={{ uri: value }} style={compact ? styles.compactImg : styles.img} resizeMode="cover" />
+        {caption ? (
+          <View style={styles.captionBox}>
+            <Text style={styles.captionText} numberOfLines={2}>{caption}</Text>
+          </View>
+        ) : null}
         <View style={styles.actions}>
           <Text style={styles.doneLabel} numberOfLines={1}>📷 {label}</Text>
           <View style={{ flex: 1 }} />
@@ -168,4 +175,18 @@ const styles = StyleSheet.create({
     minHeight: 60,
   },
   compactHint: { color: theme.color.onBrandTertiary, fontSize: 10, fontWeight: "600", textAlign: "center" },
+  captionBox: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    backgroundColor: theme.color.brandTertiary,
+    borderTopWidth: 1,
+    borderTopColor: theme.color.border,
+  },
+  captionText: {
+    fontSize: 11,
+    color: theme.color.onBrandTertiary,
+    fontWeight: "700",
+    textAlign: "center",
+    lineHeight: 15,
+  },
 });

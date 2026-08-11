@@ -48,6 +48,8 @@ export default function ProduksiInput() {
     destination: "gudang" as "gudang" | "sales",
     manual_adjust: "0",
     manual_adjust_before: "0",
+    sisa_pagi: "",
+    sisa_siang: "",
     note: "",
   });
 
@@ -111,6 +113,11 @@ export default function ProduksiInput() {
             Object.entries(d.part_qtys).forEach(([k, v]) => { pq[k] = String(v); });
             setPartQtys(pq);
           }
+          setForm((f) => ({
+            ...f,
+            sisa_pagi: d.sisa_pagi ? String(d.sisa_pagi) : f.sisa_pagi,
+            sisa_siang: d.sisa_siang ? String(d.sisa_siang) : f.sisa_siang,
+          }));
           toast.show("Draft dimuat — lanjutkan input", "success");
         } else {
           // Reset ke kosong
@@ -152,6 +159,8 @@ export default function ProduksiInput() {
       ai_count_after: aiAfter?.count ?? null,
       manual_adjust: manualN,
       manual_adjust_before: parseInt(form.manual_adjust_before || "0") || 0,
+      sisa_pagi: parseInt(form.sisa_pagi || "0") || 0,
+      sisa_siang: parseInt(form.sisa_siang || "0") || 0,
       produksi_galon: Math.max(0, totalProduksi),
       photo_before: photoBefore || null,
       photo_after: photoAfter || null,
@@ -168,7 +177,7 @@ export default function ProduksiInput() {
     setAiBefore(null);
     setAiAfter(null);
     setPartQtys({});
-    setForm((f) => ({ ...f, manual_adjust: "0", manual_adjust_before: "0", note: "" }));
+    setForm((f) => ({ ...f, manual_adjust: "0", manual_adjust_before: "0", sisa_pagi: "", sisa_siang: "", note: "" }));
   };
 
   const onSaveDraft = async () => {
@@ -377,6 +386,29 @@ export default function ProduksiInput() {
             </TouchableOpacity>
           </View>
 
+          {/* === Sisa Isi (belum terjual) === */}
+          <SectionTitle>Sisa Isi (belum terjual)</SectionTitle>
+          <View style={styles.rowTwo}>
+            <NumFieldSmall label="Sisa Isi Pagi" value={form.sisa_pagi} onChange={(v) => setF("sisa_pagi", v)} testID="sisa-pagi" />
+            <NumFieldSmall label="Sisa Isi Sore" value={form.sisa_siang} onChange={(v) => setF("sisa_siang", v)} testID="sisa-siang" />
+          </View>
+          {(() => {
+            const sisa = (parseInt(form.sisa_pagi || "0") || 0) + (parseInt(form.sisa_siang || "0") || 0);
+            const terjual = Math.max(0, totalProduksi - sisa);
+            if (totalProduksi > 0 || sisa > 0) {
+              return (
+                <View style={styles.terjualBox}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.terjualLabel}>Galon Terjual (Produksi − Sisa)</Text>
+                    <Text style={styles.terjualSub}>{totalProduksi} − {sisa} = galon terjual</Text>
+                  </View>
+                  <Text style={styles.terjualValue}>{terjual}</Text>
+                </View>
+              );
+            }
+            return null;
+          })()}
+
           {/* === DINAMIS: Penggantian Galon & Sparepart (mengikuti daftar SuperAdmin) === */}
           <SectionTitle>Penggantian Galon & Sparepart (opsional)</SectionTitle>
           {parts.length === 0 ? (
@@ -520,6 +552,18 @@ const styles = StyleSheet.create({
   partCol: { width: "48%" },
   smallLabel: { fontSize: 11, color: theme.color.muted, fontWeight: "600" },
   smallInput: { borderWidth: 1, borderColor: theme.color.border, borderRadius: 8, padding: 10, fontSize: 15, textAlign: "center", backgroundColor: "#fff", fontWeight: "700" },
+  terjualBox: {
+    backgroundColor: theme.color.brandTertiary,
+    padding: 12,
+    borderRadius: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 6,
+  },
+  terjualLabel: { fontSize: 12, fontWeight: "700", color: theme.color.onBrandTertiary },
+  terjualSub: { fontSize: 10, color: theme.color.onBrandTertiary, opacity: 0.7, marginTop: 2 },
+  terjualValue: { fontSize: 22, fontWeight: "900", color: theme.color.onBrandTertiary },
   saveBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: theme.color.brand, padding: 16, borderRadius: 14 },
   saveText: { color: "#fff", fontWeight: "800", fontSize: 15, letterSpacing: 0.5 },
   draftBtn: {

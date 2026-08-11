@@ -2188,6 +2188,9 @@ class ProductionDailyCreate(BaseModel):
     photo_before: Optional[str] = None      # foto galon kosong (watermarked)
     photo_after: Optional[str] = None       # foto galon isi (watermarked)
     ai_confidence: Optional[str] = None     # "low"/"medium"/"high" — reference only
+    # -- Sisa Isi (belum terjual) — sama seperti Gudang
+    sisa_pagi: int = 0
+    sisa_siang: int = 0
     note: Optional[str] = None
     is_draft: bool = False  # true = simpan sementara, boleh dilanjutkan; false = final
 
@@ -2251,6 +2254,8 @@ class ProductionDailyUpdate(BaseModel):
     photo_before: Optional[str] = None  # "" untuk unset
     photo_after: Optional[str] = None
     ai_confidence: Optional[str] = None
+    sisa_pagi: Optional[int] = None
+    sisa_siang: Optional[int] = None
     note: Optional[str] = None
 
 

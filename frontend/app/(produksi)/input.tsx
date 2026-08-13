@@ -326,9 +326,12 @@ export default function ProduksiInput() {
           />
           {aiBefore ? (
             <View style={[styles.aiBox, { backgroundColor: confidenceBadge(aiBefore.confidence).bg }]}>
-              <Text style={[styles.aiTitle, { color: confidenceBadge(aiBefore.confidence).text }]}>
-                🤖 AI hitung: <Text style={{ fontWeight: "900" }}>{aiBefore.count}</Text> galon · {confidenceBadge(aiBefore.confidence).label}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Ionicons name="sparkles" size={14} color={confidenceBadge(aiBefore.confidence).text} />
+                <Text style={[styles.aiTitle, { color: confidenceBadge(aiBefore.confidence).text }]}>
+                  AI hitung: <Text style={{ fontWeight: "900" }}>{aiBefore.count}</Text> galon · {confidenceBadge(aiBefore.confidence).label}
+                </Text>
+              </View>
               <Text style={styles.aiDesc}>{aiBefore.reasoning}</Text>
             </View>
           ) : null}
@@ -364,9 +367,12 @@ export default function ProduksiInput() {
           />
           {aiAfter ? (
             <View style={[styles.aiBox, { backgroundColor: confidenceBadge(aiAfter.confidence).bg }]}>
-              <Text style={[styles.aiTitle, { color: confidenceBadge(aiAfter.confidence).text }]}>
-                🤖 AI hitung: <Text style={{ fontWeight: "900" }}>{aiAfter.count}</Text> galon · {confidenceBadge(aiAfter.confidence).label}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Ionicons name="sparkles" size={14} color={confidenceBadge(aiAfter.confidence).text} />
+                <Text style={[styles.aiTitle, { color: confidenceBadge(aiAfter.confidence).text }]}>
+                  AI hitung: <Text style={{ fontWeight: "900" }}>{aiAfter.count}</Text> galon · {confidenceBadge(aiAfter.confidence).label}
+                </Text>
+              </View>
               <Text style={styles.aiDesc}>{aiAfter.reasoning}</Text>
             </View>
           ) : null}

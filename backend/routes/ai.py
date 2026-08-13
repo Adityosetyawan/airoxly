@@ -54,12 +54,15 @@ async def ai_count_gallons(body: AICountRequest, user=Depends(get_current_user))
             api_key=emergent_key,
             session_id=f"count-gallons-{user['id']}-{int(datetime.now().timestamp())}",
             system_message=system,
-        ).with_model("openai", "gpt-5")
+        ).with_model("openai", "gpt-5.4")
         image_content = ImageContent(image_base64=img_raw)
         reply = await chat.send_message(UserMessage(text=user_prompt, file_contents=[image_content]))
     except Exception as e:
         logging.exception("AI vision failed")
-        raise HTTPException(502, f"AI vision gagal: {e}")
+        # Surface a readable error message; frontend will fall back to manual entry.
+        err_type = type(e).__name__
+        err_msg = str(e)[:200] or "unknown"
+        raise HTTPException(502, f"AI vision gagal ({err_type}): {err_msg}")
 
     txt = (reply or "").strip()
     m = re.search(r"\{[\s\S]*\}", txt)

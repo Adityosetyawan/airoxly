@@ -138,8 +138,18 @@ export function PhotoCapture({
         <>
           <Ionicons name="camera" size={compact ? 20 : 24} color={theme.color.brand} />
           <Text style={compact ? styles.compactHint : styles.hint} numberOfLines={2}>{label}</Text>
-          {watermark ? <Text style={styles.badge}>📅 auto-stempel</Text> : null}
-          {aiCount ? <Text style={styles.badge}>🤖 AI hitung otomatis</Text> : null}
+          {watermark ? (
+            <View style={styles.badgeRow}>
+              <Ionicons name="calendar-outline" size={10} color={theme.color.onBrandTertiary} style={{ opacity: 0.75 }} />
+              <Text style={styles.badge}>auto-stempel</Text>
+            </View>
+          ) : null}
+          {aiCount ? (
+            <View style={styles.badgeRow}>
+              <Ionicons name="sparkles-outline" size={10} color={theme.color.onBrandTertiary} style={{ opacity: 0.75 }} />
+              <Text style={styles.badge}>AI hitung otomatis</Text>
+            </View>
+          ) : null}
         </>
       )}
     </TouchableOpacity>
@@ -163,6 +173,7 @@ const styles = StyleSheet.create({
   },
   hint: { color: theme.color.onBrandTertiary, fontSize: 11, fontWeight: "600", textAlign: "center" },
   badge: { fontSize: 9, color: theme.color.onBrandTertiary, opacity: 0.75 },
+  badgeRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   actions: { flexDirection: "row", alignItems: "center", gap: 6, padding: 6, backgroundColor: "#fff" },
   doneLabel: { fontSize: 10, fontWeight: "600", color: theme.color.brand, flexShrink: 1 },
   iconBtn: { padding: 6, borderRadius: 6, backgroundColor: theme.color.brandTertiary },

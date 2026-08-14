@@ -116,12 +116,41 @@ async def ai_count_gallons(body: AICountRequest, user=Depends(get_current_user))
         "  Confidence: HIGH kalau semua terlihat jelas, MEDIUM kalau ada beberapa terpotong bingkai.\n\n"
 
         "STRATEGI B — Galon DITUMPUK di lantai/gudang (ada layer di atas layer):\n"
-        "  1. Hitung lapisan DASAR (paling bawah): berapa galon di baris DEPAN (P) × berapa baris ke belakang (L). \n"
-        "     Contoh: 5 galon berjejer di depan × 4 baris ke belakang = 20 galon per lapisan.\n"
-        "  2. Hitung TINGGI tumpukan (T) = berapa lapis galon ditumpuk ke atas (biasanya 2–4 lapis).\n"
-        "  3. Rumus: TOTAL = P × L × T.\n"
-        "  4. Bila kolom belakang tidak terlihat sepenuhnya, estimasi konservatif berdasarkan galon paling atas yang menyembul.\n"
-        "  Confidence: MEDIUM (karena selalu ada bagian tersembunyi di tengah tumpukan).\n\n"
+        "  PENTING: Tumpukan galon HAMPIR SELALU berbentuk PIRAMIDA/TANGGA — lapisan atas lebih kecil dari lapisan bawah.\n"
+        "  Jangan pukul rata P×L×T. Hitung SETIAP LAPIS terpisah lalu jumlahkan.\n"
+        "  \n"
+        "  ATURAN MINIMUM KEDALAMAN (L) — WAJIB DITERAPKAN untuk piramida tumpukan:\n"
+        "  Kalau tumpukan piramida terlihat dari depan (front-view), AI TIDAK BISA lihat baris belakang.\n"
+        "  Karena piramida perlu base lebar & dalam agar stabil, WAJIB pakai L MINIMUM berikut:\n"
+        "  \n"
+        "  | Jumlah lapis piramida | L_min layer bawah | L_min layer tengah | L_min layer atas |\n"
+        "  | 1 lapis (satu-satunya) | 1                | -                  | -                |\n"
+        "  | 2 lapis                | 2                | 1                  | -                |\n"
+        "  | 3 lapis                | 3-4              | 2-3                | 1-2              |\n"
+        "  | 4+ lapis               | 4-5              | 3-4                | 2                |\n"
+        "  \n"
+        "  JANGAN pernah pakai L=1 untuk piramida ≥2 lapis. Fisika tidak memungkinkan.\n"
+        "  Kalau tumpukan di POJOK tembok (2 dinding), L bisa lebih besar (space dinding cukup).\n"
+        "  \n"
+        "  Langkah:\n"
+        "  1. Identifikasi berapa LAPIS tumpukan (Layer 1 = paling bawah, Layer 2, Layer 3, ...).\n"
+        "  2. Pilih L untuk setiap layer dari tabel di atas (WAJIB, tidak boleh menurunkannya).\n"
+        "  3. Hitung P (baris depan yang terlihat) untuk setiap layer.\n"
+        "  4. Sub-total lapis = P × L. Total = Σ sub-totals.\n"
+        "  \n"
+        "  CONTOH REAL 1 (tumpukan piramida galon kosong OXLY biru di pojok gudang, 3 lapis, kamera dari depan-samping):\n"
+        "  - Layer 1 (bawah): 6 depan × 4 belakang = 24 galon\n"
+        "  - Layer 2 (tengah): 5 depan × 3 belakang = 15 galon\n"
+        "  - Layer 3 (atas): 5 depan × 2 belakang + tambahan = ~11 galon\n"
+        "  - TOTAL = 24 + 15 + 11 = 50 galon.\n"
+        "  Ciri foto: galon biru OXLY di pojok tembok, piramida jelas 3 lapis, tinggi 3 galon.\n"
+        "  \n"
+        "  CONTOH REAL 2 (tumpukan 2 lapis kecil di depan dinding, kamera samping):\n"
+        "  - Layer 1 (bawah): 5 depan × 3 belakang = 15 galon\n"
+        "  - Layer 2 (atas): 4 depan × 2 belakang = 8 galon\n"
+        "  - TOTAL = 15 + 8 = 23 galon.\n"
+        "  \n"
+        "  Confidence: MEDIUM (piramida wajar), LOW kalau bentuk tumpukan sangat acak/tidak rapi.\n\n"
 
         "STRATEGI C — Galon DI ATAS MOBIL / TRUK / PICKUP:\n"
         "  1. Identifikasi jenis kendaraan dan estimasi dimensi bak muatan:\n"
@@ -141,12 +170,23 @@ async def ai_count_gallons(body: AICountRequest, user=Depends(get_current_user))
         "  - Kembalikan HANYA JSON (tanpa markdown, tanpa penjelasan tambahan sebelum/sesudah).\n"
         "  - Schema: {\"count\": <integer>, \"confidence\": \"low\"|\"medium\"|\"high\", \"reasoning\": \"<Bahasa Indonesia, max 220 karakter, WAJIB tuliskan cara hitung: strategi mana yang dipakai + angka P×L×T atau dimensi mobil>\"}\n"
         "  - Reasoning WAJIB menyebut angka konkret: mis. \"Strategi B: dasar 5×4=20, tinggi 3 lapis → total 60 galon\" atau \"Strategi C: pickup Carry bak 2.4×1.5, 30 galon/lapis × 2 lapis = 60\".\n"
+        "  - PENTING BANGET: field `count` HARUS = hasil PENJUMLAHAN semua sub-layer / rumus, BUKAN estimasi visual/impresi. Kalau formula memberi 55, count = 55 (jangan turunkan jadi 23 karena \"kelihatannya\").\n"
+        "  - Jangan ada frasa seperti \"tampak efektif\", \"kelihatan hanya\", \"visual estimate\" — count = hasil aritmatika akhir.\n"
         "  - Jangan pernah balas dengan teks bebas — HANYA JSON."
     )
     user_prompt = (
         hint_text
-        + "Hitung total galon air 19-liter yang ada di foto ini dengan strategi A/B/C yang paling sesuai. "
-        + 'Balas HANYA JSON: {"count": N, "confidence": "high|medium|low", "reasoning": "<strategi + angka>"}'
+        + "TUGAS: Hitung total galon air 19-liter di foto ini dengan sangat teliti.\n\n"
+        + "Ikuti proses berikut LANGKAH DEMI LANGKAH sebelum memberikan jawaban:\n"
+        + "1. Amati foto: apakah galon TERPISAH, DITUMPUK piramida, atau DI ATAS MOBIL?\n"
+        + "2. Kalau DITUMPUK: hitung BERAPA LAPIS ke atas dari LANTAI/BAK ke TOP. Lapisan 1 = paling bawah (menyentuh lantai). Foto tumpukan piramida di gudang HAMPIR SELALU 3 lapis atau lebih.\n"
+        + "3. Untuk SETIAP lapis dari BAWAH ke ATAS:\n"
+        + "   a. Hitung P (jumlah galon di baris paling depan yang terlihat di lapis itu).\n"
+        + "   b. Estimasi L (jumlah baris ke belakang) — kalau tumpukan tinggi/di pojok, L pasti > 1. Standar: layer bawah L=3-4, layer tengah L=2-3, layer atas L=1-2.\n"
+        + "   c. Sub-total lapis = P × L.\n"
+        + "4. Total = jumlahkan semua sub-total lapis.\n\n"
+        + "Ingat: undercount 50% jauh lebih buruk dari overcount 10%. Kalau ragu pilih estimasi lebih tinggi.\n\n"
+        + 'Balas HANYA JSON: {"count": N, "confidence": "high|medium|low", "reasoning": "<sebutkan tiap lapis: Layer 1: PxL=..., Layer 2: PxL=..., dst. Total=...>"}'
     )
     session_id = f"count-gallons-{user['id']}-{int(datetime.now().timestamp())}"
 
@@ -184,5 +224,28 @@ async def ai_count_gallons(body: AICountRequest, user=Depends(get_current_user))
     conf = str(parsed.get("confidence") or "low").lower()
     if conf not in ("low", "medium", "high"):
         conf = "low"
-    reasoning = str(parsed.get("reasoning") or "")[:200]
+    reasoning = str(parsed.get("reasoning") or "")[:220]
+
+    # Safety net: if reasoning mentions "Total = X" or "= X galon" where X > count,
+    # trust the arithmetic in reasoning over the `count` field (models sometimes
+    # compute correctly but write a "visual impression" number in `count`).
+    try:
+        # Look for patterns like "Total = 55", "Total=55", "totaltu 55"
+        total_m = re.search(r"total\s*[=:≈]\s*(\d+)", reasoning, re.IGNORECASE)
+        if total_m:
+            formula_total = int(total_m.group(1))
+            if formula_total > count * 1.3:  # meaningful discrepancy
+                logging.info("AI count corrected from %d → %d based on reasoning arithmetic", count, formula_total)
+                count = formula_total
+        else:
+            # Sum all "P×L=Z" patterns in reasoning: "5×4=20", "5x4=20"
+            subs = re.findall(r"\d+\s*[×x]\s*\d+\s*=\s*(\d+)", reasoning)
+            if len(subs) >= 2:
+                formula_total = sum(int(s) for s in subs)
+                if formula_total > count * 1.3:
+                    logging.info("AI count corrected from %d → %d from summed sub-formulas", count, formula_total)
+                    count = formula_total
+    except Exception as _e:  # noqa: BLE001
+        pass
+
     return {"count": max(0, count), "confidence": conf, "reasoning": reasoning}

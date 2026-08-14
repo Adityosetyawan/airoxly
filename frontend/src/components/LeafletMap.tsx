@@ -8,6 +8,8 @@ export type MapMarker = {
   label?: string;
   color?: string; // hex without #
   popup?: string;
+  /** Visual style — "badge" (default, big pill) or "dot" (small circle for high-density overlays). */
+  variant?: "badge" | "dot";
 };
 
 export type MapPolyline = {
@@ -49,6 +51,17 @@ function buildHtml(
     border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.25);
     white-space: nowrap;
   }
+  .oxly-dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+    background: #2563eb;
+  }
+  .oxly-dot-lbl {
+    font: 600 9px/1 -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: #111; text-shadow: 0 0 3px #fff, 0 0 3px #fff;
+    margin-top: 1px; white-space: nowrap; text-align: center;
+  }
+  .oxly-dot-wrap { display: flex; flex-direction: column; align-items: center; }
 </style>
 </head>
 <body>
@@ -82,12 +95,24 @@ function buildHtml(
 
   markers.forEach(function(m){
     const color = '#' + (m.color || '16a34a');
-    const icon = L.divIcon({
-      className: 'oxly-marker',
-      html: '<div class="oxly-pin" style="background:' + color + '">' + (m.label || '') + '</div>',
-      iconSize: null,
-      iconAnchor: [16, 12],
-    });
+    let icon;
+    if (m.variant === 'dot') {
+      // Small circular dot for high-density overlays (e.g. customers)
+      const lbl = m.label ? '<div class="oxly-dot-lbl">' + m.label + '</div>' : '';
+      icon = L.divIcon({
+        className: 'oxly-marker',
+        html: '<div class="oxly-dot-wrap"><div class="oxly-dot" style="background:' + color + '"></div>' + lbl + '</div>',
+        iconSize: null,
+        iconAnchor: [6, 6],
+      });
+    } else {
+      icon = L.divIcon({
+        className: 'oxly-marker',
+        html: '<div class="oxly-pin" style="background:' + color + '">' + (m.label || '') + '</div>',
+        iconSize: null,
+        iconAnchor: [16, 12],
+      });
+    }
     const marker = L.marker([m.lat, m.lng], { icon: icon }).addTo(map);
     if (m.popup) marker.bindPopup(m.popup);
     layers.push(marker);

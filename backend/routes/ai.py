@@ -106,18 +106,47 @@ async def ai_count_gallons(body: AICountRequest, user=Depends(get_current_user))
     img_raw = _shrink_if_needed(img_raw)
 
     hint = (body.hint or "").strip().lower()
-    hint_text = f"Konteks foto: {hint}. " if hint else ""
+    hint_text = f"Konteks foto dari user: {hint}. " if hint else ""
     system = (
-        "You are a strict counting assistant for water gallons (galon 19 liter) in a photo. "
-        "Return ONLY a valid JSON object with this schema and nothing else: "
-        '{"count": <integer>, "confidence": "low"|"medium"|"high", "reasoning": "<short reason in Bahasa Indonesia, max 200 chars>"}. '
-        "Rules: count only visible gallon containers. If some are stacked/occluded, estimate "
-        "and set confidence accordingly. If image is unclear or has no gallons, count=0 confidence=low."
+        "Anda adalah asisten hitung galon air 19-liter (diameter ~28 cm, tinggi ~48 cm) yang teliti. "
+        "Analisis foto lalu terapkan salah satu strategi berikut sesuai kondisi galon:\n\n"
+
+        "STRATEGI A — Galon terpisah / satu lapis di lantai/rak (mudah dilihat semua):\n"
+        "  Hitung langsung setiap galon yang terlihat.\n"
+        "  Confidence: HIGH kalau semua terlihat jelas, MEDIUM kalau ada beberapa terpotong bingkai.\n\n"
+
+        "STRATEGI B — Galon DITUMPUK di lantai/gudang (ada layer di atas layer):\n"
+        "  1. Hitung lapisan DASAR (paling bawah): berapa galon di baris DEPAN (P) × berapa baris ke belakang (L). \n"
+        "     Contoh: 5 galon berjejer di depan × 4 baris ke belakang = 20 galon per lapisan.\n"
+        "  2. Hitung TINGGI tumpukan (T) = berapa lapis galon ditumpuk ke atas (biasanya 2–4 lapis).\n"
+        "  3. Rumus: TOTAL = P × L × T.\n"
+        "  4. Bila kolom belakang tidak terlihat sepenuhnya, estimasi konservatif berdasarkan galon paling atas yang menyembul.\n"
+        "  Confidence: MEDIUM (karena selalu ada bagian tersembunyi di tengah tumpukan).\n\n"
+
+        "STRATEGI C — Galon DI ATAS MOBIL / TRUK / PICKUP:\n"
+        "  1. Identifikasi jenis kendaraan dan estimasi dimensi bak muatan:\n"
+        "     • Pickup kecil (Carry, Grandmax, APV pickup) bak ~2.4 m × 1.5 m\n"
+        "     • Pickup sedang (Hilux, Triton, L300) bak ~2.4 m × 1.6 m\n"
+        "     • Truk engkel colt diesel bak ~3.5–4 m × 1.7 m\n"
+        "     • Truk fuso bak ~5–6 m × 2.0 m\n"
+        "  2. Kalau galon berdiri tegak: per m² muat ~10 galon (dgn diameter 28 cm) → total per lapisan ≈ luas bak × 10.\n"
+        "     Contoh: bak 2.4×1.5 = 3.6 m² → ~36 galon per lapisan (mendekati 5×7 = 35).\n"
+        "  3. Kalau galon direbahkan/miring: kurang-lebih SAMA jumlahnya karena diameter tetap dominan.\n"
+        "  4. Hitung berapa lapisan galon tinggi di bak (lihat dari samping / dari galon yang menyembul di pinggir).\n"
+        "  5. Rumus: TOTAL = galon_per_lapisan × jumlah_lapisan. Kurangi ~10-15% bila ada rongga di tengah.\n"
+        "  6. Bila galon disusun rapi menutupi seluruh bak tanpa rongga → confidence MEDIUM.\n"
+        "     Bila banyak galon tersembunyi di tengah dan tidak jelas → confidence LOW.\n\n"
+
+        "ATURAN OUTPUT (WAJIB):\n"
+        "  - Kembalikan HANYA JSON (tanpa markdown, tanpa penjelasan tambahan sebelum/sesudah).\n"
+        "  - Schema: {\"count\": <integer>, \"confidence\": \"low\"|\"medium\"|\"high\", \"reasoning\": \"<Bahasa Indonesia, max 220 karakter, WAJIB tuliskan cara hitung: strategi mana yang dipakai + angka P×L×T atau dimensi mobil>\"}\n"
+        "  - Reasoning WAJIB menyebut angka konkret: mis. \"Strategi B: dasar 5×4=20, tinggi 3 lapis → total 60 galon\" atau \"Strategi C: pickup Carry bak 2.4×1.5, 30 galon/lapis × 2 lapis = 60\".\n"
+        "  - Jangan pernah balas dengan teks bebas — HANYA JSON."
     )
     user_prompt = (
         hint_text
-        + "Berapa jumlah galon air yang terlihat di foto ini? "
-        + 'Balas HANYA JSON: {"count": N, "confidence": "high|medium|low", "reasoning": "..."}'
+        + "Hitung total galon air 19-liter yang ada di foto ini dengan strategi A/B/C yang paling sesuai. "
+        + 'Balas HANYA JSON: {"count": N, "confidence": "high|medium|low", "reasoning": "<strategi + angka>"}'
     )
     session_id = f"count-gallons-{user['id']}-{int(datetime.now().timestamp())}"
 

@@ -110,6 +110,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await api.logout();
     await storage.removeItem("oxly.impersonation_backup_token");
     await storage.removeItem("oxly.impersonation_backup_user");
+    try {
+      const { purgeOfflineStore } = await import("@/src/utils/offlineStore");
+      await purgeOfflineStore();
+    } catch {}
     setIsImpersonating(false);
     setUser(null);
   };

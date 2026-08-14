@@ -10,6 +10,7 @@ import { theme, rp } from "@/src/theme";
 import { api, Customer, Transaction } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
 import { saveShot, shareShot } from "@/src/utils/capture";
+import { getCachedCustomer } from "@/src/utils/offlineStore";
 
 export default function CustomerDetail() {
   const params = useLocalSearchParams<{ id: string; action?: string }>();
@@ -35,7 +36,15 @@ export default function CustomerDetail() {
       setC(cust);
       setTxns(list);
     } catch (e: any) {
-      toast.show(e.message || "Gagal muat data", "error");
+      // Offline fallback — show cached customer info; transaction history
+      // stays empty until we're online again.
+      const cached = await getCachedCustomer(params.id!);
+      if (cached) {
+        setC(cached);
+        setTxns([]);
+      } else {
+        toast.show(e.message || "Gagal muat data", "error");
+      }
     }
   }, [params.id, toast]);
 

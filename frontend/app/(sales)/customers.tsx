@@ -15,6 +15,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { theme, rp } from "@/src/theme";
 import { api, Customer } from "@/src/api";
 import ExportCustomerModal from "@/src/components/ExportCustomerModal";
+import { getCachedCustomers } from "@/src/utils/offlineStore";
 
 const SORTS = [
   { id: "no", label: "No. Urut", icon: "list-outline" },
@@ -37,7 +38,29 @@ export default function Customers() {
     try {
       const r = await api.listCustomers({ sort, q: q || undefined });
       setItems(r);
-    } catch {}
+    } catch {
+      // Offline / API down — fall back to the last cached snapshot so Sales
+      // can still browse pelanggan in the field.
+      const cached = await getCachedCustomers();
+      const query = (q || "").toLowerCase().trim();
+      const filtered = query
+        ? cached.filter(
+            (c) =>
+              (c.name || "").toLowerCase().includes(query) ||
+              (c.barcode_id || "").toLowerCase().includes(query),
+          )
+        : cached;
+      const sorted = [...filtered].sort((a, b) => {
+        if (sort === "no") return (a.customer_no || 0) - (b.customer_no || 0);
+        if (sort === "ranking") return (b.total_purchases || 0) - (a.total_purchases || 0);
+        if (sort === "recent") return (b.last_purchase_date || "").localeCompare(a.last_purchase_date || "");
+        if (sort === "last") return (a.last_purchase_date || "9999").localeCompare(b.last_purchase_date || "9999");
+        if (sort === "loans") return (b.gallon_loans || 0) - (a.gallon_loans || 0);
+        if (sort === "debt") return (b.total_debt || 0) - (a.total_debt || 0);
+        return 0;
+      });
+      setItems(sorted);
+    }
   }, [sort, q]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));

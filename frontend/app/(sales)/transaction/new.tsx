@@ -17,6 +17,13 @@ import { api, Customer, Product, Transaction, TransactionItem } from "@/src/api"
 import { useToast } from "@/src/components/Toast";
 import { formatReceipt, sendWhatsApp } from "@/src/whatsapp";
 import { useAuth } from "@/src/AuthContext";
+import { useOnlineStatus } from "@/src/hooks/useOnlineStatus";
+import {
+  enqueueTransaction,
+  getCachedCustomer,
+  getCachedProducts,
+  patchCachedCustomer,
+} from "@/src/utils/offlineStore";
 
 export default function TransactionForm() {
   const params = useLocalSearchParams<{ customer_id?: string; edit_id?: string }>();
@@ -24,6 +31,7 @@ export default function TransactionForm() {
   const insets = useSafeAreaInsets();
   const toast = useToast();
   const { user } = useAuth();
+  const online = useOnlineStatus();
 
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -38,7 +46,13 @@ export default function TransactionForm() {
   useEffect(() => {
     (async () => {
       try {
-        const prods = await api.listProducts();
+        // Try network first; fall back to offline cache for products & customer.
+        let prods: Product[] = [];
+        try {
+          prods = await api.listProducts();
+        } catch {
+          prods = await getCachedProducts();
+        }
         setProducts(prods);
 
         if (params.edit_id) {
@@ -56,11 +70,25 @@ export default function TransactionForm() {
         }
 
         if (params.customer_id) {
-          const c = await api.getCustomer(params.customer_id);
+          let c: Customer | null = null;
+          try {
+            c = await api.getCustomer(params.customer_id);
+          } catch {
+            c = await getCachedCustomer(params.customer_id);
+          }
           setCustomer(c);
         }
       } catch (e: any) {
-        toast.show(e.message || "Gagal muat data", "error");
+        // Last-resort attempt from cache.
+        const [prods, c] = await Promise.all([
+          getCachedProducts(),
+          params.customer_id ? getCachedCustomer(params.customer_id) : Promise.resolve(null),
+        ]);
+        setProducts(prods);
+        setCustomer(c);
+        if (prods.length === 0 || !c) {
+          toast.show(e.message || "Gagal muat data", "error");
+        }
       } finally {
         setLoading(false);
       }
@@ -99,6 +127,77 @@ export default function TransactionForm() {
       toast.show("Tambahkan minimal 1 item atau pinjam/kembali galon", "error");
       return;
     }
+
+    // ── OFFLINE PATH: enqueue locally and update cached customer optimistically.
+    if (!online && !editingTxn) {
+      setSaving(true);
+      try {
+        const localId =
+          (typeof crypto !== "undefined" && (crypto as any).randomUUID)
+            ? (crypto as any).randomUUID()
+            : `local-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+        await enqueueTransaction({
+          local_id: localId,
+          customer_id: customer.id,
+          customer_name: customer.name,
+          customer_no: customer.customer_no,
+          items,
+          bayar: bayarNum,
+          pinjam_galon: pinjamNum,
+          galon_kembali: kembaliNum,
+          total,
+        });
+
+        // Optimistic cache update so the customer detail screen still shows
+        // consistent balances while offline.
+        const newDebt = Math.max(0, (customer.total_debt || 0) - Math.min(customer.total_debt || 0, Math.max(0, bayarNum - total))) + Math.max(0, total - bayarNum);
+        const newLoans = Math.max(0, (customer.gallon_loans || 0) + pinjamNum - kembaliNum);
+        await patchCachedCustomer(customer.id, {
+          total_debt: newDebt,
+          gallon_loans: newLoans,
+          total_purchases: (customer.total_purchases || 0) + total,
+          purchase_count: (customer.purchase_count || 0) + 1,
+          last_purchase_date: new Date().toISOString(),
+        });
+
+        toast.show(
+          "📴 Offline — transaksi disimpan & akan sinkron saat online",
+          "success",
+        );
+
+        if (sendWA && customer.wa_number) {
+          try {
+            const msg = formatReceipt({
+              storeName: "Air OXLY",
+              salesCode: user?.sales_code || user?.username,
+              customerName: customer.name,
+              customerNo: customer.customer_no,
+              date: new Date().toISOString(),
+              items,
+              total,
+              bayar: bayarNum,
+              hutang_transaksi: Math.max(0, total - bayarNum),
+              pinjam_galon: pinjamNum,
+              galon_kembali: kembaliNum,
+              new_debt: newDebt,
+              new_loans: newLoans,
+              edited: false,
+            });
+            await sendWhatsApp(customer.wa_number, msg);
+          } catch {}
+        }
+        router.back();
+        return;
+      } catch (e: any) {
+        toast.show(e?.message || "Gagal menyimpan offline", "error");
+        return;
+      } finally {
+        setSaving(false);
+      }
+    }
+
+    // ── ONLINE PATH (existing behavior)
     setSaving(true);
     try {
       let saved: Transaction;

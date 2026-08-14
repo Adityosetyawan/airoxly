@@ -192,12 +192,48 @@ export default function CustomerDetailReadonly({ customerId, onOpenTransaction, 
 
             {canDelete ? (
               <TouchableOpacity
-                style={styles.dangerBtn}
-                onPress={() => setConfirmDelete(true)}
+                style={[
+                  styles.dangerBtn,
+                  ((c?.total_debt ?? 0) > 0 || (c?.gallon_loans ?? 0) > 0) && styles.dangerBtnDisabled,
+                ]}
+                onPress={() => {
+                  if ((c?.total_debt ?? 0) > 0 || (c?.gallon_loans ?? 0) > 0) {
+                    const parts: string[] = [];
+                    if ((c?.total_debt ?? 0) > 0) parts.push(`hutang Rp ${rp(c!.total_debt)}`);
+                    if ((c?.gallon_loans ?? 0) > 0) parts.push(`pinjam ${c!.gallon_loans} galon`);
+                    toast.show(
+                      `Tidak bisa hapus: masih ada ${parts.join(" & ")}. Selesaikan dulu.`,
+                      "error",
+                    );
+                    return;
+                  }
+                  setConfirmDelete(true);
+                }}
                 testID="delete-customer-btn"
               >
-                <Ionicons name="trash-outline" size={18} color={theme.color.error} />
-                <Text style={styles.dangerBtnText}>Hapus Pelanggan</Text>
+                <Ionicons
+                  name={
+                    (c?.total_debt ?? 0) > 0 || (c?.gallon_loans ?? 0) > 0
+                      ? "lock-closed-outline"
+                      : "trash-outline"
+                  }
+                  size={18}
+                  color={
+                    (c?.total_debt ?? 0) > 0 || (c?.gallon_loans ?? 0) > 0
+                      ? theme.color.muted
+                      : theme.color.error
+                  }
+                />
+                <Text
+                  style={[
+                    styles.dangerBtnText,
+                    ((c?.total_debt ?? 0) > 0 || (c?.gallon_loans ?? 0) > 0) && { color: theme.color.muted },
+                  ]}
+                >
+                  {(c?.total_debt ?? 0) > 0 || (c?.gallon_loans ?? 0) > 0
+                    ? "Tidak bisa hapus (masih ada hutang/pinjam galon)"
+                    : "Hapus Pelanggan"}
+                </Text>
               </TouchableOpacity>
             ) : null}
 
@@ -463,6 +499,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(239,68,68,0.06)",
   },
   dangerBtnText: { color: theme.color.error, fontWeight: "700", fontSize: 14 },
+  dangerBtnDisabled: {
+    borderColor: theme.color.border,
+    backgroundColor: theme.color.surfaceSecondary,
+  },
   confirmOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.55)",

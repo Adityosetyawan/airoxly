@@ -284,6 +284,14 @@ async def delete_customer(customer_id: str, user=Depends(get_current_user)):
       - super_admin: any customer
       - admin: only customers within their group_letter
       - sales: only customers they created themselves
+
+    Business rule (enforced for all roles):
+      - Customer with outstanding debt (`total_debt > 0`) can NOT be deleted.
+      - Customer with outstanding gallon loans (`gallon_loans > 0`) can NOT
+        be deleted.
+      This prevents accidental data loss for pelanggan yang masih punya
+      kewajiban.
+
     Note: `customer_no` is NEVER reused after deletion (persistent counter
     on `users.next_customer_no`).
     """
@@ -298,5 +306,20 @@ async def delete_customer(customer_id: str, user=Depends(get_current_user)):
             raise HTTPException(403, "Bukan pelanggan wilayah Anda")
     elif user["role"] not in ("super_admin",):
         raise HTTPException(403, "Forbidden")
+
+    debt = float(c.get("total_debt") or 0)
+    loans = int(c.get("gallon_loans") or 0)
+    if debt > 0 or loans > 0:
+        parts = []
+        if debt > 0:
+            parts.append(f"hutang Rp {debt:,.0f}".replace(",", "."))
+        if loans > 0:
+            parts.append(f"pinjam {loans} galon")
+        raise HTTPException(
+            400,
+            f"Tidak bisa hapus: pelanggan masih memiliki " + " & ".join(parts) +
+            ". Selesaikan pelunasan / pengembalian galon terlebih dahulu.",
+        )
+
     await db.customers.delete_one({"id": customer_id})
     return {"ok": True, "deleted_id": customer_id, "customer_no": c.get("customer_no")}

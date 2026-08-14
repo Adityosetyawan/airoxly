@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { theme, rp } from "@/src/theme";
 import { api, Customer, User } from "@/src/api";
+import ExportCustomerModal from "@/src/components/ExportCustomerModal";
 
 export type SortId = "no" | "ranking" | "recent" | "last" | "loans" | "debt";
 
@@ -52,6 +53,7 @@ export default function CustomersList({
   const [salesList, setSalesList] = useState<User[]>([]);
   const [salesId, setSalesId] = useState<string>("");
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -101,7 +103,13 @@ export default function CustomersList({
           <Ionicons name="chevron-back" size={22} color={theme.color.onSurface} />
         </TouchableOpacity>
         <Text style={styles.title}>{title}</Text>
-        <View style={{ width: 32 }} />
+        <TouchableOpacity
+          style={styles.exportHeaderBtn}
+          onPress={() => setExportOpen(true)}
+          testID="export-pdf-btn"
+        >
+          <Ionicons name="document-text-outline" size={18} color={theme.color.brand} />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.searchWrap}>
@@ -297,6 +305,18 @@ export default function CustomersList({
           </Pressable>
         </Pressable>
       </Modal>
+
+      <ExportCustomerModal
+        visible={exportOpen}
+        onClose={() => setExportOpen(false)}
+        fixedSalesId={salesId || undefined}
+        salesOptions={salesList.map((u) => ({
+          id: u.id,
+          code: u.sales_code || u.username,
+          name: u.name,
+          group_letter: u.group_letter,
+        }))}
+      />
     </SafeAreaView>
   );
 }
@@ -311,6 +331,12 @@ const styles = StyleSheet.create({
   },
   backBtn: { padding: 4, width: 32 },
   title: { fontSize: 18, fontWeight: "600", color: theme.color.onSurface },
+  exportHeaderBtn: {
+    width: 36, height: 36, borderRadius: 12,
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: theme.color.brand,
+    backgroundColor: theme.color.surface,
+  },
   searchWrap: {
     flexDirection: "row",
     alignItems: "center",

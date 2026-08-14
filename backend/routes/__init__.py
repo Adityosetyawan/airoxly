@@ -9,6 +9,7 @@ from routes import (
     auth,
     customers,
     expenses,
+    exports,
     health,
     locations,
     lottery,
@@ -40,6 +41,7 @@ ALL_ROUTERS = [
     warehouse.router,
     shifts.router,
     ai.router,
+    exports.router,
     health.router,
 ]
 

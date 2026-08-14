@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { theme, rp } from "@/src/theme";
 import { api, Customer } from "@/src/api";
+import ExportCustomerModal from "@/src/components/ExportCustomerModal";
 
 const SORTS = [
   { id: "no", label: "No. Urut", icon: "list-outline" },
@@ -30,6 +31,7 @@ export default function Customers() {
   const [q, setQ] = useState("");
   const [items, setItems] = useState<Customer[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -53,14 +55,24 @@ export default function Customers() {
     <SafeAreaView style={styles.wrap} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.title}>Pelanggan</Text>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => router.push("/(sales)/customer/new")}
-          testID="add-customer-btn"
-        >
-          <Ionicons name="add" size={20} color="#fff" />
-          <Text style={styles.addBtnText}>Baru</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <TouchableOpacity
+            style={styles.exportBtn}
+            onPress={() => setExportOpen(true)}
+            testID="export-pdf-btn"
+          >
+            <Ionicons name="document-text-outline" size={18} color={theme.color.brand} />
+            <Text style={styles.exportBtnText}>PDF</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => router.push("/(sales)/customer/new")}
+            testID="add-customer-btn"
+          >
+            <Ionicons name="add" size={20} color="#fff" />
+            <Text style={styles.addBtnText}>Baru</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.searchWrap}>
@@ -161,6 +173,11 @@ export default function Customers() {
           </View>
         }
       />
+
+      <ExportCustomerModal
+        visible={exportOpen}
+        onClose={() => setExportOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -179,6 +196,18 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   addBtnText: { color: "#fff", fontWeight: "600", fontSize: 13 },
+  exportBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.color.brand,
+    backgroundColor: theme.color.surface,
+  },
+  exportBtnText: { color: theme.color.brand, fontWeight: "700", fontSize: 12 },
   searchWrap: {
     flexDirection: "row",
     alignItems: "center",

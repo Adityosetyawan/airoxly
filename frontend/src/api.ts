@@ -437,6 +437,46 @@ export const api = {
     req<{ ok: boolean }>(`/warehouse/daily/${entry_id}/clear-hijau`, { method: "POST" }),
   restoreHijau: (entry_id: string) =>
     req<{ ok: boolean }>(`/warehouse/daily/${entry_id}/restore-hijau`, { method: "POST" }),
+
+  // === EXPORT PDF: data pelanggan by range no urut ===
+  previewCustomerExport: (params: { sales_id?: string; from_no: number; to_no: number }) => {
+    const q = new URLSearchParams();
+    if (params.sales_id) q.set("sales_id", params.sales_id);
+    q.set("from_no", String(params.from_no));
+    q.set("to_no", String(params.to_no));
+    return req<{
+      sales_id: string;
+      sales_code: string;
+      sales_name?: string;
+      total_customers: number;
+      min_no: number;
+      max_no: number;
+      in_range: number;
+      from_no: number;
+      to_no: number;
+    }>(`/exports/customers/preview?${q.toString()}`);
+  },
+
+  /** Returns a Blob so caller can trigger download or share. */
+  downloadCustomerPDF: async (params: { sales_id?: string; from_no: number; to_no: number }) => {
+    const q = new URLSearchParams();
+    if (params.sales_id) q.set("sales_id", params.sales_id);
+    q.set("from_no", String(params.from_no));
+    q.set("to_no", String(params.to_no));
+    const token = await storage.getItem<string>(TOKEN_KEY, "");
+    const res = await fetch(`${API_BASE}/exports/customers.pdf?${q.toString()}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      let msg = `Gagal unduh PDF (HTTP ${res.status})`;
+      try {
+        const j = await res.json();
+        if (j?.detail) msg = j.detail;
+      } catch {}
+      throw new Error(msg);
+    }
+    return res.blob();
+  },
 };
 
 export async function getSavedUser(): Promise<User | null> {

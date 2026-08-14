@@ -97,6 +97,15 @@ async def create_transaction(body: TransactionCreate, user=Depends(require_roles
             txn["lottery_period_name"] = period.get("name")
 
     await db.transactions.insert_one(txn)
+    # Track `debt_since` on the customer:
+    #   • if debt just came into existence (prev == 0 → new > 0), stamp today.
+    #   • if the customer just paid off everything (new == 0), clear the stamp.
+    #   • otherwise leave the existing value alone.
+    debt_update: dict = {}
+    if prev_debt <= 0 and new_debt > 0:
+        debt_update["$set"] = {"debt_since": txn["date_only"]}
+    elif new_debt <= 0:
+        debt_update["$unset"] = {"debt_since": ""}
     await db.customers.update_one(
         {"id": body.customer_id},
         {
@@ -111,6 +120,8 @@ async def create_transaction(body: TransactionCreate, user=Depends(require_roles
             },
         },
     )
+    if debt_update:
+        await db.customers.update_one({"id": body.customer_id}, debt_update)
     return strip_id(txn)
 
 
@@ -225,6 +236,14 @@ async def edit_transaction(txn_id: str, body: TransactionEdit, user=Depends(get_
             "$inc": {"total_purchases": delta_purchases},
         },
     )
+    # Keep `debt_since` in sync with the recomputed debt state.
+    if new_debt <= 0:
+        await db.customers.update_one({"id": t["customer_id"]}, {"$unset": {"debt_since": ""}})
+    elif not customer.get("debt_since"):
+        await db.customers.update_one(
+            {"id": t["customer_id"]},
+            {"$set": {"debt_since": t.get("date_only") or now_utc().strftime("%Y-%m-%d")}},
+        )
     return await db.transactions.find_one({"id": txn_id}, {"_id": 0})
 
 

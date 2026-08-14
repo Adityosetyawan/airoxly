@@ -27,6 +27,7 @@ export default function SalesDashboard() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [lottery, setLottery] = useState<any | null>(null);
   const [lotteryCount, setLotteryCount] = useState<number>(0);
+  const [reminderCount, setReminderCount] = useState<{ debt: number; inactive: number }>({ debt: 0, inactive: 0 });
   const [refreshing, setRefreshing] = useState(false);
   const [expenseModal, setExpenseModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -37,18 +38,22 @@ export default function SalesDashboard() {
 
   const load = useCallback(async () => {
     try {
-      const [s, t, e, lp, ls] = await Promise.all([
+      const [s, t, e, lp, ls, rem] = await Promise.all([
         api.overview(),
         api.listTransactions({ date_from: today, date_to: today }),
         api.listExpenses({ date_from: today, date_to: today }),
         api.activeLotteryPeriod(),
         api.lotteryStats().catch(() => null),
+        api.customerReminders({ debt_days: 14, inactive_weeks: 4 }).catch(() => null),
       ]);
       setStats(s);
       setTxns(t);
       setExpenses(e);
       setLottery(lp);
       setLotteryCount(ls?.total_tickets || 0);
+      if (rem) {
+        setReminderCount({ debt: rem.debt_overdue.length, inactive: rem.inactive.length });
+      }
     } catch {}
   }, [today]);
 
@@ -130,6 +135,42 @@ export default function SalesDashboard() {
               <MiniStat label="Nilai Jual" value={"Rp " + rp(stats?.today_total || 0)} />
               <MiniStat label="Pelanggan" value={String(stats?.total_customers || 0)} />
             </View>
+
+            {(reminderCount.debt > 0 || reminderCount.inactive > 0) && (
+              <TouchableOpacity
+                style={styles.reminderBanner}
+                onPress={() => router.push("/(sales)/reminders")}
+                testID="reminders-banner"
+                activeOpacity={0.85}
+              >
+                <View style={styles.reminderIcon}>
+                  <Ionicons name="notifications" size={20} color="#fff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.reminderTitle}>Perlu Ditindaklanjuti</Text>
+                  <Text style={styles.reminderSub}>
+                    {reminderCount.debt > 0 && (
+                      <Text>
+                        <Text style={{ fontWeight: "800", color: theme.color.error }}>
+                          {reminderCount.debt}
+                        </Text>
+                        <Text> piutang &gt; 14 hari</Text>
+                      </Text>
+                    )}
+                    {reminderCount.debt > 0 && reminderCount.inactive > 0 ? "  ·  " : ""}
+                    {reminderCount.inactive > 0 && (
+                      <Text>
+                        <Text style={{ fontWeight: "800", color: theme.color.brand }}>
+                          {reminderCount.inactive}
+                        </Text>
+                        <Text> tidak beli &gt; 4 minggu</Text>
+                      </Text>
+                    )}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={theme.color.muted} />
+              </TouchableOpacity>
+            )}
 
             {lottery && (
               <View style={styles.lotteryBanner} testID="lottery-banner">
@@ -388,6 +429,27 @@ const styles = StyleSheet.create({
   kpiValue: { fontSize: 14, fontWeight: "700", color: theme.color.onSurface, letterSpacing: -0.3 },
   kpiUnit: { fontSize: 11, color: theme.color.muted, fontWeight: "400" },
   miniRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
+  reminderBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: "#FEF3C7",
+    borderWidth: 1,
+    borderColor: "#F59E0B",
+    marginBottom: 16,
+  },
+  reminderIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F59E0B",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reminderTitle: { fontSize: 13, fontWeight: "700", color: "#92400E" },
+  reminderSub: { fontSize: 11, color: "#78350F", marginTop: 2 },
   lotteryBanner: {
     flexDirection: "row",
     alignItems: "center",

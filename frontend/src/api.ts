@@ -230,6 +230,22 @@ export const api = {
   updateCustomer: (id: string, body: any) => req<Customer>(`/customers/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteCustomer: (id: string) => req(`/customers/${id}`, { method: "DELETE" }),
 
+  // Customer reminders — piutang > X hari / tidak beli > X minggu
+  customerReminders: (params: { debt_days?: number; inactive_weeks?: number; sales_id?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.debt_days) q.set("debt_days", String(params.debt_days));
+    if (params.inactive_weeks) q.set("inactive_weeks", String(params.inactive_weeks));
+    if (params.sales_id) q.set("sales_id", params.sales_id);
+    const s = q.toString();
+    return req<{
+      debt_overdue: Array<Customer & { debt_days: number; debt_since: string }>;
+      inactive: Array<Customer & { days_inactive: number }>;
+      debt_days: number;
+      inactive_weeks: number;
+      today: string;
+    }>(`/customers/reminders${s ? "?" + s : ""}`);
+  },
+
   // Transactions
   listTransactions: (params?: Record<string, string | undefined>) => {
     const q = new URLSearchParams();

@@ -127,6 +127,7 @@ export default function SalesLayout() {
           <Tabs.Screen name="transaction/new" options={{ href: null }} />
           <Tabs.Screen name="transaction/[id]" options={{ href: null }} />
           <Tabs.Screen name="winners" options={{ href: null }} />
+          <Tabs.Screen name="reminders" options={{ href: null }} />
         </Tabs>
       </View>
     </View>

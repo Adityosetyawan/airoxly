@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -100,6 +101,91 @@ async def list_customers(
         no_date.sort(key=lambda c: c.get("customer_no", 0))
         items = has_date + no_date
     return items
+
+
+@router.get("/reminders")
+async def customer_reminders(
+    debt_days: int = Query(14, ge=1, le=365),
+    inactive_weeks: int = Query(4, ge=1, le=52),
+    sales_id: Optional[str] = None,
+    user=Depends(get_current_user),
+):
+    """Return customers that need Sales attention:
+      • debt_overdue: piutang berumur > `debt_days` hari.
+      • inactive:    tidak beli > `inactive_weeks` minggu.
+
+    Sales sees own; Admin sees own group; Super Admin sees all (optionally
+    filterable by `sales_id`). `debt_since` (transaction.py side-effect) is
+    used first; falls back to `last_purchase_date` for pre-existing debts.
+    """
+    filt: dict = {}
+    if user["role"] == "sales":
+        filt["created_by"] = user["id"]
+    elif user["role"] == "admin":
+        filt["group_letter"] = user.get("group_letter")
+        if sales_id:
+            filt["created_by"] = sales_id
+    else:
+        if sales_id:
+            filt["created_by"] = sales_id
+
+    now = now_utc()
+    debt_cutoff_date = (now - timedelta(days=debt_days)).strftime("%Y-%m-%d")
+    inactive_cutoff = now - timedelta(weeks=inactive_weeks)
+    inactive_cutoff_iso = inactive_cutoff.isoformat()
+    today_str = now.strftime("%Y-%m-%d")
+
+    cursor = db.customers.find(filt, {"_id": 0})
+    docs = await cursor.to_list(5000)
+
+    debt_overdue = []
+    inactive = []
+    for c in docs:
+        total_debt = float(c.get("total_debt") or 0)
+        last_pd = c.get("last_purchase_date")
+        # Debt overdue calculation
+        if total_debt > 0:
+            debt_since = c.get("debt_since")
+            if not debt_since and last_pd:
+                # Legacy row without `debt_since`; fall back to last purchase.
+                try:
+                    debt_since = (last_pd or "")[:10]
+                except Exception:
+                    debt_since = None
+            if debt_since:
+                try:
+                    d0 = datetime.strptime(debt_since, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                    days = (now - d0).days
+                except Exception:
+                    days = 0
+                if debt_since <= debt_cutoff_date:
+                    debt_overdue.append({**c, "debt_days": max(days, 0), "debt_since": debt_since})
+
+        # Inactivity — customers that HAVE purchased at least once but not
+        # recently. Never-purchased customers are excluded (they're the "new"
+        # customer follow-up flow, not this one).
+        if last_pd:
+            try:
+                pd = datetime.fromisoformat(last_pd.replace("Z", "+00:00")) if isinstance(last_pd, str) else None
+            except Exception:
+                pd = None
+            if pd:
+                if pd.tzinfo is None:
+                    pd = pd.replace(tzinfo=timezone.utc)
+                if pd < inactive_cutoff:
+                    days_inactive = (now - pd).days
+                    inactive.append({**c, "days_inactive": max(days_inactive, 0)})
+
+    debt_overdue.sort(key=lambda c: c.get("debt_days") or 0, reverse=True)
+    inactive.sort(key=lambda c: c.get("days_inactive") or 0, reverse=True)
+
+    return {
+        "debt_overdue": debt_overdue,
+        "inactive": inactive,
+        "debt_days": debt_days,
+        "inactive_weeks": inactive_weeks,
+        "today": today_str,
+    }
 
 
 @router.get("/lookup/{barcode_id}")

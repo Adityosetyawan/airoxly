@@ -28,6 +28,22 @@ export default function CustomerDetail() {
   const qrShotRef = useRef<ViewShot>(null);
 
   const load = useCallback(async () => {
+    // Pending (offline-created) customers only exist in the local cache —
+    // don't waste a network request on them.
+    if (params.id && params.id.startsWith("local-")) {
+      const cached = await getCachedCustomer(params.id);
+      if (cached) {
+        setC(cached);
+        setTxns([]);
+      } else {
+        // Cache stub disappeared — most likely the sync already promoted this
+        // customer to a real server record. Bounce back to the list so the
+        // user picks up the freshly-synced customer_no.
+        toast.show("Pelanggan sudah tersinkron — silakan buka dari daftar", "success");
+        setTimeout(() => router.replace("/(sales)/customers"), 400);
+      }
+      return;
+    }
     try {
       const [cust, list] = await Promise.all([
         api.getCustomer(params.id!),
@@ -46,7 +62,7 @@ export default function CustomerDetail() {
         toast.show(e.message || "Gagal muat data", "error");
       }
     }
-  }, [params.id, toast]);
+  }, [params.id, toast, router]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -168,8 +184,23 @@ export default function CustomerDetail() {
             <Text style={styles.avatarText}>{c.name[0]?.toUpperCase() || "?"}</Text>
           </View>
           <Text style={styles.name}>{c.name}</Text>
-          <Text style={styles.no}>#{c.customer_no} · {c.barcode_id}</Text>
+          <Text style={styles.no}>
+            {c.id.startsWith("local-") ? "Belum sinkron — nomor akan otomatis dibuat" : `#${c.customer_no} · ${c.barcode_id}`}
+          </Text>
         </View>
+
+        {c.id.startsWith("local-") && (
+          <View style={styles.pendingBanner}>
+            <Ionicons name="cloud-offline" size={18} color="#92400E" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.pendingTitle}>Pelanggan pending sync</Text>
+              <Text style={styles.pendingSub}>
+                Data disimpan lokal. Nomor pelanggan resmi akan dibuat otomatis begitu online.
+                Anda tetap bisa input transaksi — akan tersinkron bersamaan.
+              </Text>
+            </View>
+          </View>
+        )}
 
         {showQR && (
           <View style={styles.qrWrap}>
@@ -471,6 +502,19 @@ const styles = StyleSheet.create({
   avatarText: { color: "#fff", fontSize: 28, fontWeight: "600" },
   name: { fontSize: 20, fontWeight: "600", color: theme.color.onSurface, marginTop: 10 },
   no: { fontSize: 12, color: theme.color.muted, marginTop: 2 },
+  pendingBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#FEF3C7",
+    borderWidth: 1,
+    borderColor: "#F59E0B",
+    marginBottom: 12,
+  },
+  pendingTitle: { fontSize: 13, fontWeight: "700", color: "#92400E" },
+  pendingSub: { fontSize: 11, color: "#78350F", marginTop: 2, lineHeight: 15 },
   qrWrap: { marginBottom: 16 },
   qrCard: {
     alignItems: "center",

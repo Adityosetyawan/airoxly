@@ -17,11 +17,14 @@ import { theme } from "@/src/theme";
 import { api } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
 import { PhotoCapture } from "@/src/components/PhotoCapture";
+import { useOnlineStatus } from "@/src/hooks/useOnlineStatus";
+import { addPendingCustomerStub, enqueueCustomer } from "@/src/utils/offlineStore";
 
 export default function NewCustomer() {
   const params = useLocalSearchParams<{ barcode?: string }>();
   const router = useRouter();
   const toast = useToast();
+  const online = useOnlineStatus();
   const [name, setName] = useState("");
   const [wa, setWa] = useState("");
   const [address, setAddress] = useState("");
@@ -62,6 +65,38 @@ export default function NewCustomer() {
       return;
     }
     setLoading(true);
+
+    // ── OFFLINE PATH ──────────────────────────────────────────────────────
+    if (!online) {
+      try {
+        const local_id =
+          (typeof crypto !== "undefined" && (crypto as any).randomUUID)
+            ? "local-" + (crypto as any).randomUUID()
+            : `local-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        const rec = await enqueueCustomer({
+          local_id,
+          name: name.trim(),
+          wa_number: wa.trim(),
+          address: address.trim(),
+          barcode_id: barcode.trim() || undefined,
+          lat: coords?.lat ?? null,
+          lng: coords?.lng ?? null,
+          photo_rumah: photoRumah ?? null,
+        });
+        await addPendingCustomerStub(rec);
+        toast.show("📴 Offline — pelanggan disimpan & akan sinkron saat online", "success");
+        // Route to the local-id detail so Sales can immediately create a
+        // transaction against this pending customer.
+        router.replace({ pathname: "/(sales)/customer/[id]", params: { id: local_id } });
+      } catch (e: any) {
+        toast.show(e?.message || "Gagal menyimpan offline", "error");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // ── ONLINE PATH ───────────────────────────────────────────────────────
     try {
       const c = await api.createCustomer({
         name: name.trim(),

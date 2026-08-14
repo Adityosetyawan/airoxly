@@ -153,15 +153,20 @@ export default function Customers() {
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
         renderItem={({ item, index }) => (
           <TouchableOpacity
-            style={styles.card}
+            style={[styles.card, (item as any)._pending && styles.cardPending]}
             onPress={() => router.push({ pathname: "/(sales)/customer/[id]", params: { id: item.id } })}
             testID={`customer-${item.id}`}
           >
-            <View style={styles.rankBadge}>
-              <Text style={styles.rankText}>{sort === "no" ? `#${item.customer_no}` : `#${index + 1}`}</Text>
+            <View style={[styles.rankBadge, (item as any)._pending && { backgroundColor: "#FEF3C7" }]}>
+              <Text style={[styles.rankText, (item as any)._pending && { color: "#92400E" }]}>
+                {(item as any)._pending ? "PEND" : sort === "no" ? `#${item.customer_no}` : `#${index + 1}`}
+              </Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.cName}>{item.name}</Text>
+              <Text style={styles.cName}>
+                {item.name}
+                {(item as any)._pending && <Text style={{ color: "#F59E0B", fontSize: 11 }}>  · 📴 pending sync</Text>}
+              </Text>
               <Text style={styles.cSub}>
                 {item.barcode_id}
                 {item.last_purchase_date
@@ -277,6 +282,11 @@ const styles = StyleSheet.create({
     borderColor: theme.color.border,
     marginBottom: 8,
     gap: 12,
+  },
+  cardPending: {
+    borderColor: "#F59E0B",
+    borderStyle: "dashed",
+    backgroundColor: "#FFFBEB",
   },
   rankBadge: {
     width: 44,

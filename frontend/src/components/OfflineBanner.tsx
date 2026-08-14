@@ -15,8 +15,12 @@ import { useToast } from "@/src/components/Toast";
 import { useOnlineStatus } from "@/src/hooks/useOnlineStatus";
 import {
   getLastSync,
+  getPendingCustomers,
   getPendingTransactions,
+  removePendingCustomer,
+  removeCachedCustomer,
   removePendingTransaction,
+  type PendingCustomer,
   type PendingTransaction,
 } from "@/src/utils/offlineStore";
 import {
@@ -40,13 +44,19 @@ export default function OfflineBanner() {
   const toast = useToast();
 
   const [pending, setPending] = useState<PendingTransaction[]>([]);
+  const [pendingCust, setPendingCust] = useState<PendingCustomer[]>([]);
   const [running, setRunning] = useState<boolean>(isSyncRunning());
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
   const refresh = useCallback(async () => {
-    const [list, ts] = await Promise.all([getPendingTransactions(), getLastSync()]);
+    const [list, custList, ts] = await Promise.all([
+      getPendingTransactions(),
+      getPendingCustomers(),
+      getLastSync(),
+    ]);
     setPending(list);
+    setPendingCust(custList);
     setLastSync(ts);
     setRunning(isSyncRunning());
   }, []);
@@ -59,25 +69,32 @@ export default function OfflineBanner() {
     };
   }, [refresh]);
 
+  const totalPending = pending.length + pendingCust.length;
+
   // Auto-trigger sync when we detect a fresh online transition AND have work.
   useEffect(() => {
-    if (online && pending.length > 0 && !running) {
+    if (online && totalPending > 0 && !running) {
       syncPendingTransactions().then((r) => {
         if (r.succeeded > 0) {
-          toast.show(`${r.succeeded} transaksi tersinkron`, "success");
+          toast.show(`${r.succeeded} item tersinkron`, "success");
         }
         if (r.failed > 0) {
-          toast.show(`${r.failed} transaksi gagal sync — cek daftar antrian`, "error");
+          toast.show(`${r.failed} gagal sync — cek daftar antrian`, "error");
         }
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [online, pending.length]);
+  }, [online, totalPending]);
 
-  const failedCount = useMemo(() => pending.filter((p) => p.status === "failed").length, [pending]);
+  const failedCount = useMemo(
+    () =>
+      pending.filter((p) => p.status === "failed").length +
+      pendingCust.filter((p) => p.status === "failed").length,
+    [pending, pendingCust],
+  );
 
   // Nothing to show when everything is fine.
-  if (online && pending.length === 0) return null;
+  if (online && totalPending === 0) return null;
 
   const doSyncNow = async () => {
     if (!online) {
@@ -105,14 +122,14 @@ export default function OfflineBanner() {
   const icon = !online ? "cloud-offline" : running ? "sync" : failedCount > 0 ? "warning" : "cloud-upload";
 
   const label = !online
-    ? pending.length > 0
-      ? `Offline — ${pending.length} transaksi menunggu sync`
-      : "Mode Offline — transaksi disimpan lokal"
+    ? totalPending > 0
+      ? `Offline — ${totalPending} item menunggu sync`
+      : "Mode Offline — data disimpan lokal"
     : running
-    ? `Menyinkron ${pending.length} transaksi…`
+    ? `Menyinkron ${totalPending} item…`
     : failedCount > 0
-    ? `${failedCount} gagal · ${pending.length - failedCount} pending — tap untuk retry`
-    : `${pending.length} transaksi menunggu sync — tap untuk sinkron`;
+    ? `${failedCount} gagal · ${totalPending - failedCount} pending — tap untuk retry`
+    : `${totalPending} item menunggu sync — tap untuk sinkron`;
 
   return (
     <>
@@ -149,60 +166,113 @@ export default function OfflineBanner() {
             </View>
 
             <ScrollView style={{ maxHeight: 400 }} contentContainerStyle={{ padding: 12 }}>
-              {pending.length === 0 ? (
+              {totalPending === 0 ? (
                 <View style={styles.empty}>
                   <Ionicons name="checkmark-done" size={36} color={theme.color.success} />
-                  <Text style={styles.emptyText}>Tidak ada transaksi menunggu</Text>
+                  <Text style={styles.emptyText}>Tidak ada item menunggu</Text>
                 </View>
               ) : (
-                pending.map((t) => (
-                  <View key={t.local_id} style={styles.row} testID={`pending-txn-${t.local_id}`}>
-                    <View style={styles.rowStatus}>
-                      <Ionicons
-                        name={
-                          t.status === "failed"
-                            ? "alert-circle"
-                            : t.status === "syncing"
-                            ? "sync"
-                            : "time"
-                        }
-                        size={18}
-                        color={
-                          t.status === "failed"
-                            ? theme.color.error
-                            : t.status === "syncing"
-                            ? theme.color.brand
-                            : theme.color.muted
-                        }
-                      />
+                <>
+                  {pendingCust.length > 0 && (
+                    <Text style={styles.sectionLabel}>Pelanggan Baru ({pendingCust.length})</Text>
+                  )}
+                  {pendingCust.map((c) => (
+                    <View key={c.local_id} style={styles.row} testID={`pending-cust-${c.local_id}`}>
+                      <View style={styles.rowStatus}>
+                        <Ionicons
+                          name={
+                            c.status === "failed"
+                              ? "alert-circle"
+                              : c.status === "syncing"
+                              ? "sync"
+                              : "person-add"
+                          }
+                          size={18}
+                          color={
+                            c.status === "failed"
+                              ? theme.color.error
+                              : c.status === "syncing"
+                              ? theme.color.brand
+                              : theme.color.muted
+                          }
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.rowTitle} numberOfLines={1}>{c.name}</Text>
+                        <Text style={styles.rowSub} numberOfLines={2}>
+                          {new Date(c.created_at).toLocaleString("id-ID", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" })}
+                          {c.wa_number ? "  ·  " + c.wa_number : ""}
+                        </Text>
+                        {c.status === "failed" && c.error ? (
+                          <Text style={styles.rowError} numberOfLines={2}>Gagal: {c.error}</Text>
+                        ) : null}
+                      </View>
+                      <TouchableOpacity
+                        style={styles.delBtn}
+                        onPress={async () => {
+                          await removePendingCustomer(c.local_id);
+                          await removeCachedCustomer(c.local_id);
+                          refresh();
+                          toast.show("Pelanggan pending dihapus", "success");
+                        }}
+                        testID={`delete-pending-cust-${c.local_id}`}
+                      >
+                        <Ionicons name="trash-outline" size={16} color={theme.color.error} />
+                      </TouchableOpacity>
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.rowTitle} numberOfLines={1}>
-                        {t.customer_name}
-                        {t.customer_no ? "  ·  #" + t.customer_no : ""}
-                      </Text>
-                      <Text style={styles.rowSub} numberOfLines={2}>
-                        {new Date(t.created_at).toLocaleString("id-ID", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" })}
-                        {"  ·  Rp "}{rp(t.total)}
-                        {"  ·  bayar Rp "}{rp(t.bayar)}
-                      </Text>
-                      {t.status === "failed" && t.error ? (
-                        <Text style={styles.rowError} numberOfLines={2}>Gagal: {t.error}</Text>
-                      ) : null}
+                  ))}
+                  {pending.length > 0 && (
+                    <Text style={[styles.sectionLabel, { marginTop: 12 }]}>Transaksi ({pending.length})</Text>
+                  )}
+                  {pending.map((t) => (
+                    <View key={t.local_id} style={styles.row} testID={`pending-txn-${t.local_id}`}>
+                      <View style={styles.rowStatus}>
+                        <Ionicons
+                          name={
+                            t.status === "failed"
+                              ? "alert-circle"
+                              : t.status === "syncing"
+                              ? "sync"
+                              : "time"
+                          }
+                          size={18}
+                          color={
+                            t.status === "failed"
+                              ? theme.color.error
+                              : t.status === "syncing"
+                              ? theme.color.brand
+                              : theme.color.muted
+                          }
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.rowTitle} numberOfLines={1}>
+                          {t.customer_name}
+                          {t.customer_no ? "  ·  #" + t.customer_no : ""}
+                        </Text>
+                        <Text style={styles.rowSub} numberOfLines={2}>
+                          {new Date(t.created_at).toLocaleString("id-ID", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" })}
+                          {"  ·  Rp "}{rp(t.total)}
+                          {"  ·  bayar Rp "}{rp(t.bayar)}
+                        </Text>
+                        {t.status === "failed" && t.error ? (
+                          <Text style={styles.rowError} numberOfLines={2}>Gagal: {t.error}</Text>
+                        ) : null}
+                      </View>
+                      <TouchableOpacity
+                        style={styles.delBtn}
+                        onPress={async () => {
+                          await removePendingTransaction(t.local_id);
+                          refresh();
+                          toast.show("Transaksi pending dihapus", "success");
+                        }}
+                        testID={`delete-pending-${t.local_id}`}
+                      >
+                        <Ionicons name="trash-outline" size={16} color={theme.color.error} />
+                      </TouchableOpacity>
                     </View>
-                    <TouchableOpacity
-                      style={styles.delBtn}
-                      onPress={async () => {
-                        await removePendingTransaction(t.local_id);
-                        refresh();
-                        toast.show("Transaksi pending dihapus", "success");
-                      }}
-                      testID={`delete-pending-${t.local_id}`}
-                    >
-                      <Ionicons name="trash-outline" size={16} color={theme.color.error} />
-                    </TouchableOpacity>
-                  </View>
-                ))
+                  ))}
+                </>
               )}
             </ScrollView>
 
@@ -259,6 +329,7 @@ const styles = StyleSheet.create({
   closeBtn: { padding: 6, borderRadius: 999, backgroundColor: theme.color.surfaceSecondary },
   empty: { alignItems: "center", padding: 32 },
   emptyText: { color: theme.color.muted, marginTop: 8, fontSize: 13 },
+  sectionLabel: { fontSize: 12, fontWeight: "700", color: theme.color.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 },
   row: {
     flexDirection: "row",
     alignItems: "center",

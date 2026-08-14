@@ -25,11 +25,6 @@ export default function AdminProfile() {
           <Row label="No. WA" value={user?.wa_number || "-"} />
         </View>
 
-        <TouchableOpacity onPress={() => router.push("/panduan")} style={styles.panduanBtn} testID="panduan-btn">
-          <Ionicons name="book-outline" size={20} color={theme.color.brand} />
-          <Text style={styles.panduanText}>Buku Panduan</Text>
-        </TouchableOpacity>
-
         <TouchableOpacity onPress={logout} style={styles.logout} testID="logout-btn">
           <Ionicons name="log-out-outline" size={20} color={theme.color.error} />
           <Text style={styles.logoutText}>Keluar</Text>

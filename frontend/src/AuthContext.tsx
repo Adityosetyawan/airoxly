@@ -16,6 +16,12 @@ type AuthCtx = {
   loginWithGoogle: () => Promise<User | null>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
+  /** Impersonate another user (Super Admin only). */
+  impersonate: (target_user_id: string) => Promise<User>;
+  /** Stop impersonation and restore the original Super Admin session. */
+  stopImpersonation: () => Promise<User | null>;
+  /** True when the current session is an impersonation of another user. */
+  isImpersonating: boolean;
 };
 
 const Ctx = createContext<AuthCtx>({} as any);
@@ -23,6 +29,11 @@ const Ctx = createContext<AuthCtx>({} as any);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isImpersonating, setIsImpersonating] = useState(false);
+
+  const refreshImpersonationFlag = useCallback(async () => {
+    setIsImpersonating(await api.isImpersonating());
+  }, []);
 
   const bootstrap = useCallback(async () => {
     setLoading(true);
@@ -70,11 +81,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     bootstrap();
-  }, [bootstrap]);
+    refreshImpersonationFlag();
+  }, [bootstrap, refreshImpersonationFlag]);
 
   const login = async (username: string, password: string) => {
     const r = await api.login(username, password);
     setUser(r.user);
+    // Fresh login clears any leftover impersonation backup.
+    await storage.removeItem("oxly.impersonation_backup_token");
+    await storage.removeItem("oxly.impersonation_backup_user");
+    setIsImpersonating(false);
     return r.user;
   };
 
@@ -82,6 +98,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const r = await startGoogleSignIn();
     if (r?.user) {
       setUser(r.user);
+      await storage.removeItem("oxly.impersonation_backup_token");
+      await storage.removeItem("oxly.impersonation_backup_user");
+      setIsImpersonating(false);
       return r.user;
     }
     return null;
@@ -89,6 +108,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     await api.logout();
+    await storage.removeItem("oxly.impersonation_backup_token");
+    await storage.removeItem("oxly.impersonation_backup_user");
+    setIsImpersonating(false);
     setUser(null);
   };
 
@@ -97,8 +119,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(u);
   };
 
+  const impersonate = async (target_user_id: string) => {
+    const r = await api.impersonate(target_user_id);
+    setUser(r.user);
+    setIsImpersonating(true);
+    return r.user;
+  };
+
+  const stopImpersonation = async () => {
+    const orig = await api.stopImpersonation();
+    if (orig) setUser(orig);
+    setIsImpersonating(false);
+    return orig;
+  };
+
   return (
-    <Ctx.Provider value={{ user, loading, login, loginWithGoogle, logout, refresh }}>
+    <Ctx.Provider
+      value={{
+        user,
+        loading,
+        login,
+        loginWithGoogle,
+        logout,
+        refresh,
+        impersonate,
+        stopImpersonation,
+        isImpersonating,
+      }}
+    >
       {children}
     </Ctx.Provider>
   );

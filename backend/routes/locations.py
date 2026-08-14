@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime as _dt
+from datetime import datetime as _dt, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends
@@ -14,11 +14,33 @@ from models import LocationPing
 
 router = APIRouter(prefix="/api/location", tags=["location"])
 
+# Working hours (Asia/Jakarta = UTC+7). Sales GPS ping only accepted between
+# GPS_START_HOUR (inclusive) and GPS_END_HOUR (exclusive).
+GPS_START_HOUR = 8
+GPS_END_HOUR = 17
+JAKARTA_TZ = timezone(timedelta(hours=7))
+
+
+def _is_within_working_hours() -> bool:
+    """Return True when Jakarta local time is between GPS_START_HOUR (inclusive)
+    and GPS_END_HOUR (exclusive). Falls back to True on any error."""
+    try:
+        now_jkt = _dt.now(JAKARTA_TZ)
+        return GPS_START_HOUR <= now_jkt.hour < GPS_END_HOUR
+    except Exception:
+        return True
+
 
 @router.post("/ping")
 async def location_ping(body: LocationPing, user=Depends(get_current_user)):
     """GPS noise filter — skip if < min_move meters from previous ping and
-    within last 5 minutes. Configurable via `settings.gps_min_move_m`."""
+    within last 5 minutes. Configurable via `settings.gps_min_move_m`.
+
+    Also enforces server-side working-hours window (08:00–17:00 Asia/Jakarta):
+    outside those hours the ping is silently ignored (no DB write, no error).
+    """
+    if not _is_within_working_hours():
+        return {"ok": True, "skipped": "outside_working_hours", "window": f"{GPS_START_HOUR:02d}:00-{GPS_END_HOUR:02d}:00 WIB"}
     setting = await db.settings.find_one({"key": "gps_min_move_m"}, {"_id": 0})
     try:
         min_move_m = float((setting or {}).get("value") or 20)

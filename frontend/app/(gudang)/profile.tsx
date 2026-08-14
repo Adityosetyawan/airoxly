@@ -21,10 +21,6 @@ export default function GudangProfile() {
           <Text style={styles.role}>GUDANG</Text>
           <Text style={styles.username}>@{user?.username}</Text>
         </View>
-        <TouchableOpacity style={styles.panduanBtn} onPress={() => router.push("/panduan")} testID="panduan-btn">
-          <Ionicons name="book-outline" size={20} color={theme.color.brand} />
-          <Text style={styles.panduanText}>Buku Panduan</Text>
-        </TouchableOpacity>
         <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
           <Ionicons name="log-out-outline" size={20} color="#fff" />
           <Text style={styles.logoutText}>Keluar</Text>

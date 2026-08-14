@@ -5,6 +5,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { theme } from "@/src/theme";
 import { api, User } from "@/src/api";
+import { useAuth } from "@/src/AuthContext";
+import { useToast } from "@/src/components/Toast";
 
 const TABS = [
   { id: "all", label: "Semua", role: undefined },
@@ -15,9 +17,26 @@ const TABS = [
 
 export default function SuperUsers() {
   const router = useRouter();
+  const toast = useToast();
+  const { impersonate } = useAuth();
   const [tab, setTab] = useState<string>("all");
   const [users, setUsers] = useState<User[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [impersonatingId, setImpersonatingId] = useState<string | null>(null);
+
+  const handleImpersonate = async (target: User) => {
+    if (impersonatingId) return;
+    setImpersonatingId(target.id);
+    try {
+      await impersonate(target.id);
+      toast.show(`Login sebagai ${target.username}`, "success");
+      // Route ke home; router akan redirect ke tab role user target.
+      setTimeout(() => router.replace("/"), 200);
+    } catch (e: any) {
+      toast.show(e?.message || "Gagal login sebagai user ini", "error");
+      setImpersonatingId(null);
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -63,23 +82,39 @@ export default function SuperUsers() {
         contentContainerStyle={{ padding: 16 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.color.brandPrimary} />}
         renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() => router.push({ pathname: "/(superadmin)/user-form", params: { id: item.id } })}
-            testID={`user-${item.username}`}
-          >
-            <View style={[styles.badge, item.role === "super_admin" ? { backgroundColor: theme.color.brandPrimary } : item.role === "admin" ? { backgroundColor: theme.color.brandSecondary } : { backgroundColor: theme.color.brandTertiary }]}>
-              <Text style={[styles.badgeText, item.role === "sales" && { color: theme.color.onBrandTertiary }]}>
-                {item.sales_code || item.group_letter || item.role[0].toUpperCase()}
-              </Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name}>{item.name || item.username}</Text>
-              <Text style={styles.meta}>{item.username} · {item.role.replace("_", " ")}</Text>
-              {item.disabled && <Text style={styles.disabled}>Nonaktif</Text>}
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={theme.color.muted} />
-          </TouchableOpacity>
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}
+              onPress={() => router.push({ pathname: "/(superadmin)/user-form", params: { id: item.id } })}
+              testID={`user-${item.username}`}
+            >
+              <View style={[styles.badge, item.role === "super_admin" ? { backgroundColor: theme.color.brandPrimary } : item.role === "admin" ? { backgroundColor: theme.color.brandSecondary } : { backgroundColor: theme.color.brandTertiary }]}>
+                <Text style={[styles.badgeText, item.role === "sales" && { color: theme.color.onBrandTertiary }]}>
+                  {item.sales_code || item.group_letter || item.role[0].toUpperCase()}
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name}>{item.name || item.username}</Text>
+                <Text style={styles.meta}>{item.username} · {item.role.replace("_", " ")}</Text>
+                {item.disabled && <Text style={styles.disabled}>Nonaktif</Text>}
+              </View>
+            </TouchableOpacity>
+            {item.role !== "super_admin" && !item.disabled ? (
+              <TouchableOpacity
+                style={[styles.impersonateBtn, impersonatingId === item.id && { opacity: 0.6 }]}
+                onPress={() => handleImpersonate(item)}
+                disabled={!!impersonatingId}
+                testID={`impersonate-${item.username}`}
+              >
+                <Ionicons name="log-in-outline" size={16} color="#fff" />
+                <Text style={styles.impersonateBtnText}>
+                  {impersonatingId === item.id ? "..." : "Masuk"}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <Ionicons name="chevron-forward" size={20} color={theme.color.muted} />
+            )}
+          </View>
         )}
         ListEmptyComponent={<Text style={styles.empty}>Tidak ada user</Text>}
       />
@@ -104,5 +139,15 @@ const styles = StyleSheet.create({
   name: { fontSize: 15, fontWeight: "500", color: theme.color.onSurface },
   meta: { fontSize: 11, color: theme.color.muted, marginTop: 2, textTransform: "capitalize" },
   disabled: { fontSize: 10, color: theme.color.error, marginTop: 2, fontWeight: "600" },
+  impersonateBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: theme.color.brandPrimary,
+  },
+  impersonateBtnText: { color: "#fff", fontWeight: "700", fontSize: 12 },
   empty: { textAlign: "center", color: theme.color.muted, padding: 40 },
 });

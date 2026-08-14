@@ -143,6 +143,47 @@ export const api = {
   me: () => req<User>("/auth/me"),
 
   /**
+   * Impersonate another user (Super Admin only). Backs up the actor's own
+   * token so the caller can restore it later via `stopImpersonation`.
+   */
+  impersonate: async (target_user_id: string) => {
+    const currentToken = await storage.getItem<string>(TOKEN_KEY, "");
+    const currentUserRaw = await storage.getItem<string>(USER_KEY, "");
+    const r = await req<{ access_token: string; user: User }>(
+      `/auth/impersonate/${encodeURIComponent(target_user_id)}`,
+      { method: "POST" },
+    );
+    // Preserve original identity so we can swap back later.
+    if (currentToken) await storage.setItem("oxly.impersonation_backup_token", currentToken);
+    if (currentUserRaw) await storage.setItem("oxly.impersonation_backup_user", currentUserRaw);
+    await storage.secureSet(TOKEN_KEY, r.access_token);
+    await storage.setItem(USER_KEY, JSON.stringify(r.user));
+    return r;
+  },
+
+  /** Restore the previously impersonating Super Admin session, if any. */
+  stopImpersonation: async () => {
+    const bakToken = await storage.getItem<string>("oxly.impersonation_backup_token", "");
+    const bakUser = await storage.getItem<string>("oxly.impersonation_backup_user", "");
+    if (!bakToken || !bakUser) return null;
+    await storage.secureSet(TOKEN_KEY, bakToken);
+    await storage.setItem(USER_KEY, bakUser);
+    await storage.removeItem("oxly.impersonation_backup_token");
+    await storage.removeItem("oxly.impersonation_backup_user");
+    try {
+      return JSON.parse(bakUser) as User;
+    } catch {
+      return null;
+    }
+  },
+
+  /** Whether an impersonation backup is present. */
+  isImpersonating: async () => {
+    const bak = await storage.getItem<string>("oxly.impersonation_backup_token", "");
+    return !!bak;
+  },
+
+  /**
    * Exchange a one-time Emergent `session_id` for a 7-day session_token.
    * Called from the Google Sign-in redirect handler.
    */

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from core.config import db, oauth2_scheme
 from core.security import create_token, get_current_user, verify_password
-from core.utils import user_public
+from core.utils import now_utc, user_public
 from models import LoginRequest, SessionExchangeRequest, TokenResponse
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -95,3 +95,39 @@ async def auth_logout(user=Depends(get_current_user), token: str = Depends(oauth
     if token and token.startswith("emg_"):
         await db.user_sessions.delete_one({"session_token": token})
     return {"ok": True}
+
+
+@router.post("/impersonate/{target_user_id}", response_model=TokenResponse)
+async def impersonate(target_user_id: str, actor=Depends(get_current_user)):
+    """Super Admin only — issue a JWT for another user (Admin/Sales/Produksi/Gudang).
+
+    Frontend is expected to store the actor's original token separately so it
+    can be swapped back via `POST /auth/impersonate/stop` (or by re-login).
+    The token issued here is identical to a normal login token, so RBAC checks
+    downstream naturally act on behalf of the target user.
+    """
+    if actor.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Hanya Super Admin yang boleh impersonate")
+    if actor["id"] == target_user_id:
+        raise HTTPException(status_code=400, detail="Tidak perlu impersonate diri sendiri")
+    target = await db.users.find_one({"id": target_user_id}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="User target tidak ditemukan")
+    if target.get("disabled"):
+        raise HTTPException(status_code=403, detail="User target dinonaktifkan")
+    if target.get("role") == "super_admin":
+        raise HTTPException(status_code=403, detail="Tidak bisa impersonate Super Admin lain")
+    # Audit log — best-effort, never fail the request on log errors.
+    try:
+        await db.impersonation_log.insert_one({
+            "actor_id": actor["id"],
+            "actor_username": actor["username"],
+            "target_id": target["id"],
+            "target_username": target["username"],
+            "target_role": target.get("role"),
+            "at": now_utc(),
+        })
+    except Exception:
+        pass
+    token = create_token(target["id"])
+    return TokenResponse(access_token=token, user=user_public(target))

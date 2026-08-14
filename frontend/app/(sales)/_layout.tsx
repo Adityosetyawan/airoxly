@@ -6,14 +6,26 @@ import { useAuth } from "@/src/AuthContext";
 import { theme } from "@/src/theme";
 import { api } from "@/src/api";
 
+// Jakarta local time working window for GPS ping (mirror of backend).
+const GPS_START_HOUR = 8;
+const GPS_END_HOUR = 17;
+
+function isWithinWorkingHours(): boolean {
+  // Use device local time. Sales devices are used in Indonesia (WIB / UTC+7)
+  // so local hour matches Jakarta hour.
+  const h = new Date().getHours();
+  return h >= GPS_START_HOUR && h < GPS_END_HOUR;
+}
+
 export default function SalesLayout() {
   const { user, loading } = useAuth();
 
-  // Background GPS ping every 60s
+  // Background GPS ping every 60s — ONLY during 08:00–17:00 (mirror of backend guard).
   useEffect(() => {
     if (!user || user.role !== "sales") return;
     let cancelled = false;
     const ping = async () => {
+      if (!isWithinWorkingHours()) return; // silently skip outside jam kerja
       try {
         const { status } = await Location.getForegroundPermissionsAsync();
         if (status !== "granted") return;

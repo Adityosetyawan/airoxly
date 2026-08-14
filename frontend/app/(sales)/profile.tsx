@@ -112,11 +112,6 @@ export default function Profile() {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity onPress={() => router.push("/panduan")} style={styles.panduanBtn} testID="panduan-btn">
-          <Ionicons name="book-outline" size={20} color={theme.color.brand} />
-          <Text style={styles.panduanText}>Buku Panduan</Text>
-        </TouchableOpacity>
-
         <TouchableOpacity onPress={logout} style={styles.logoutBtn} testID="logout-btn">
           <Ionicons name="log-out-outline" size={20} color={theme.color.error} />
           <Text style={styles.logoutText}>Keluar</Text>

@@ -9,6 +9,7 @@ import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { AuthProvider } from "@/src/AuthContext";
 import { ToastProvider } from "@/src/components/Toast";
 import PwaInstallHint from "@/src/components/PwaInstallHint";
+import ImpersonationBanner from "@/src/components/ImpersonationBanner";
 
 
 LogBox.ignoreAllLogs(true);
@@ -31,6 +32,7 @@ export default function RootLayout() {
         <AuthProvider>
           <ToastProvider>
             <Stack screenOptions={{ headerShown: false, animation: "fade" }} />
+            <ImpersonationBanner />
             <PwaInstallHint />
           </ToastProvider>
         </AuthProvider>

@@ -2,12 +2,13 @@ import React, { useState } from "react";
 import { Image, Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
 import { theme } from "@/src/theme";
+import { useAuth } from "@/src/AuthContext";
 
 /**
  * Buku Panduan (in-app manual)
- * Route: /panduan  — accessible from all role dashboards.
+ * Route: /panduan  — accessible ONLY by Super Admin (per operational policy).
  * Rendered as ScrollView per role section with expandable accordions.
  * Screenshots hosted at /panduan-img/*.jpeg (served from public/).
  */
@@ -397,7 +398,14 @@ const SECTIONS: Section[] = [
 
 export default function PanduanScreen() {
   const router = useRouter();
+  const { user, loading } = useAuth();
   const [openId, setOpenId] = useState<string | null>("intro");
+
+  // Panduan is Super Admin only per operational policy. Guard the route in
+  // case someone types the URL directly.
+  if (loading) return null;
+  if (!user) return <Redirect href="/login" />;
+  if (user.role !== "super_admin") return <Redirect href="/" />;
 
   return (
     <SafeAreaView style={styles.wrap} edges={["top"]}>

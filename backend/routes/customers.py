@@ -5,6 +5,7 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pymongo import ReturnDocument
 
 from core.config import db
 from core.security import get_current_user, require_roles
@@ -15,13 +16,39 @@ router = APIRouter(prefix="/api/customers", tags=["customers"])
 
 
 async def next_customer_no_for(sales_id: str) -> int:
-    last = await db.customers.find(
-        {"created_by": sales_id},
-        {"_id": 0, "customer_no": 1},
-    ).sort("customer_no", -1).limit(1).to_list(1)
-    if not last:
+    """Get next customer_no for a sales — using a persistent counter that
+    NEVER decrements (deleted numbers are never reused).
+
+    - Migration: if `users.next_customer_no` doesn't exist yet, initialize it
+      from `max(customer_no) + 1` of existing customers for that sales.
+    - On subsequent calls, atomically increment the counter with $inc.
+    """
+    u = await db.users.find_one({"id": sales_id}, {"_id": 0, "id": 1, "next_customer_no": 1})
+    if u is None:
         return 1
-    return int(last[0].get("customer_no", 0)) + 1
+    counter = u.get("next_customer_no")
+    if counter is None:
+        # Lazy migration: initialize from existing customers
+        last = await db.customers.find(
+            {"created_by": sales_id},
+            {"_id": 0, "customer_no": 1},
+        ).sort("customer_no", -1).limit(1).to_list(1)
+        initial = (int(last[0].get("customer_no", 0)) + 1) if last else 1
+        await db.users.update_one(
+            {"id": sales_id},
+            {"$set": {"next_customer_no": initial}},
+        )
+    # Atomically consume this number and bump the counter for next time.
+    # `ReturnDocument.BEFORE` returns the doc PRE-update — the value we hand out.
+    result = await db.users.find_one_and_update(
+        {"id": sales_id},
+        {"$inc": {"next_customer_no": 1}},
+        projection={"_id": 0, "next_customer_no": 1},
+        return_document=ReturnDocument.BEFORE,
+    )
+    if not result or result.get("next_customer_no") is None:
+        return 1
+    return int(result["next_customer_no"])
 
 
 @router.get("")
@@ -164,6 +191,26 @@ async def update_customer(customer_id: str, body: CustomerUpdate, user=Depends(g
 
 
 @router.delete("/{customer_id}")
-async def delete_customer(customer_id: str, user=Depends(require_roles("super_admin"))):
+async def delete_customer(customer_id: str, user=Depends(get_current_user)):
+    """Delete a customer.
+
+    Permissions:
+      - super_admin: any customer
+      - admin: only customers within their group_letter
+      - sales: only customers they created themselves
+    Note: `customer_no` is NEVER reused after deletion (persistent counter
+    on `users.next_customer_no`).
+    """
+    c = await db.customers.find_one({"id": customer_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "Pelanggan tidak ditemukan")
+    if user["role"] == "sales":
+        if c.get("created_by") != user["id"]:
+            raise HTTPException(403, "Hanya bisa hapus pelanggan sendiri")
+    elif user["role"] == "admin":
+        if c.get("group_letter") != user.get("group_letter"):
+            raise HTTPException(403, "Bukan pelanggan wilayah Anda")
+    elif user["role"] not in ("super_admin",):
+        raise HTTPException(403, "Forbidden")
     await db.customers.delete_one({"id": customer_id})
-    return {"ok": True}
+    return {"ok": True, "deleted_id": customer_id, "customer_no": c.get("customer_no")}

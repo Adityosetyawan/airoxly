@@ -14,18 +14,24 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { theme, rp } from "@/src/theme";
 import { api, Customer, Transaction } from "@/src/api";
+import { useToast } from "@/src/components/Toast";
 
 type Props = {
   customerId: string;
   onOpenTransaction?: (txnId: string) => void;
+  /** Show a "Hapus Pelanggan" danger button. Enabled for admin & superadmin views. */
+  canDelete?: boolean;
 };
 
-export default function CustomerDetailReadonly({ customerId, onOpenTransaction }: Props) {
+export default function CustomerDetailReadonly({ customerId, onOpenTransaction, canDelete = false }: Props) {
   const router = useRouter();
+  const toast = useToast();
   const [c, setC] = useState<Customer | null>(null);
   const [txns, setTxns] = useState<Transaction[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [photoZoom, setPhotoZoom] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -44,6 +50,20 @@ export default function CustomerDetailReadonly({ customerId, onOpenTransaction }
     setRefreshing(true);
     await load();
     setRefreshing(false);
+  };
+
+  const handleDelete = async () => {
+    if (!c || deleting) return;
+    setDeleting(true);
+    try {
+      await api.deleteCustomer(c.id);
+      toast.show(`Pelanggan #${c.customer_no} dihapus. Nomor tidak dipakai ulang.`, "success");
+      setConfirmDelete(false);
+      setTimeout(() => router.back(), 250);
+    } catch (e: any) {
+      toast.show(e?.message || "Gagal hapus pelanggan", "error");
+      setDeleting(false);
+    }
   };
 
   if (!c) {
@@ -170,6 +190,17 @@ export default function CustomerDetailReadonly({ customerId, onOpenTransaction }
               </TouchableOpacity>
             ) : null}
 
+            {canDelete ? (
+              <TouchableOpacity
+                style={styles.dangerBtn}
+                onPress={() => setConfirmDelete(true)}
+                testID="delete-customer-btn"
+              >
+                <Ionicons name="trash-outline" size={18} color={theme.color.error} />
+                <Text style={styles.dangerBtnText}>Hapus Pelanggan</Text>
+              </TouchableOpacity>
+            ) : null}
+
             <Text style={styles.section}>Riwayat Transaksi ({txns.length})</Text>
           </>
         }
@@ -237,6 +268,47 @@ export default function CustomerDetailReadonly({ customerId, onOpenTransaction }
             <Image source={{ uri: c.photo_rumah }} style={styles.zoomImg} resizeMode="contain" />
           ) : null}
         </TouchableOpacity>
+      </Modal>
+
+      {/* Modal konfirmasi hapus pelanggan */}
+      <Modal
+        visible={confirmDelete}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !deleting && setConfirmDelete(false)}
+      >
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmBox}>
+            <View style={styles.confirmIconWrap}>
+              <Ionicons name="alert-circle" size={40} color={theme.color.error} />
+            </View>
+            <Text style={styles.confirmTitle}>Hapus Pelanggan?</Text>
+            <Text style={styles.confirmDesc}>
+              Pelanggan <Text style={{ fontWeight: "800" }}>{c.name}</Text> (#{c.customer_no}) akan dihapus permanen.
+              {"\n\n"}Riwayat transaksi tetap tersimpan. Nomor pelanggan #{c.customer_no}{" "}
+              <Text style={{ fontWeight: "700" }}>tidak akan dipakai ulang</Text>.
+            </Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={styles.confirmCancel}
+                onPress={() => setConfirmDelete(false)}
+                disabled={deleting}
+                testID="cancel-delete-btn"
+              >
+                <Text style={styles.confirmCancelText}>Batal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmDelete, deleting && { opacity: 0.6 }]}
+                onPress={handleDelete}
+                disabled={deleting}
+                testID="confirm-delete-btn"
+              >
+                <Ionicons name="trash" size={16} color="#fff" />
+                <Text style={styles.confirmDeleteText}>{deleting ? "Menghapus…" : "Ya, Hapus"}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -377,4 +449,69 @@ const styles = StyleSheet.create({
   txnTag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
   txnTagText: { fontSize: 11, fontWeight: "500" },
   empty: { textAlign: "center", color: theme.color.muted, padding: 24 },
+  dangerBtn: {
+    marginTop: 8,
+    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.color.error,
+    backgroundColor: "rgba(239,68,68,0.06)",
+  },
+  dangerBtnText: { color: theme.color.error, fontWeight: "700", fontSize: 14 },
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  confirmBox: {
+    width: "100%",
+    maxWidth: 380,
+    backgroundColor: theme.color.surface,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+  },
+  confirmIconWrap: { marginBottom: 12 },
+  confirmTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: theme.color.onSurface,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  confirmDesc: {
+    fontSize: 13,
+    color: theme.color.muted,
+    textAlign: "center",
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  confirmActions: { flexDirection: "row", gap: 10, width: "100%" },
+  confirmCancel: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+    alignItems: "center",
+  },
+  confirmCancelText: { color: theme.color.onSurface, fontWeight: "600" },
+  confirmDelete: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: theme.color.error,
+  },
+  confirmDeleteText: { color: "#fff", fontWeight: "700" },
 });

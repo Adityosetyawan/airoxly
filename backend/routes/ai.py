@@ -194,19 +194,28 @@ async def ai_count_gallons(body: AICountRequest, user=Depends(get_current_user))
         "  - Kalau ada logo/label \"SUZUKI\" di tailgate + rangka bak besi tinggi + banyak galon → hampir pasti Mega Carry.\n"
         "  - Kalau ragu, JANGAN pilih 'generik 50' (terlalu konservatif). Pilih kandidat terbaik dari nilai baku yang cocok.\n"
         "  \n"
-        "  ATURAN PENERAPAN:\n"
-        "  1. Identifikasi jenis mobil dari foto.\n"
-        "  2. Amati apakah galon DITUMPUK di atas mobil (lihat apakah ada 2 lapis galon berbeda tinggi di dalam bak):\n"
-        "     a. Kalau HANYA 1 LAPIS (bak penuh 1 baris) → COUNT = kapasitas baku mobil.\n"
-        "        Contoh: Granmax 1 lapis → count = 52.\n"
-        "     b. Kalau 2 LAPIS (ditumpuk 2 tingkat, sering ada JERUJI/SIDE-RAIL tinggi untuk menahan tumpukan) →\n"
-        "        COUNT = kapasitas_baku + hitung_galon_terlihat_di_LAPIS_ATAS.\n"
-        "        Lapis bawah = tertutup lapis atas → JANGAN dihitung ulang, pakai kapasitas baku.\n"
-        "        Lapis atas = hitung dari yang terlihat menyembul di atas bak (baris depan × baris ke belakang).\n"
-        "        Contoh: Granmax 2 tumpuk, lapis atas ~18 → count = 52 + 18 = 70.\n"
-        "     c. Kalau 3 LAPIS → COUNT = kapasitas_baku + (kapasitas × 0.7) + galon_terlihat_lapis_teratas.\n"
-        "     d. Kalau bak TIDAK penuh (ada rongga jelas) → kapasitas_baku × persen_kepenuhan.\n"
-        "  3. Reasoning WAJIB sebut jenis mobil + kapasitas baku + jumlah lapis + hitung lapis atas.\n"
+        "  ATURAN PENERAPAN (WAJIB HARFIAH — jangan menghitung ulang lapis bawah):\n"
+        "  1. Identifikasi jenis mobil dari foto → dapatkan KAPASITAS BAKU dari tabel.\n"
+        "  2. Amati berapa TINGKAT/TUMPUK galon di atas bak:\n"
+        "     a. 1 LAPIS penuh (bak rata) → COUNT = KAPASITAS BAKU (langsung, jangan hitung manual).\n"
+        "        Contoh: Granmax rata 1 lapis → count = 52. Suzuki Carry rata 1 lapis → count = 54.\n"
+        "     b. 2 LAPIS (ada tumpukan atas di atas jeruji/side-rail atau di atas lapis bawah) → \n"
+        "        LAPIS BAWAH: JANGAN dihitung visual — PAKAI KAPASITAS BAKU SESUAI JENIS MOBIL.\n"
+        "        LAPIS ATAS: hitung MANUAL galon yang terlihat menyembul di atas.\n"
+        "        COUNT = KAPASITAS_BAKU_JENIS_MOBIL + JUMLAH_LAPIS_ATAS.\n"
+        "        Contoh WAJIB (Granmax 2 tumpuk, atas terlihat 30 galon):\n"
+        "          - Bawah = 52 (patokan Granmax, JANGAN dihitung visual).\n"
+        "          - Atas  = 30 (hitung dari foto).\n"
+        "          - Total = 52 + 30 = 82 galon.\n"
+        "        Contoh WAJIB (Suzuki Carry 2 tumpuk, atas terlihat 18):\n"
+        "          - Total = 54 + 18 = 72.\n"
+        "        Contoh WAJIB (Mega Carry 2 tumpuk, atas 25):\n"
+        "          - Total = 48 + 25 = 73.\n"
+        "     c. 3 LAPIS → COUNT = kapasitas_baku + (kapasitas × 0.7) + galon_terlihat_lapis_teratas.\n"
+        "     d. Kalau bak TIDAK penuh (ada rongga jelas 1 lapis) → kapasitas_baku × persen_kepenuhan.\n"
+        "  3. Reasoning WAJIB tuliskan jenis mobil + kapasitas baku + jumlah lapis + hitung lapis atas.\n"
+        "  4. `positions` HANYA untuk galon di LAPIS ATAS (yang benar-benar terlihat kepalanya). \n"
+        "     Galon lapis bawah TIDAK diberi positions karena tertutup — user cukup melihat angka total.\n"
         "  \n"
         "  CONTOH REAL 1 (Suzuki Mega Carry dengan JERUJI BESI side-rail tinggi, 2 tumpuk galon biru OXLY):\n"
         "  - Identifikasi: tulisan SUZUKI di tailgate, bak PANJANG, side-rail besi tinggi mengelilingi bak → Mega Carry.\n"
@@ -225,10 +234,15 @@ async def ai_count_gallons(body: AICountRequest, user=Depends(get_current_user))
 
         "ATURAN OUTPUT (WAJIB):\n"
         "  - Kembalikan HANYA JSON (tanpa markdown, tanpa penjelasan tambahan sebelum/sesudah).\n"
-        "  - Schema: {\"count\": <integer>, \"confidence\": \"low\"|\"medium\"|\"high\", \"reasoning\": \"<Bahasa Indonesia, max 220 karakter, WAJIB tuliskan cara hitung: strategi mana yang dipakai + angka P×L×T atau dimensi mobil>\"}\n"
-        "  - Reasoning WAJIB menyebut angka konkret: mis. \"Strategi B: dasar 5×4=20, tinggi 3 lapis → total 60 galon\" atau \"Strategi C: pickup Carry bak 2.4×1.5, 30 galon/lapis × 2 lapis = 60\".\n"
-        "  - PENTING BANGET: field `count` HARUS = hasil PENJUMLAHAN semua sub-layer / rumus, BUKAN estimasi visual/impresi. Kalau formula memberi 55, count = 55 (jangan turunkan jadi 23 karena \"kelihatannya\").\n"
-        "  - Jangan ada frasa seperti \"tampak efektif\", \"kelihatan hanya\", \"visual estimate\" — count = hasil aritmatika akhir.\n"
+        "  - Schema: {\n"
+        "      \"count\": <integer>,\n"
+        "      \"confidence\": \"low\"|\"medium\"|\"high\",\n"
+        "      \"reasoning\": \"<Bahasa Indonesia, max 260 karakter, WAJIB tuliskan cara hitung + enumerasi galon per layer, mis: 'L1 bawah G1-G12 (6×2). L2 tengah G13-G22 (5×2). L3 atas G23-G28 (4×2). Total=28'>\",\n"
+        "      \"positions\": [ {\"n\": 1, \"x\": <0-1>, \"y\": <0-1>}, ... ]  // koordinat titik-tengah setiap kepala galon yang terlihat, dinormalisasi 0-1 dari kiri-atas gambar. WAJIB diberikan agar sistem bisa menomori kepala galon di foto. n=nomor urut galon (mulai dari 1). Cukup titik kepala/tutup galon saja.\n"
+        "    }\n"
+        "  - PENTING: `positions` HANYA untuk galon yang MATA-nya terlihat / bisa AI lihat (tidak untuk galon yang tertutup lapisan atas). Kalau ini pickup 2 tingkat, positions hanya berisi galon di lapis ATAS. Tapi `count` tetap = kapasitas baku bawah + lapis atas.\n"
+        "  - Reasoning WAJIB menyebut angka konkret: mis. \"Strategi B: L1 G1-G20 (5×4), L2 G21-G35 (5×3). Total=35\" atau \"Strategi C: Granmax 52 (bawah, patokan) + G1-G30 lapis atas (5×6) = 82\".\n"
+        "  - PENTING BANGET: field `count` HARUS = hasil PENJUMLAHAN semua sub-layer / rumus, BUKAN estimasi visual/impresi.\n"
         "  - Jangan pernah balas dengan teks bebas — HANYA JSON."
     )
     user_prompt = (
@@ -307,7 +321,21 @@ async def ai_count_gallons(body: AICountRequest, user=Depends(get_current_user))
     conf = str(parsed.get("confidence") or "low").lower()
     if conf not in ("low", "medium", "high"):
         conf = "low"
-    reasoning = str(parsed.get("reasoning") or "")[:220]
+    reasoning = str(parsed.get("reasoning") or "")[:260]
+
+    # Extract positions [{n, x, y}] — used to draw numbered dots on each galon head.
+    positions_raw = parsed.get("positions") or []
+    positions: list[dict] = []
+    if isinstance(positions_raw, list):
+        for i, p in enumerate(positions_raw[:200]):  # safety cap
+            try:
+                x = float(p.get("x"))
+                y = float(p.get("y"))
+                # sanity clip 0..1
+                if 0.0 <= x <= 1.0 and 0.0 <= y <= 1.0:
+                    positions.append({"n": int(p.get("n") or (i + 1)), "x": x, "y": y})
+            except Exception:
+                continue
 
     # Safety net: if reasoning mentions "Total = X" or "= X galon" where X > count,
     # trust the arithmetic in reasoning over the `count` field (models sometimes
@@ -328,7 +356,73 @@ async def ai_count_gallons(body: AICountRequest, user=Depends(get_current_user))
                 if formula_total > count * 1.3:
                     logging.info("AI count corrected from %d → %d from summed sub-formulas", count, formula_total)
                     count = formula_total
-    except Exception as _e:  # noqa: BLE001
+    except Exception:
         pass
 
-    return {"count": max(0, count), "confidence": conf, "reasoning": reasoning}
+    # Draw numbered dots on the (shrunk) image if positions are available.
+    annotated_b64 = _annotate_image(img_raw, positions) if positions else None
+
+    return {
+        "count": max(0, count),
+        "confidence": conf,
+        "reasoning": reasoning,
+        "positions": positions,
+        "annotated_image_base64": annotated_b64,
+    }
+
+
+def _annotate_image(img_b64: str, positions: list[dict]) -> str | None:
+    """Draw numbered circle labels on each detected gallon head.
+
+    Best-effort — returns None on any failure (Pillow missing, bad base64,
+    etc.) so the client always still gets the count.
+    """
+    if not positions:
+        return None
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except Exception:
+        return None
+    try:
+        raw = base64.b64decode(img_b64)
+        img = Image.open(io.BytesIO(raw)).convert("RGB")
+        w, h = img.size
+        draw = ImageDraw.Draw(img, "RGBA")
+        # radius scales with image so it looks proportional on any size.
+        r = max(14, min(w, h) // 45)
+        # Try to load a bold font; fallback to default if not available.
+        font = None
+        for candidate in (
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        ):
+            try:
+                font = ImageFont.truetype(candidate, size=int(r * 1.2))
+                break
+            except Exception:
+                font = None
+        if font is None:
+            font = ImageFont.load_default()
+
+        for p in positions:
+            cx = int(float(p["x"]) * w)
+            cy = int(float(p["y"]) * h)
+            n = int(p.get("n") or 0)
+            # Halo (outer ring) — semi-transparent white so it stands out on both light & dark bg.
+            draw.ellipse([cx - r - 2, cy - r - 2, cx + r + 2, cy + r + 2], fill=(255, 255, 255, 220))
+            # Filled center — bright red so it's obvious on blue gallons.
+            draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(220, 38, 38, 255))
+            # Number text, centered.
+            label = str(n)
+            try:
+                tw, th = draw.textbbox((0, 0), label, font=font)[2:]
+            except Exception:
+                tw, th = font.getsize(label) if hasattr(font, "getsize") else (r, r)
+            draw.text((cx - tw / 2, cy - th / 2), label, fill=(255, 255, 255, 255), font=font)
+
+        out = io.BytesIO()
+        img.save(out, format="JPEG", quality=80, optimize=True)
+        return base64.b64encode(out.getvalue()).decode()
+    except Exception as e:  # noqa: BLE001
+        logging.warning("Image annotate failed: %s", e)
+        return None

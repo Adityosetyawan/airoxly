@@ -84,6 +84,12 @@ export function PhotoCapture({
       if (aiCount && onAICount) {
         try {
           const r = await api.aiCountGallons(dataUri, hintForAI || label);
+          // If backend returned an image annotated with numbered gallon heads,
+          // swap it into the photo slot so the user can visually verify the
+          // count. Otherwise keep the original watermarked photo.
+          if (r.annotated_image_base64) {
+            onChange(`data:image/jpeg;base64,${r.annotated_image_base64}`);
+          }
           onAICount(r.count, r.confidence, r.reasoning);
         } catch (e: any) {
           const msg = e?.message || "Gagal hitung AI";

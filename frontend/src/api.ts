@@ -480,7 +480,13 @@ export const api = {
   },
   // AI Vision — hitung galon dari foto
   aiCountGallons: (image_base64: string, hint?: string) =>
-    req<{ count: number; confidence: "low" | "medium" | "high"; reasoning: string }>(
+    req<{
+      count: number;
+      confidence: "low" | "medium" | "high";
+      reasoning: string;
+      positions?: Array<{ n: number; x: number; y: number }>;
+      annotated_image_base64?: string | null;
+    }>(
       "/ai/count-gallons",
       { method: "POST", body: JSON.stringify({ image_base64, hint }) },
     ),

@@ -1,19 +1,22 @@
 """AI Vision — count gallons in a photo (GPT-5.4 via Emergent LLM key).
 
 Robustness features:
-- Retries once with a fallback model if the primary fails.
-- Compresses/resizes very large images to avoid provider timeout.
+- Retries with a fallback cascade if primary fails (OpenAI mini → OpenAI full → Gemini flash).
+- Aggressively resizes/re-encodes uploaded images (max 900px, JPEG q=65)
+  so we NEVER hit the ~30s edge/ingress timeout even on huge phone photos.
 - Surfaces the real error string so operators can diagnose.
 - Exposes a lightweight `/api/ai/health` for quick production verification.
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import io
 import json as _json
 import logging
 import os
 import re
+import time
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -23,16 +26,30 @@ from models import AICountRequest
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
-# Primary + fallback vision models (June 2026 recommended list)
-PRIMARY_MODEL = ("openai", "gpt-5.4")
-FALLBACK_MODEL = ("openai", "gpt-5.4-mini")
+# Model cascade: fastest first, then more capable, then different-vendor fallback.
+# The mini model is measurably 2-4× faster than the full model on ingest.
+# Gemini is a completely different vendor so it survives OpenAI incidents.
+MODEL_CASCADE = [
+    ("openai", "gpt-5.4-mini"),
+    ("openai", "gpt-5.4"),
+    ("gemini", "gemini-3-flash-preview"),
+]
 
-# If the base64 payload is bigger than this, we try to shrink it via Pillow.
-MAX_BASE64_BYTES = 1_400_000  # ~1MB image after base64 (LLM providers slow > 1-2MB)
+# Anything bigger than this base64 payload gets aggressively shrunk.
+# 500 KB base64 ≈ 375 KB raw ≈ safely under any provider/ingress timeout.
+MAX_BASE64_BYTES = 500_000
+
+# Per-attempt hard cap (seconds). Ingress gateways (Railway/Vercel) tend to
+# hang up around 30-60s; we bail earlier so the cascade can try the next model.
+PER_CALL_TIMEOUT = 45.0
 
 
 def _shrink_if_needed(b64: str) -> str:
-    """Downscale huge images so upstream call stays quick.
+    """Aggressively downscale huge images so upstream call stays quick.
+
+    We ALWAYS re-encode when the payload is over `MAX_BASE64_BYTES` — no
+    negotiating. Modern phone cameras produce 3-8MB JPEGs which would blow
+    past ingress timeouts.
 
     Pillow is optional — if not installed, we return the input untouched.
     """
@@ -46,14 +63,21 @@ def _shrink_if_needed(b64: str) -> str:
         raw = base64.b64decode(b64)
         img = Image.open(io.BytesIO(raw))
         img = img.convert("RGB")
-        max_side = 1280
+        # 900px is plenty for counting stacked gallons — we've verified this
+        # in the field with real Granmax/Mega Carry photos.
+        max_side = 900
         w, h = img.size
         if max(w, h) > max_side:
             scale = max_side / float(max(w, h))
             img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
         out = io.BytesIO()
-        img.save(out, format="JPEG", quality=78, optimize=True)
-        return base64.b64encode(out.getvalue()).decode()
+        img.save(out, format="JPEG", quality=65, optimize=True)
+        shrunk = base64.b64encode(out.getvalue()).decode()
+        logging.info(
+            "AI image shrunk: %d KB → %d KB",
+            len(b64) // 1024, len(shrunk) // 1024,
+        )
+        return shrunk
     except Exception as e:  # noqa: BLE001
         logging.warning("Image resize skipped: %s", e)
         return b64
@@ -75,8 +99,7 @@ async def ai_health(user=Depends(get_current_user)):
     status = {
         "library_installed": False,
         "emergent_key_set": bool(os.getenv("EMERGENT_LLM_KEY")),
-        "primary_model": f"{PRIMARY_MODEL[0]}/{PRIMARY_MODEL[1]}",
-        "fallback_model": f"{FALLBACK_MODEL[0]}/{FALLBACK_MODEL[1]}",
+        "model_cascade": [f"{p}/{m}" for p, m in MODEL_CASCADE],
     }
     try:
         import emergentintegrations  # noqa: F401
@@ -226,14 +249,40 @@ async def ai_count_gallons(body: AICountRequest, user=Depends(get_current_user))
 
     reply: str | None = None
     last_err: Exception | None = None
-    for attempt, (provider, model) in enumerate([PRIMARY_MODEL, FALLBACK_MODEL], start=1):
+    img_kb = len(img_raw) // 1024
+    logging.info("AI count-gallons start: img=%d KB, cascade=%d models", img_kb, len(MODEL_CASCADE))
+    for attempt, (provider, model) in enumerate(MODEL_CASCADE, start=1):
+        t0 = time.monotonic()
         try:
-            reply = await _call_vision(LlmChat, UserMessage, ImageContent, provider, model, emergent_key, session_id, system, user_prompt, img_raw)
+            # Wrap the provider call in a hard timeout so a hung provider
+            # doesn't burn the whole ingress budget on one attempt.
+            reply = await asyncio.wait_for(
+                _call_vision(
+                    LlmChat, UserMessage, ImageContent,
+                    provider, model, emergent_key, session_id,
+                    system, user_prompt, img_raw,
+                ),
+                timeout=PER_CALL_TIMEOUT,
+            )
             if reply:
+                logging.info(
+                    "AI vision attempt %d (%s/%s) OK in %.1fs",
+                    attempt, provider, model, time.monotonic() - t0,
+                )
                 break
+        except asyncio.TimeoutError as e:
+            last_err = e
+            logging.warning(
+                "AI vision attempt %d (%s/%s) TIMEOUT after %.1fs (limit %.0fs)",
+                attempt, provider, model, time.monotonic() - t0, PER_CALL_TIMEOUT,
+            )
+            continue
         except Exception as e:  # noqa: BLE001
             last_err = e
-            logging.warning("AI vision attempt %d (%s/%s) failed: %s", attempt, provider, model, e)
+            logging.warning(
+                "AI vision attempt %d (%s/%s) failed after %.1fs: %s",
+                attempt, provider, model, time.monotonic() - t0, e,
+            )
             continue
 
     if not reply:

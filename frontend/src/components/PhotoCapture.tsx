@@ -7,6 +7,20 @@ import { addWatermarkTimestamp } from "@/src/utils/watermark";
 import { api } from "@/src/api";
 
 /**
+ * Global kill-switch untuk AI auto-count galon.
+ *
+ * Disetel `false` per Aug 2026 sesuai instruksi user: akurasi AI belum
+ * cukup untuk kondisi lapangan, sehingga penghitungan dilakukan MANUAL
+ * oleh petugas (Gudang / Produksi). Foto tetap disimpan (bukti visual);
+ * hanya panggilan AI yang dinonaktifkan.
+ *
+ * Untuk mengaktifkan kembali di masa depan: ubah ke `true` dan tidak
+ * perlu menyentuh call-site lain — semua PhotoCapture yang punya prop
+ * `aiCount` akan otomatis kembali menghitung.
+ */
+export const AI_COUNT_ENABLED = false;
+
+/**
  * PhotoCapture — tombol foto realtime (kamera saja, tidak dari galeri).
  * Digunakan untuk foto nota, foto galon, dsb. Value = data URI base64 atau null.
  *
@@ -80,13 +94,11 @@ export function PhotoCapture({
       }
       onChange(dataUri);
 
-      // AI count jika diminta
-      if (aiCount && onAICount) {
+      // AI count — dinonaktifkan global via AI_COUNT_ENABLED (lihat atas file).
+      // Foto tetap disimpan; petugas mengisi angka manual pakai stepper +/−.
+      if (AI_COUNT_ENABLED && aiCount && onAICount) {
         try {
           const r = await api.aiCountGallons(dataUri, hintForAI || label);
-          // If backend returned an image annotated with numbered gallon heads,
-          // swap it into the photo slot so the user can visually verify the
-          // count. Otherwise keep the original watermarked photo.
           if (r.annotated_image_base64) {
             onChange(`data:image/jpeg;base64,${r.annotated_image_base64}`);
           }

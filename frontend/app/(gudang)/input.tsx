@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AppHeader } from "@/src/components/AppHeader";
-import { PhotoCapture } from "@/src/components/PhotoCapture";
+import { PhotoCapture, AI_COUNT_ENABLED } from "@/src/components/PhotoCapture";
 import { NumStepper } from "@/src/components/NumStepper";
 import { theme } from "@/src/theme";
 import { api } from "@/src/api";
@@ -334,7 +334,7 @@ export default function GudangInput() {
             ) : null}
           </Row>
 
-          <SectionTitle>1️⃣ Bawa Isi (dari foto real + AI + penyesuaian)</SectionTitle>
+          <SectionTitle>1️⃣ Bawa Isi (foto + isi manual)</SectionTitle>
           <View style={styles.photoGrid}>
             <View style={{ flex: 1 }}>
               <PhotoCapture
@@ -343,7 +343,7 @@ export default function GudangInput() {
                   setPhotoIsiPagi(v);
                   setPhotoIsiPagiAt(v ? new Date() : null);
                   if (!v) { setAiIsiPagi(null); setAiIsiPagiStatus("idle"); }
-                  else if (aiIsiPagi == null) setAiIsiPagiStatus("processing");
+                  else if (AI_COUNT_ENABLED && aiIsiPagi == null) setAiIsiPagiStatus("processing");
                 }}
                 label="Isi Pagi"
                 watermark
@@ -356,7 +356,7 @@ export default function GudangInput() {
                 ) : null}
                 testID="photo-isi-pagi"
               />
-              <NumStepper value={form.bawa_pagi} onChange={(v) => setF("bawa_pagi", v)} label="Bawa Isi Pagi (AI + koreksi)" allowNegative={false} testID="stepper-bawa-pagi" />
+              <NumStepper value={form.bawa_pagi} onChange={(v) => setF("bawa_pagi", v)} label="Bawa Isi Pagi (isi manual)" allowNegative={false} testID="stepper-bawa-pagi" />
             </View>
             <View style={{ flex: 1 }}>
               <PhotoCapture
@@ -365,7 +365,7 @@ export default function GudangInput() {
                   setPhotoIsiSiang(v);
                   setPhotoIsiSiangAt(v ? new Date() : null);
                   if (!v) { setAiIsiSiang(null); setAiIsiSiangStatus("idle"); }
-                  else if (aiIsiSiang == null) setAiIsiSiangStatus("processing");
+                  else if (AI_COUNT_ENABLED && aiIsiSiang == null) setAiIsiSiangStatus("processing");
                 }}
                 label="Isi Siang"
                 watermark
@@ -378,7 +378,7 @@ export default function GudangInput() {
                 ) : null}
                 testID="photo-isi-siang"
               />
-              <NumStepper value={form.bawa_siang} onChange={(v) => setF("bawa_siang", v)} label="Bawa Isi Siang (AI + koreksi)" allowNegative={false} testID="stepper-bawa-siang" />
+              <NumStepper value={form.bawa_siang} onChange={(v) => setF("bawa_siang", v)} label="Bawa Isi Siang (isi manual)" allowNegative={false} testID="stepper-bawa-siang" />
             </View>
           </View>
 
@@ -396,7 +396,7 @@ export default function GudangInput() {
             <Text style={styles.terjualValue}>{terjual}</Text>
           </View>
 
-          <SectionTitle>3️⃣ Galon Kembali (dari foto real + AI + penyesuaian)</SectionTitle>
+          <SectionTitle>3️⃣ Galon Kembali (foto + isi manual)</SectionTitle>
           <View style={styles.photoGrid}>
             <View style={{ flex: 1 }}>
               <PhotoCapture
@@ -405,7 +405,7 @@ export default function GudangInput() {
                   setPhotoKosongSiang(v);
                   setPhotoKosongSiangAt(v ? new Date() : null);
                   if (!v) { setAiKosongSiang(null); setAiKosongSiangStatus("idle"); }
-                  else if (aiKosongSiang == null) setAiKosongSiangStatus("processing");
+                  else if (AI_COUNT_ENABLED && aiKosongSiang == null) setAiKosongSiangStatus("processing");
                 }}
                 label="Galon Siang"
                 watermark
@@ -418,7 +418,7 @@ export default function GudangInput() {
                 ) : null}
                 testID="photo-galon-siang"
               />
-              <NumStepper value={form.kosong_kembali_siang} onChange={(v) => setF("kosong_kembali_siang", v)} label="Galon Kembali Siang (AI + koreksi)" allowNegative={false} testID="stepper-kembali-siang" />
+              <NumStepper value={form.kosong_kembali_siang} onChange={(v) => setF("kosong_kembali_siang", v)} label="Galon Kembali Siang (isi manual)" allowNegative={false} testID="stepper-kembali-siang" />
             </View>
             <View style={{ flex: 1 }}>
               <PhotoCapture
@@ -427,7 +427,7 @@ export default function GudangInput() {
                   setPhotoKosongSore(v);
                   setPhotoKosongSoreAt(v ? new Date() : null);
                   if (!v) { setAiKosongSore(null); setAiKosongSoreStatus("idle"); }
-                  else if (aiKosongSore == null) setAiKosongSoreStatus("processing");
+                  else if (AI_COUNT_ENABLED && aiKosongSore == null) setAiKosongSoreStatus("processing");
                 }}
                 label="Galon Sore"
                 watermark
@@ -440,7 +440,7 @@ export default function GudangInput() {
                 ) : null}
                 testID="photo-galon-sore"
               />
-              <NumStepper value={form.kosong_kembali_sore} onChange={(v) => setF("kosong_kembali_sore", v)} label="Galon Kembali Sore (AI + koreksi)" allowNegative={false} testID="stepper-kembali-sore" />
+              <NumStepper value={form.kosong_kembali_sore} onChange={(v) => setF("kosong_kembali_sore", v)} label="Galon Kembali Sore (isi manual)" allowNegative={false} testID="stepper-kembali-sore" />
             </View>
           </View>
           {kosongPulang > 0 || form.sales_id ? (

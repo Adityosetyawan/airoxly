@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AppHeader } from "@/src/components/AppHeader";
-import { PhotoCapture } from "@/src/components/PhotoCapture";
+import { PhotoCapture, AI_COUNT_ENABLED } from "@/src/components/PhotoCapture";
 import { NumStepper } from "@/src/components/NumStepper";
 import { theme } from "@/src/theme";
 import { api } from "@/src/api";
@@ -311,7 +311,7 @@ export default function ProduksiInput() {
               setPhotoBefore(v);
               setPhotoBeforeAt(v ? new Date() : null);
               if (!v) { setAiBefore(null); setAiBeforeStatus("idle"); }
-              else if (!aiBefore) setAiBeforeStatus("processing");
+              else if (AI_COUNT_ENABLED && !aiBefore) setAiBeforeStatus("processing");
             }}
             label="Foto galon kosong"
             watermark
@@ -337,10 +337,11 @@ export default function ProduksiInput() {
           ) : null}
           {photoBefore ? (
             <NumStepper
-              label="Penyesuaian +/- (referensi)"
+              label="Jumlah galon SEBELUM (isi manual)"
               value={form.manual_adjust_before}
               onChange={(v) => setF("manual_adjust_before", v)}
-              hint="Sesuaikan jika jumlah kenyataan berbeda dari AI"
+              hint="Ketik jumlah galon kosong sebelum diisi"
+              allowNegative={false}
               testID="adjust-before"
             />
           ) : null}
@@ -352,7 +353,7 @@ export default function ProduksiInput() {
               setPhotoAfter(v);
               setPhotoAfterAt(v ? new Date() : null);
               if (!v) { setAiAfter(null); setAiAfterStatus("idle"); }
-              else if (!aiAfter) setAiAfterStatus("processing");
+              else if (AI_COUNT_ENABLED && !aiAfter) setAiAfterStatus("processing");
             }}
             label="Foto galon isi (produk jadi)"
             watermark
@@ -378,10 +379,11 @@ export default function ProduksiInput() {
           ) : null}
           {photoAfter ? (
             <NumStepper
-              label="Penyesuaian +/- (mempengaruhi TOTAL)"
+              label="Jumlah galon SETELAH (isi manual)"
               value={form.manual_adjust}
               onChange={(v) => setF("manual_adjust", v)}
-              hint="Contoh: -2 kalau 2 galon rusak / bocor"
+              hint="Ketik jumlah galon isi hasil produksi"
+              allowNegative={false}
               testID="adjust-after"
             />
           ) : null}
@@ -389,7 +391,7 @@ export default function ProduksiInput() {
           <View style={styles.totalBox}>
             <View style={{ flex: 1 }}>
               <Text style={styles.totalLabel}>TOTAL PRODUKSI</Text>
-              <Text style={styles.totalSub}>AI ({aiAfter?.count || 0}) {manualN >= 0 ? "+" : ""}{manualN} penyesuaian</Text>
+              <Text style={styles.totalSub}>Input manual dari petugas</Text>
             </View>
             <Text style={styles.totalValue}>{Math.max(0, totalProduksi)}</Text>
             <Text style={styles.totalUnit}>gln</Text>

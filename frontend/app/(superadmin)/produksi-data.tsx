@@ -8,6 +8,7 @@ import { theme } from "@/src/theme";
 import { api } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
 import { EditEntryModal } from "@/src/components/EditEntryModal";
+import { EntryPhotos, makeProductionSlots, makeWarehouseSlots } from "@/src/components/EntryPhotos";
 
 type Kind = "production" | "warehouse";
 
@@ -124,6 +125,11 @@ export default function SuperAdminProdWhData() {
               </View>
             </View>
             {renderPills(item, kind)}
+            <EntryPhotos
+              slots={kind === "production" ? makeProductionSlots(item) : makeWarehouseSlots(item)}
+              hint="📷 Foto Galon (ketuk untuk perbesar)"
+              compact
+            />
             {item.edit_count ? <Text style={styles.editInfo}>✏️ diedit {item.edit_count}x</Text> : null}
             {item.note ? <Text style={styles.note}>{item.note}</Text> : null}
           </View>

@@ -6,6 +6,7 @@ import { theme } from "@/src/theme";
 import { api } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
 import { EditEntryModal } from "@/src/components/EditEntryModal";
+import { EntryPhotos, makeWarehouseSlots } from "@/src/components/EntryPhotos";
 
 export default function GudangHistory() {
   const toast = useToast();
@@ -84,6 +85,7 @@ export default function GudangHistory() {
                 {item.stoper_ganti ? <Pill k="Stoper" v={item.stoper_ganti} /> : null}
               </View>
               {item.note ? <Text style={styles.note}>{item.note}</Text> : null}
+              <EntryPhotos slots={makeWarehouseSlots(item)} hint="📷 Foto Galon (ketuk untuk perbesar)" compact />
             </View>
           );
         }}

@@ -6,6 +6,7 @@ import { theme } from "@/src/theme";
 import { api } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
 import { EditEntryModal } from "@/src/components/EditEntryModal";
+import { EntryPhotos, makeProductionSlots } from "@/src/components/EntryPhotos";
 
 export default function ProduksiHistory() {
   const toast = useToast();
@@ -84,6 +85,7 @@ export default function ProduksiHistory() {
               {item.produksi_galon ? <Pill k="Prod Gln" v={item.produksi_galon} color="#1E3A8A" /> : null}
             </View>
             {item.note ? <Text style={styles.note}>{item.note}</Text> : null}
+            <EntryPhotos slots={makeProductionSlots(item)} hint="📷 Foto Galon (ketuk untuk perbesar)" compact />
           </View>
         )}
       />

@@ -111,11 +111,20 @@ export function formatReceipt(opts: {
   lines.push(`Total pinjam galon: ${opts.new_loans} gln`);
   if (opts.lottery_tickets && opts.lottery_tickets.length > 0) {
     lines.push("");
-    lines.push(`🎁 *Kupon Undian ${opts.lottery_period_name || ""}*`.trim());
-    opts.lottery_tickets.forEach((code) => {
-      lines.push(`   • ${code}`);
+    lines.push("━━━━━━━━━━━━━━━━━━━");
+    lines.push(
+      `🎁 *SELAMAT! Anda mendapat ${opts.lottery_tickets.length} Kupon Undian${
+        opts.lottery_period_name ? ` — ${opts.lottery_period_name}` : ""
+      }*`,
+    );
+    lines.push("");
+    lines.push("*Nomor Kupon:*");
+    opts.lottery_tickets.forEach((code, idx) => {
+      lines.push(`  ${idx + 1}. \`${code}\``);
     });
-    lines.push(`Simpan nomor undian di atas untuk ikut Undian Berhadiah 🍀`);
+    lines.push("");
+    lines.push("🍀 Simpan nomor kupon di atas untuk ikut Undian Berhadiah!");
+    lines.push("━━━━━━━━━━━━━━━━━━━");
   }
   lines.push("");
   lines.push("Terima kasih 🙏");

@@ -27,6 +27,8 @@ export default function SuperSettings() {
   const [savingGps, setSavingGps] = useState(false);
   const [radius, setRadius] = useState("100");
   const [gpsMin, setGpsMin] = useState("20");
+  const [lotteryMin, setLotteryMin] = useState("11000");
+  const [savingLottery, setSavingLottery] = useState(false);
   const [shifts, setShifts] = useState<{ key: string; label: string; order?: number }[]>([]);
   const [savingShifts, setSavingShifts] = useState(false);
 
@@ -43,11 +45,12 @@ export default function SuperSettings() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [r, g, sh, pp] = await Promise.all([
+      const [r, g, sh, pp, lot] = await Promise.all([
         api.getSetting("visit_radius_m").catch(() => null),
         api.getSetting("gps_min_move_m").catch(() => null),
         api.getShifts().catch(() => null),
         api.listPartPrices().catch(() => null),
+        api.getSetting("lottery_min_price_per_galon").catch(() => null),
       ]);
       if (r?.value) setRadius(String(r.value));
       if (g?.value) setGpsMin(String(g.value));
@@ -56,6 +59,7 @@ export default function SuperSettings() {
         const sorted = [...pp].sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
         setParts(sorted);
       }
+      if (lot?.value != null) setLotteryMin(String(lot.value));
     } catch (e: any) {
       toast.show(e.message || "Gagal memuat pengaturan", "error");
     } finally {
@@ -98,6 +102,23 @@ export default function SuperSettings() {
       toast.show(e.message || "Gagal simpan", "error");
     } finally {
       setSavingGps(false);
+    }
+  };
+
+  const saveLotteryMin = async () => {
+    const v = parseInt(lotteryMin, 10);
+    if (isNaN(v) || v < 0 || v > 1_000_000) {
+      toast.show("Harga minimum harus 0 – 1.000.000", "error");
+      return;
+    }
+    setSavingLottery(true);
+    try {
+      await api.setSetting("lottery_min_price_per_galon", v);
+      toast.show("Harga minimum kupon tersimpan", "success");
+    } catch (e: any) {
+      toast.show(e.message || "Gagal simpan", "error");
+    } finally {
+      setSavingLottery(false);
     }
   };
 
@@ -278,6 +299,34 @@ export default function SuperSettings() {
         </View>
         <TouchableOpacity onPress={saveGpsMin} disabled={savingGps} style={[styles.btn, savingGps && { opacity: 0.6 }]} testID="save-gps-btn">
           <Text style={styles.btnText}>{savingGps ? "Menyimpan…" : "Simpan Filter GPS"}</Text>
+        </TouchableOpacity>
+
+        {/* Lottery minimum price */}
+        <Text style={styles.section}>🎟️ Kupon Undian — Harga Minimum</Text>
+        <Text style={styles.desc}>
+          Hanya pembelian <Text style={{ fontWeight: "700" }}>Air Galon 19L</Text> dengan harga
+          per unit ≥ nilai ini yang berhak mendapatkan kupon undian. Galon Kosong tidak dapat kupon.
+          Default: Rp 11.000.
+        </Text>
+        <View style={styles.row}>
+          <Text style={styles.unit}>Rp</Text>
+          <TextInput
+            value={lotteryMin}
+            onChangeText={(v) => setLotteryMin(v.replace(/[^\d]/g, ""))}
+            keyboardType="number-pad"
+            style={styles.input}
+            placeholder="11000"
+            testID="lottery-min-input"
+          />
+          <Text style={styles.unit}>/ galon</Text>
+        </View>
+        <TouchableOpacity
+          onPress={saveLotteryMin}
+          disabled={savingLottery}
+          style={[styles.btn, savingLottery && { opacity: 0.6 }]}
+          testID="save-lottery-min-btn"
+        >
+          <Text style={styles.btnText}>{savingLottery ? "Menyimpan…" : "Simpan Harga Minimum Kupon"}</Text>
         </TouchableOpacity>
 
         {/* Shifts CRUD */}

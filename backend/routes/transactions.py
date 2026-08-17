@@ -67,9 +67,23 @@ async def create_transaction(body: TransactionCreate, user=Depends(require_roles
         "edit_count": 0,
         "lottery_tickets": [],
     }
+    # Aturan kupon undian:
+    #   Hanya pembelian **Air Galon 19L berisi** yang harga per unit ≥ threshold
+    #   yang berhak dapat kupon. Galon "Kosong" tetap tidak dapat kupon.
+    #   Threshold default Rp 11.000 (bisa diubah lewat setting
+    #   `lottery_min_price_per_galon`).
+    lottery_setting = await db.settings.find_one(
+        {"key": "lottery_min_price_per_galon"}, {"_id": 0}
+    )
+    try:
+        min_price = float((lottery_setting or {}).get("value") or 11000)
+    except Exception:
+        min_price = 11000.0
     galon_qty = sum(
         int(it.qty) for it in body.items
-        if it.unit == "gln" and "Kosong" not in (it.product_name or "")
+        if it.unit == "gln"
+        and "Kosong" not in (it.product_name or "")
+        and float(it.price or 0) >= min_price
     )
     if galon_qty > 0:
         period = await db.lottery_periods.find_one({"is_active": True})

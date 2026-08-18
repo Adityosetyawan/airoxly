@@ -310,12 +310,8 @@ export default function GudangInput() {
 
           <SectionTitle>1️⃣ Bawa Isi (input manual)</SectionTitle>
           <View style={styles.rowTwo}>
-            <View style={{ flex: 1 }}>
-              <NumStepper value={form.bawa_pagi} onChange={(v) => setF("bawa_pagi", v)} label="Bawa Isi Pagi" allowNegative={false} testID="stepper-bawa-pagi" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <NumStepper value={form.bawa_siang} onChange={(v) => setF("bawa_siang", v)} label="Bawa Isi Siang" allowNegative={false} testID="stepper-bawa-siang" />
-            </View>
+            <NumStepper compact value={form.bawa_pagi} onChange={(v) => setF("bawa_pagi", v)} label="Bawa Isi Pagi" allowNegative={false} testID="stepper-bawa-pagi" />
+            <NumStepper compact value={form.bawa_siang} onChange={(v) => setF("bawa_siang", v)} label="Bawa Isi Siang" allowNegative={false} testID="stepper-bawa-siang" />
           </View>
 
           <SectionTitle>2️⃣ Sisa Isi (belum terjual — diisi Gudang)</SectionTitle>
@@ -334,12 +330,8 @@ export default function GudangInput() {
 
           <SectionTitle>3️⃣ Galon Kembali (input manual)</SectionTitle>
           <View style={styles.rowTwo}>
-            <View style={{ flex: 1 }}>
-              <NumStepper value={form.kosong_kembali_siang} onChange={(v) => setF("kosong_kembali_siang", v)} label="Galon Kembali Siang" allowNegative={false} testID="stepper-kembali-siang" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <NumStepper value={form.kosong_kembali_sore} onChange={(v) => setF("kosong_kembali_sore", v)} label="Galon Kembali Sore" allowNegative={false} testID="stepper-kembali-sore" />
-            </View>
+            <NumStepper compact value={form.kosong_kembali_siang} onChange={(v) => setF("kosong_kembali_siang", v)} label="Galon Kembali Siang" allowNegative={false} testID="stepper-kembali-siang" />
+            <NumStepper compact value={form.kosong_kembali_sore} onChange={(v) => setF("kosong_kembali_sore", v)} label="Galon Kembali Sore" allowNegative={false} testID="stepper-kembali-sore" />
           </View>
           {kosongPulang > 0 || form.sales_id ? (
             <View style={styles.kosongInfoBox}>

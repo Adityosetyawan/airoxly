@@ -302,17 +302,17 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
           </View>
 
           {/* SECTION: PRODUKSI & GUDANG SUMMARY */}
-          {data.prod_wh_summary && (data.prod_wh_summary.prod_entries_count > 0 || data.prod_wh_summary.wh_entries_count > 0) ? (
+          {data.prod_wh_summary ? (
             <>
               <SectionTitle icon="hammer-outline">Data Produksi & Gudang</SectionTitle>
               <View style={[styles.tableCard, { paddingBottom: 8 }]}>
                 <View style={styles.pwRow}>
-                  <PWStat label="Produksi Galon" value={data.prod_wh_summary.produksi_galon_total} color="#1E3A8A" />
-                  <PWStat label="Dibawa Ke Gudang" value={data.prod_wh_summary.dibawa_ke_gudang ?? data.prod_wh_summary.bawa_total} color="#059669" />
+                  <PWStat label="Produksi Galon" value={data.prod_wh_summary.produksi_galon_total || 0} color="#1E3A8A" />
+                  <PWStat label="Dibawa Ke Gudang" value={data.prod_wh_summary.dibawa_ke_gudang ?? data.prod_wh_summary.bawa_total ?? 0} color="#059669" />
                 </View>
                 <View style={styles.pwRow}>
-                  <PWStat label="Stok Digudang" value={data.prod_wh_summary.stok_keluar_gudang ?? data.prod_wh_summary.terjual_by_gudang} color="#F59E0B" />
-                  <PWStat label="Terjual Gudang & Produksi" value={data.prod_wh_summary.terjual_gudang_produksi ?? data.prod_wh_summary.terjual_by_gudang} color="#0EA5E9" />
+                  <PWStat label="Stok Digudang" value={data.prod_wh_summary.stok_keluar_gudang ?? data.prod_wh_summary.terjual_by_gudang ?? 0} color="#F59E0B" />
+                  <PWStat label="Terjual Gudang & Produksi" value={data.prod_wh_summary.terjual_gudang_produksi ?? data.prod_wh_summary.terjual_by_gudang ?? 0} color="#0EA5E9" />
                 </View>
               </View>
             </>

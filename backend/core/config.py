@@ -17,8 +17,17 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT_DIR / ".env")
 
 # --- Mongo ---
+# Low-memory-friendly connection settings for Railway Trial (512MB RAM).
+# maxPoolSize kecil (10) supaya total footprint proses tetap di bawah limit.
 mongo_url = os.environ["MONGO_URL"]
-client = AsyncIOMotorClient(mongo_url)
+client = AsyncIOMotorClient(
+    mongo_url,
+    maxPoolSize=10,
+    minPoolSize=1,
+    serverSelectionTimeoutMS=8000,
+    connectTimeoutMS=8000,
+    socketTimeoutMS=20000,
+)
 db = client[os.environ["DB_NAME"]]
 
 # --- JWT / auth ---

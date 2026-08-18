@@ -6,7 +6,7 @@
     "buildCommand": null
   },
   "deploy": {
-    "startCommand": "sh -c 'uvicorn server:app --host 0.0.0.0 --port $PORT'",
+    "startCommand": "sh -c 'uvicorn server:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 30 --limit-max-requests 1000'",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",

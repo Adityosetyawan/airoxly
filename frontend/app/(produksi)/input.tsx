@@ -11,7 +11,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AppHeader } from "@/src/components/AppHeader";
-import { PhotoCapture, AI_COUNT_ENABLED } from "@/src/components/PhotoCapture";
+// Foto galon di Produksi dihapus (Agt 2026) untuk hemat storage MongoDB.
+// Petugas hanya input angka manual.
 import { NumStepper } from "@/src/components/NumStepper";
 import { theme } from "@/src/theme";
 import { api } from "@/src/api";
@@ -24,14 +25,12 @@ type PartPrice = { id: string; name: string; rp_per_pcs: number; order?: number 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
 /**
- * Produksi Input — flow spec Aug 2026 + part_qtys dinamis:
+ * Produksi Input — flow spec Aug 2026 + part_qtys dinamis (tanpa foto/AI):
  *  1. Pilih Sales (search)
  *  2. Pilih Shift (dinamis, dari settings)
- *  3. Foto SEBELUM (galon kosong sebelum diisi) → AI hitung otomatis
- *  4. Foto SESUDAH (galon isi setelah diisi) → AI hitung otomatis
- *  5. Manual +/- adjust
- *  6. Destinasi: Kirim Gudang | Langsung Jual
- *  7. Penggantian Galon & Sparepart — DINAMIS dari SuperAdmin (part_prices).
+ *  3. Input manual jumlah galon SEBELUM & SETELAH diisi
+ *  4. Destinasi: Kirim Gudang | Langsung Jual
+ *  5. Penggantian Galon & Sparepart — DINAMIS dari SuperAdmin (part_prices).
  */
 export default function ProduksiInput() {
   const toast = useToast();
@@ -55,17 +54,6 @@ export default function ProduksiInput() {
 
   // Peta dinamis nama part → qty (string utk input)
   const [partQtys, setPartQtys] = useState<Record<string, string>>({});
-
-  const [photoBefore, setPhotoBefore] = useState<string | null>(null);
-  const [photoAfter, setPhotoAfter] = useState<string | null>(null);
-  const [photoBeforeAt, setPhotoBeforeAt] = useState<Date | null>(null);
-  const [photoAfterAt, setPhotoAfterAt] = useState<Date | null>(null);
-  const [aiBefore, setAiBefore] = useState<{ count: number; confidence: string; reasoning: string } | null>(null);
-  const [aiAfter, setAiAfter] = useState<{ count: number; confidence: string; reasoning: string } | null>(null);
-  const [aiBeforeStatus, setAiBeforeStatus] = useState<"idle" | "processing" | "error">("idle");
-  const [aiAfterStatus, setAiAfterStatus] = useState<"idle" | "processing" | "error">("idle");
-  const [aiBeforeErr, setAiBeforeErr] = useState("");
-  const [aiAfterErr, setAiAfterErr] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -110,10 +98,6 @@ export default function ProduksiInput() {
             manual_adjust_before: String(d.manual_adjust_before || 0),
             note: d.note || "",
           }));
-          setPhotoBefore(d.photo_before || null);
-          setPhotoAfter(d.photo_after || null);
-          if (d.ai_count_before != null) setAiBefore({ count: d.ai_count_before, confidence: d.ai_confidence || "medium", reasoning: "Draft tersimpan sebelumnya" });
-          if (d.ai_count_after != null) setAiAfter({ count: d.ai_count_after, confidence: d.ai_confidence || "medium", reasoning: "Draft tersimpan sebelumnya" });
           if (d.part_qtys && typeof d.part_qtys === "object") {
             const pq: Record<string, string> = {};
             Object.entries(d.part_qtys).forEach(([k, v]) => { pq[k] = String(v); });
@@ -127,10 +111,6 @@ export default function ProduksiInput() {
           toast.show("Draft dimuat — lanjutkan input", "success");
         } else {
           // Reset ke kosong
-          setPhotoBefore(null);
-          setPhotoAfter(null);
-          setAiBefore(null);
-          setAiAfter(null);
           setPartQtys({});
           setForm((f) => ({ ...f, manual_adjust: "0", manual_adjust_before: "0", note: "" }));
         }
@@ -148,7 +128,8 @@ export default function ProduksiInput() {
   const selectedSales = sales.find((s) => s.id === form.sales_id);
 
   const manualN = parseInt(form.manual_adjust || "0") || 0;
-  const totalProduksi = (aiAfter?.count || 0) + manualN;
+  const manualBeforeN = parseInt(form.manual_adjust_before || "0") || 0;
+  const totalProduksi = manualN;
 
   const buildBody = (isDraft: boolean) => {
     const partQtysBody: Record<string, number> = {};
@@ -161,16 +142,16 @@ export default function ProduksiInput() {
       shift: form.shift,
       sales_id: form.sales_id,
       destination: form.destination,
-      ai_count_before: aiBefore?.count ?? null,
-      ai_count_after: aiAfter?.count ?? null,
+      ai_count_before: null,
+      ai_count_after: null,
       manual_adjust: manualN,
-      manual_adjust_before: parseInt(form.manual_adjust_before || "0") || 0,
+      manual_adjust_before: manualBeforeN,
       sisa_pagi: parseInt(form.sisa_pagi || "0") || 0,
       sisa_siang: parseInt(form.sisa_siang || "0") || 0,
       produksi_galon: Math.max(0, totalProduksi),
-      photo_before: photoBefore || null,
-      photo_after: photoAfter || null,
-      ai_confidence: aiAfter?.confidence || null,
+      photo_before: null,
+      photo_after: null,
+      ai_confidence: null,
       part_qtys: partQtysBody,
       note: form.note || null,
       is_draft: isDraft,
@@ -178,10 +159,6 @@ export default function ProduksiInput() {
   };
 
   const resetForm = () => {
-    setPhotoBefore(null);
-    setPhotoAfter(null);
-    setAiBefore(null);
-    setAiAfter(null);
     setPartQtys({});
     setForm((f) => ({ ...f, manual_adjust: "0", manual_adjust_before: "0", sisa_pagi: "", sisa_siang: "", note: "" }));
   };
@@ -203,7 +180,7 @@ export default function ProduksiInput() {
     if (!form.sales_id) return toast.show("Pilih Sales dulu", "error");
     if (totalProduksi <= 0) {
       return toast.show(
-        "Foto galon isi atau masukkan koreksi manual dulu (produksi 0)",
+        "Masukkan jumlah galon SETELAH diisi dulu (produksi 0)",
         "error",
       );
     }
@@ -220,15 +197,6 @@ export default function ProduksiInput() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const confidenceBadge = (c?: string) => {
-    const map: Record<string, { bg: string; text: string; label: string }> = {
-      high: { bg: "#D1FAE5", text: "#065F46", label: "AI: yakin" },
-      medium: { bg: "#FEF3C7", text: "#92400E", label: "AI: cek ulang" },
-      low: { bg: "#FEE2E2", text: "#991B1B", label: "AI: kurang yakin" },
-    };
-    return map[c || "low"] || map.low;
   };
 
   return (
@@ -304,89 +272,25 @@ export default function ProduksiInput() {
             ) : null}
           </Row>
 
-          <SectionTitle>1️⃣ Foto Galon Kosong (SEBELUM diisi)</SectionTitle>
-          <PhotoCapture
-            value={photoBefore}
-            onChange={(v) => {
-              setPhotoBefore(v);
-              setPhotoBeforeAt(v ? new Date() : null);
-              if (!v) { setAiBefore(null); setAiBeforeStatus("idle"); }
-              else if (AI_COUNT_ENABLED && !aiBefore) setAiBeforeStatus("processing");
-            }}
-            label="Foto galon kosong"
-            watermark
-            aiCount
-            hintForAI="galon kosong sebelum diisi"
-            onAICount={(count, confidence, reasoning) => { setAiBefore({ count, confidence, reasoning }); setAiBeforeStatus("idle"); }}
-            onAIError={(m) => { setAiBeforeErr(m); setAiBeforeStatus("error"); }}
-            caption={photoBefore ? (
-              <PhotoMeta status={aiBeforeStatus} aiCount={aiBefore?.count} err={aiBeforeErr} at={photoBeforeAt} unit="galon" />
-            ) : null}
-            testID="photo-produksi-before"
+          <SectionTitle>1️⃣ Galon Kosong SEBELUM diisi</SectionTitle>
+          <NumStepper
+            label="Jumlah galon SEBELUM (input manual)"
+            value={form.manual_adjust_before}
+            onChange={(v) => setF("manual_adjust_before", v)}
+            hint="Ketik jumlah galon kosong sebelum diisi"
+            allowNegative={false}
+            testID="adjust-before"
           />
-          {aiBefore ? (
-            <View style={[styles.aiBox, { backgroundColor: confidenceBadge(aiBefore.confidence).bg }]}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Ionicons name="sparkles" size={14} color={confidenceBadge(aiBefore.confidence).text} />
-                <Text style={[styles.aiTitle, { color: confidenceBadge(aiBefore.confidence).text }]}>
-                  AI hitung: <Text style={{ fontWeight: "900" }}>{aiBefore.count}</Text> galon · {confidenceBadge(aiBefore.confidence).label}
-                </Text>
-              </View>
-              <Text style={styles.aiDesc}>{aiBefore.reasoning}</Text>
-            </View>
-          ) : null}
-          {photoBefore ? (
-            <NumStepper
-              label="Jumlah galon SEBELUM (isi manual)"
-              value={form.manual_adjust_before}
-              onChange={(v) => setF("manual_adjust_before", v)}
-              hint="Ketik jumlah galon kosong sebelum diisi"
-              allowNegative={false}
-              testID="adjust-before"
-            />
-          ) : null}
 
-          <SectionTitle>2️⃣ Foto Galon Isi (SETELAH diisi)</SectionTitle>
-          <PhotoCapture
-            value={photoAfter}
-            onChange={(v) => {
-              setPhotoAfter(v);
-              setPhotoAfterAt(v ? new Date() : null);
-              if (!v) { setAiAfter(null); setAiAfterStatus("idle"); }
-              else if (AI_COUNT_ENABLED && !aiAfter) setAiAfterStatus("processing");
-            }}
-            label="Foto galon isi (produk jadi)"
-            watermark
-            aiCount
-            hintForAI="galon air isi setelah diisi"
-            onAICount={(count, confidence, reasoning) => { setAiAfter({ count, confidence, reasoning }); setAiAfterStatus("idle"); }}
-            onAIError={(m) => { setAiAfterErr(m); setAiAfterStatus("error"); }}
-            caption={photoAfter ? (
-              <PhotoMeta status={aiAfterStatus} aiCount={aiAfter?.count} err={aiAfterErr} at={photoAfterAt} unit="galon" />
-            ) : null}
-            testID="photo-produksi-after"
+          <SectionTitle>2️⃣ Galon Isi SETELAH diisi</SectionTitle>
+          <NumStepper
+            label="Jumlah galon SETELAH (input manual)"
+            value={form.manual_adjust}
+            onChange={(v) => setF("manual_adjust", v)}
+            hint="Ketik jumlah galon isi hasil produksi"
+            allowNegative={false}
+            testID="adjust-after"
           />
-          {aiAfter ? (
-            <View style={[styles.aiBox, { backgroundColor: confidenceBadge(aiAfter.confidence).bg }]}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Ionicons name="sparkles" size={14} color={confidenceBadge(aiAfter.confidence).text} />
-                <Text style={[styles.aiTitle, { color: confidenceBadge(aiAfter.confidence).text }]}>
-                  AI hitung: <Text style={{ fontWeight: "900" }}>{aiAfter.count}</Text> galon · {confidenceBadge(aiAfter.confidence).label}
-                </Text>
-              </View>
-              <Text style={styles.aiDesc}>{aiAfter.reasoning}</Text>
-            </View>
-          ) : null}
-          {photoAfter ? (
-            <NumStepper
-              label="Jumlah galon SETELAH (isi manual)"
-              value={form.manual_adjust}
-              onChange={(v) => setF("manual_adjust", v)}
-              hint="Ketik jumlah galon isi hasil produksi"
-              allowNegative={false}
-              testID="adjust-after"
-            />
-          ) : null}
 
           <View style={styles.totalBox}>
             <View style={{ flex: 1 }}>
@@ -528,39 +432,6 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <Text style={styles.sectionTitle}>{children}</Text>;
 }
 
-function PhotoMeta({ status, aiCount, err, at, unit }: {
-  status: "idle" | "processing" | "error";
-  aiCount?: number;
-  err?: string;
-  at: Date | null;
-  unit: string;
-}) {
-  const dateStr = at ? at.toLocaleString("id-ID", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-";
-  return (
-    <View style={{ gap: 4 }}>
-      {status === "processing" ? (
-        <View style={photoMetaStyles.rowCenter}>
-          <ActivityIndicator size="small" color="#059669" />
-          <Text style={photoMetaStyles.aiText}>AI sedang menghitung…</Text>
-        </View>
-      ) : aiCount != null ? (
-        <View style={photoMetaStyles.rowCenter}>
-          <Ionicons name="sparkles" size={13} color="#059669" />
-          <Text style={photoMetaStyles.aiText}>AI: <Text style={{ fontWeight: "900" }}>{aiCount}</Text> {unit}</Text>
-        </View>
-      ) : status === "error" ? (
-        <View style={photoMetaStyles.rowCenter}>
-          <Ionicons name="alert-circle" size={13} color="#DC2626" />
-          <Text style={photoMetaStyles.errText}>AI gagal: {err || "coba manual"}</Text>
-        </View>
-      ) : null}
-      <View style={photoMetaStyles.rowCenter}>
-        <Ionicons name="time-outline" size={12} color="#065F46" />
-        <Text style={photoMetaStyles.dateText}>{dateStr}</Text>
-      </View>
-    </View>
-  );
-}
 function NumFieldSmall({ label, value, onChange, testID }: { label: string; value: string; onChange: (v: string) => void; testID?: string }) {
   return (
     <View style={{ flex: 1, gap: 4 }}>
@@ -576,13 +447,6 @@ function NumFieldSmall({ label, value, onChange, testID }: { label: string; valu
     </View>
   );
 }
-
-const photoMetaStyles = StyleSheet.create({
-  rowCenter: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 },
-  aiText: { fontSize: 12, color: "#065F46", fontWeight: "700" },
-  errText: { fontSize: 11, color: "#DC2626", fontWeight: "600" },
-  dateText: { fontSize: 10, color: "#065F46", fontWeight: "600" },
-});
 
 const styles = StyleSheet.create({
   body: { padding: 16, gap: 12, paddingBottom: 60 },

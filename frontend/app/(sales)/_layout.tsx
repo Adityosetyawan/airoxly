@@ -26,7 +26,8 @@ export default function SalesLayout() {
   const { user, loading } = useAuth();
   const online = useOnlineStatus();
 
-  // Background GPS ping every 60s — ONLY during 08:00–17:00 (mirror of backend guard).
+  // Background GPS ping every 120s — ONLY during 08:00–17:00 (mirror of backend guard).
+  // Interval 120s (bukan 60s) untuk hemat bandwidth + kurangi beban server ~50%.
   useEffect(() => {
     if (!user || user.role !== "sales") return;
     let cancelled = false;
@@ -41,7 +42,7 @@ export default function SalesLayout() {
       } catch {}
     };
     ping();
-    const i = setInterval(ping, 60000);
+    const i = setInterval(ping, 120000);
     return () => {
       cancelled = true;
       clearInterval(i);

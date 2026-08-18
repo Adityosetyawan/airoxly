@@ -277,11 +277,9 @@ async def monthly_report(
     def _sum_where(rows, key, cond):
         return sum(int(r.get(key, 0) or 0) for r in rows if cond(r))
 
-    # Total galon terproduksi (semua entry)
+    # Total galon terproduksi (semua entry) — RAW, tanpa dikurangi sisa
     total_produksi_raw = _sum(prod_entries, "produksi_galon")
     total_sisa_produksi = _sum(prod_entries, "sisa_pagi") + _sum(prod_entries, "sisa_siang")
-    # Produksi netto = total isi - sisa yg belum terjual
-    produksi_galon_netto = max(0, total_produksi_raw - total_sisa_produksi)
 
     prod_ke_gudang = _sum_where(
         prod_entries, "produksi_galon",
@@ -309,9 +307,8 @@ async def monthly_report(
     terjual_gudang_produksi = stok_keluar_gudang + terjual_langsung_produksi
 
     prod_wh_summary = {
-        # Produksi Galon = total produksi DIKURANGI sisa isi (yg belum terjual)
-        "produksi_galon_total": produksi_galon_netto,
-        "produksi_galon_raw": total_produksi_raw,
+        # Produksi Galon = total produksi RAW (tanpa dikurangi sisa)
+        "produksi_galon_total": total_produksi_raw,
         "sisa_produksi": total_sisa_produksi,
         "dibawa_ke_gudang": prod_ke_gudang,
         "stok_keluar_gudang": stok_keluar_gudang,

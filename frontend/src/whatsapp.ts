@@ -106,9 +106,14 @@ export function formatReceipt(opts: {
   if (opts.hutang_transaksi > 0) lines.push(`Kekurangan/Hutang transaksi: ${fmt(opts.hutang_transaksi)}`);
   if (opts.pinjam_galon > 0) lines.push(`Pinjam galon: ${opts.pinjam_galon} gln`);
   if (opts.galon_kembali > 0) lines.push(`Galon kembali: ${opts.galon_kembali} gln`);
-  lines.push("");
-  lines.push(`Sisa hutang: ${fmt(opts.new_debt)}`);
-  lines.push(`Total pinjam galon: ${opts.new_loans} gln`);
+  // Baris ringkasan saldo — hanya tampil jika ada hutang/pinjaman aktif setelah transaksi
+  const showDebt = (opts.new_debt || 0) > 0;
+  const showLoans = (opts.new_loans || 0) > 0;
+  if (showDebt || showLoans) {
+    lines.push("");
+    if (showDebt) lines.push(`Sisa hutang: ${fmt(opts.new_debt)}`);
+    if (showLoans) lines.push(`Total pinjam galon: ${opts.new_loans} gln`);
+  }
   if (opts.lottery_tickets && opts.lottery_tickets.length > 0) {
     lines.push("");
     lines.push("━━━━━━━━━━━━━━━━━━━");

@@ -46,7 +46,7 @@ const withTickets = formatReceipt({
   hutang_transaksi: 0,
   pinjam_galon: 1,
   galon_kembali: 0,
-  new_debt: 0,
+  new_debt: 15000,
   new_loans: 1,
   edited: false,
   lottery_tickets: ["OXLY-ABC123", "OXLY-XYZ789", "OXLY-DEF456"],
@@ -128,6 +128,9 @@ const checks = {
   "[no-tickets] NO 'Anda mendapat' line": !noTickets.includes("Anda mendapat"),
   "[no-tickets] Has 'Total: Rp 30.000'": /Total: Rp\s?30\.000/.test(noTickets),
   "[no-tickets] Has 'Terima kasih 🙏'": noTickets.includes("Terima kasih 🙏"),
+  // no-debt behavior: "Sisa hutang" & "Total pinjam galon" must NOT appear when 0
+  "[no-tickets] NO 'Sisa hutang:' when new_debt=0": !noTickets.includes("Sisa hutang:"),
+  "[no-tickets] NO 'Total pinjam galon:' when new_loans=0": !noTickets.includes("Total pinjam galon:"),
 
   // EMPTY-array assertions (should behave same as WITHOUT)
   "[empty-arr] NO 'Kupon Undian' section": !emptyTickets.includes("Kupon Undian"),

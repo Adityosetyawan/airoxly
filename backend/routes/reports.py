@@ -270,17 +270,54 @@ async def monthly_report(
 
     pendapatan_bersih = A1_penjualan - A4_kulakan - A3_biaya_operasional - A2_gaji_bonus
 
+    # --- Aggregations for Prod & Warehouse Summary ---
+    # Prod entries split by destination:
+    #   destination == "gudang" → produksi masuk ke gudang (dibawa ke gudang)
+    #   destination == "sales"  → produksi langsung dijual (skip gudang)
+    def _sum_where(rows, key, cond):
+        return sum(int(r.get(key, 0) or 0) for r in rows if cond(r))
+
+    prod_ke_gudang = _sum_where(
+        prod_entries, "produksi_galon",
+        lambda r: (r.get("destination") or "gudang") == "gudang",
+    )
+    prod_langsung_jual_produced = _sum_where(
+        prod_entries, "produksi_galon",
+        lambda r: (r.get("destination") or "gudang") == "sales",
+    )
+    prod_langsung_jual_sisa = _sum_where(
+        prod_entries, "sisa_pagi",
+        lambda r: (r.get("destination") or "gudang") == "sales",
+    ) + _sum_where(
+        prod_entries, "sisa_siang",
+        lambda r: (r.get("destination") or "gudang") == "sales",
+    )
+    # Terjual dari produksi langsung (yang tidak lewat gudang): produced - sisa
+    terjual_langsung_produksi = max(0, prod_langsung_jual_produced - prod_langsung_jual_sisa)
+
+    wh_bawa_total = _sum(wh_entries, "bawa_pagi") + _sum(wh_entries, "bawa_siang")
+    wh_sisa_total = _sum(wh_entries, "sisa_pagi") + _sum(wh_entries, "sisa_siang")
+    # Stok yang KELUAR dari gudang (bawa isi sales - sisa isi yg dikembalikan)
+    stok_keluar_gudang = wh_bawa_total - wh_sisa_total
+
+    terjual_gudang_produksi = stok_keluar_gudang + terjual_langsung_produksi
+
     prod_wh_summary = {
         "produksi_galon_total": _sum(prod_entries, "produksi_galon"),
-        "bawa_total": _sum(wh_entries, "bawa_pagi") + _sum(wh_entries, "bawa_siang"),
-        "sisa_total": _sum(wh_entries, "sisa_pagi") + _sum(wh_entries, "sisa_siang"),
-        "terjual_by_gudang": (_sum(wh_entries, "bawa_pagi") + _sum(wh_entries, "bawa_siang")) - (_sum(wh_entries, "sisa_pagi") + _sum(wh_entries, "sisa_siang")),
+        "dibawa_ke_gudang": prod_ke_gudang,
+        "stok_keluar_gudang": stok_keluar_gudang,
+        "terjual_langsung_produksi": terjual_langsung_produksi,
+        "terjual_gudang_produksi": terjual_gudang_produksi,
+        # Legacy fields (kept for backward compatibility)
+        "bawa_total": wh_bawa_total,
+        "sisa_total": wh_sisa_total,
+        "terjual_by_gudang": stok_keluar_gudang,
         "prod_entries_count": len(prod_entries),
         "wh_entries_count": len(wh_entries),
     }
     prod_wh_summary["terjual_by_transaksi"] = total_gln
-    prod_wh_summary["match"] = prod_wh_summary["terjual_by_gudang"] == total_gln
-    prod_wh_summary["diff"] = total_gln - prod_wh_summary["terjual_by_gudang"]
+    prod_wh_summary["match"] = terjual_gudang_produksi == total_gln
+    prod_wh_summary["diff"] = total_gln - terjual_gudang_produksi
 
     return {
         "sales_id": sales_id,

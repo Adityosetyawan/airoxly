@@ -305,30 +305,15 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
           {data.prod_wh_summary && (data.prod_wh_summary.prod_entries_count > 0 || data.prod_wh_summary.wh_entries_count > 0) ? (
             <>
               <SectionTitle icon="hammer-outline">Data Produksi & Gudang</SectionTitle>
-              <View style={styles.tableCard}>
+              <View style={[styles.tableCard, { paddingBottom: 8 }]}>
                 <View style={styles.pwRow}>
                   <PWStat label="Produksi Galon" value={data.prod_wh_summary.produksi_galon_total} color="#1E3A8A" />
-                  <PWStat label="Bawa (Gudang)" value={data.prod_wh_summary.bawa_total} color="#059669" />
-                  <PWStat label="Sisa (Gudang)" value={data.prod_wh_summary.sisa_total} color="#F59E0B" />
+                  <PWStat label="Dibawa Ke Gudang" value={data.prod_wh_summary.dibawa_ke_gudang ?? data.prod_wh_summary.bawa_total} color="#059669" />
                 </View>
                 <View style={styles.pwRow}>
-                  <PWStat label="Terjual Gudang" value={data.prod_wh_summary.terjual_by_gudang} color="#0EA5E9" />
-                  <PWStat label="Terjual Transaksi" value={data.prod_wh_summary.terjual_by_transaksi} color="#0EA5E9" />
-                  <PWStat
-                    label="Selisih"
-                    value={data.prod_wh_summary.diff}
-                    color={data.prod_wh_summary.match ? "#059669" : "#DC2626"}
-                  />
+                  <PWStat label="Stok Digudang" value={data.prod_wh_summary.stok_keluar_gudang ?? data.prod_wh_summary.terjual_by_gudang} color="#F59E0B" />
+                  <PWStat label="Terjual Gudang & Produksi" value={data.prod_wh_summary.terjual_gudang_produksi ?? data.prod_wh_summary.terjual_by_gudang} color="#0EA5E9" />
                 </View>
-                {!data.prod_wh_summary.match ? (
-                  <View style={styles.mismatchAlert}>
-                    <Ionicons name="warning" size={16} color="#DC2626" />
-                    <Text style={styles.mismatchText}>
-                      ⚠️ SELISIH: Data Gudang menunjukkan terjual {data.prod_wh_summary.terjual_by_gudang} galon,
-                      sedangkan transaksi Sales tercatat {data.prod_wh_summary.terjual_by_transaksi} galon.
-                    </Text>
-                  </View>
-                ) : null}
               </View>
             </>
           ) : null}
@@ -546,9 +531,9 @@ function SectionTitle({ children, icon }: { children: React.ReactNode; icon: any
 
 function PWStat({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <View style={{ flex: 1, alignItems: "center", padding: 8, borderRadius: 8, backgroundColor: color + "15" }}>
-      <Text style={{ fontSize: 18, fontWeight: "800", color }}>{value}</Text>
-      <Text style={{ fontSize: 10, color, opacity: 0.8, textAlign: "center" }}>{label}</Text>
+    <View style={{ flex: 1, alignItems: "center", paddingVertical: 12, paddingHorizontal: 8, borderRadius: 10, backgroundColor: color + "15", borderWidth: 1, borderColor: color + "30" }}>
+      <Text style={{ fontSize: 24, fontWeight: "800", color, lineHeight: 28 }}>{value}</Text>
+      <Text style={{ fontSize: 11, color, opacity: 0.85, textAlign: "center", fontWeight: "600", marginTop: 2 }} numberOfLines={2}>{label}</Text>
     </View>
   );
 }
@@ -1158,7 +1143,7 @@ const styles = StyleSheet.create({
   yellowText: { fontSize: 11, color: COLOR_YELLOW_TEXT, fontWeight: "700" },
   autoHint: { fontSize: 8, color: "#059669", fontWeight: "800", marginTop: 1 },
   overrideHint: { fontSize: 7, color: "#DC2626", fontWeight: "600", marginTop: 1 },
-  pwRow: { flexDirection: "row", gap: 6, padding: 8 },
+  pwRow: { flexDirection: "row", gap: 8, paddingHorizontal: 8, paddingTop: 8 },
   mismatchAlert: { flexDirection: "row", gap: 6, padding: 10, backgroundColor: "#FEE2E2", alignItems: "center" },
   mismatchText: { flex: 1, fontSize: 11, color: "#991B1B", fontWeight: "600" },
   subtotalCell: { backgroundColor: theme.color.surface, padding: 6, alignItems: "center", justifyContent: "center" },

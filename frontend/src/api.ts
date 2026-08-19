@@ -549,6 +549,29 @@ export const api = {
       generated_at: string;
     }>("/backup/preview"),
 
+  // === Photo compression migration (Super Admin only) ===
+  photoStats: () =>
+    req<{
+      total_photos: number;
+      eligible_for_compress: number;
+      total_bytes: number;
+      total_mb: number;
+      max_width_px: number;
+      jpeg_quality: number;
+    }>("/backup/photo-stats"),
+
+  compressPhotos: (dry_run = false) =>
+    req<{
+      dry_run: boolean;
+      processed: number;
+      skipped_small: number;
+      skipped_error: number;
+      original_mb: number;
+      new_mb: number;
+      saved_mb: number;
+      saved_pct: number;
+    }>(`/backup/compress-photos?dry_run=${dry_run ? "true" : "false"}`, { method: "POST" }),
+
   /** Returns a Blob + suggested filename so caller can download or share. */
   downloadFullBackup: async (): Promise<{ blob: Blob; filename: string }> => {
     const token = await storage.getItem<string>(TOKEN_KEY, "");

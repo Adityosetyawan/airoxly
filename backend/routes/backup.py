@@ -10,6 +10,7 @@ Endpoints:
 from __future__ import annotations
 
 import csv
+import base64
 import io
 import json
 import zipfile
@@ -182,3 +183,149 @@ async def export_all_backup(
             "X-Backup-Filename": filename,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Photo compression (Super Admin one-shot migration).
+# ---------------------------------------------------------------------------
+
+PHOTO_MAX_WIDTH = 1024
+PHOTO_JPEG_QUALITY = 60
+# Anything under this size is already tiny — skip to save time.
+PHOTO_MIN_COMPRESS_BYTES = 60 * 1024  # 60 KB
+
+
+def _decode_data_uri(data_uri: str) -> tuple[Optional[bytes], str]:
+    """Return (raw_bytes, mime). Handles both raw base64 and full data URIs."""
+    if not data_uri:
+        return None, ""
+    mime = "image/jpeg"
+    payload = data_uri
+    if data_uri.startswith("data:"):
+        try:
+            header, payload = data_uri.split(",", 1)
+            if ";" in header:
+                mime = header.split(":", 1)[1].split(";", 1)[0] or mime
+        except Exception:
+            return None, ""
+    try:
+        return base64.b64decode(payload, validate=False), mime
+    except Exception:
+        return None, ""
+
+
+def _compress_photo_bytes(raw: bytes) -> Optional[bytes]:
+    """Resize + re-encode a photo. Returns None on any failure."""
+    try:
+        from PIL import Image, ImageOps
+    except Exception:
+        return None
+    try:
+        img = Image.open(io.BytesIO(raw))
+        img = ImageOps.exif_transpose(img)  # respect phone camera rotation
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+        if img.width > PHOTO_MAX_WIDTH:
+            ratio = PHOTO_MAX_WIDTH / img.width
+            new_size = (PHOTO_MAX_WIDTH, max(1, int(img.height * ratio)))
+            img = img.resize(new_size, Image.LANCZOS)
+        out = io.BytesIO()
+        img.save(out, format="JPEG", quality=PHOTO_JPEG_QUALITY, optimize=True)
+        return out.getvalue()
+    except Exception:
+        return None
+
+
+@router.get("/photo-stats")
+async def photo_compression_stats(user=Depends(get_current_user)):
+    """Report how many customer photos exist and their total size."""
+    _require_super_admin(user)
+    cursor = db.customers.find(
+        {"photo_rumah": {"$exists": True, "$ne": None}},
+        {"_id": 0, "id": 1, "photo_rumah": 1},
+    )
+    total_bytes = 0
+    count = 0
+    large = 0
+    async for c in cursor:
+        p = c.get("photo_rumah") or ""
+        if not p:
+            continue
+        count += 1
+        # base64 → approx bytes
+        b64 = p.split(",", 1)[1] if p.startswith("data:") else p
+        sz = max(0, (len(b64) * 3) // 4)
+        total_bytes += sz
+        if sz >= PHOTO_MIN_COMPRESS_BYTES:
+            large += 1
+    return {
+        "total_photos": count,
+        "eligible_for_compress": large,
+        "total_bytes": total_bytes,
+        "total_mb": round(total_bytes / (1024 * 1024), 2),
+        "max_width_px": PHOTO_MAX_WIDTH,
+        "jpeg_quality": PHOTO_JPEG_QUALITY,
+    }
+
+
+@router.post("/compress-photos")
+async def compress_photos(
+    dry_run: bool = Query(False, description="If true, calculate savings without writing to DB"),
+    user=Depends(get_current_user),
+):
+    """Re-encode every customer.photo_rumah to <=1024px JPEG q=60. Idempotent."""
+    _require_super_admin(user)
+
+    try:
+        from PIL import Image  # noqa: F401 — ensure Pillow is installed
+    except Exception:
+        raise HTTPException(500, "Pillow tidak terpasang di server")
+
+    cursor = db.customers.find(
+        {"photo_rumah": {"$exists": True, "$ne": None}},
+        {"_id": 0, "id": 1, "photo_rumah": 1, "name": 1},
+    )
+
+    processed = 0
+    skipped_small = 0
+    skipped_error = 0
+    original_bytes = 0
+    new_bytes = 0
+    async for c in cursor:
+        cid = c.get("id")
+        photo = c.get("photo_rumah") or ""
+        raw, _ = _decode_data_uri(photo)
+        if not raw:
+            skipped_error += 1
+            continue
+        original_bytes += len(raw)
+        if len(raw) < PHOTO_MIN_COMPRESS_BYTES:
+            new_bytes += len(raw)
+            skipped_small += 1
+            continue
+        compressed = _compress_photo_bytes(raw)
+        if not compressed or len(compressed) >= len(raw):
+            # Compression failed or made it larger — keep original
+            new_bytes += len(raw)
+            skipped_error += 1
+            continue
+        new_bytes += len(compressed)
+        processed += 1
+        if not dry_run:
+            new_uri = "data:image/jpeg;base64," + base64.b64encode(compressed).decode("ascii")
+            await db.customers.update_one({"id": cid}, {"$set": {"photo_rumah": new_uri}})
+
+    saved = original_bytes - new_bytes
+    return {
+        "dry_run": dry_run,
+        "processed": processed,
+        "skipped_small": skipped_small,
+        "skipped_error": skipped_error,
+        "original_mb": round(original_bytes / (1024 * 1024), 2),
+        "new_mb": round(new_bytes / (1024 * 1024), 2),
+        "saved_mb": round(saved / (1024 * 1024), 2),
+        "saved_pct": round((saved / original_bytes) * 100, 1) if original_bytes > 0 else 0,
+        "max_width_px": PHOTO_MAX_WIDTH,
+        "jpeg_quality": PHOTO_JPEG_QUALITY,
+    }
+

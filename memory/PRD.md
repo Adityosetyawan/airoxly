@@ -95,3 +95,10 @@ Aplikasi mobile (Expo/React Native) untuk penjualan air minum galon dengan hirar
 - CSV pakai UTF-8 BOM (langsung rapi di Excel/Sheets), nested field dijadikan JSON string
 - Field `password_hash` dan `_id` tidak diekspor
 - Isi ZIP: users, products, part_prices, customers, transactions, expenses, warehouse_daily, warehouse_incoming, production_daily, monthly_reports, lottery_periods, lottery_tickets, locations, settings, README.txt, manifest.json
+
+## Photo Compression (Aug 2026)
+- Foto baru: PhotoCapture otomatis resize ke max 1024px + JPEG q=0.5 via `expo-image-manipulator`
+- Foto lama: Endpoint migrasi `POST /api/backup/compress-photos` menggunakan Pillow (max 1024px + JPEG q=60). Idempotent. Skip file < 60KB atau file yang sudah optimal.
+- Stats endpoint: `GET /api/backup/photo-stats` menampilkan total foto & ukuran
+- UI: card kuning di dalam Backup modal — tombol "Kompres Sekarang" dengan konfirmasi Alert
+- Hasil real-world test: 1.56 MB → 0.17 MB (89.2% saving)

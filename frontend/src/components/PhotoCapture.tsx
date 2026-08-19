@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { theme } from "@/src/theme";
 import { addWatermarkTimestamp } from "@/src/utils/watermark";
+import { compressPhoto } from "@/src/utils/imageCompress";
 import { api } from "@/src/api";
 
 /**
@@ -86,6 +87,11 @@ export function PhotoCapture({
       if (!dataUri) return;
 
       setProcessing(true);
+      // Kompres foto (max 1024px, JPEG q=0.5) supaya DB + backup lebih ringan
+      try {
+        const compressed = await compressPhoto(dataUri);
+        if (compressed) dataUri = compressed;
+      } catch { /* fail-open: pakai foto asli kalau kompres gagal */ }
       // Watermark timestamp jika diminta
       if (watermark) {
         try {

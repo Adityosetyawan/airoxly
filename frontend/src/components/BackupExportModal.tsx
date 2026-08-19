@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Platform,
   ScrollView,
@@ -20,6 +21,11 @@ type Props = {
 };
 
 type CollInfo = { name: string; count: number };
+type PhotoStats = {
+  total_photos: number;
+  eligible_for_compress: number;
+  total_mb: number;
+};
 
 /**
  * Superadmin-only manual full-database backup.
@@ -31,14 +37,20 @@ export default function BackupExportModal({ visible, onClose }: Props) {
     collections: CollInfo[];
     total_rows: number;
   } | null>(null);
+  const [photos, setPhotos] = useState<PhotoStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [compressing, setCompressing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const p = await api.previewBackup();
+      const [p, ph] = await Promise.all([
+        api.previewBackup(),
+        api.photoStats().catch(() => null),
+      ]);
       setPreview(p);
+      setPhotos(ph as PhotoStats | null);
     } catch (e: any) {
       toast.show(e?.message || "Gagal memuat ringkasan backup", "error");
       setPreview(null);
@@ -111,6 +123,38 @@ export default function BackupExportModal({ visible, onClose }: Props) {
 
   const total = preview?.total_rows ?? 0;
 
+  const runCompress = async () => {
+    if (!photos || photos.eligible_for_compress === 0) {
+      toast.show("Tidak ada foto yang perlu dikompres", "info");
+      return;
+    }
+    Alert.alert(
+      "Kompres Foto Pelanggan?",
+      `${photos.eligible_for_compress} foto (dari total ${photos.total_photos}) akan dikompres ke max 1024px JPEG q60.\n\nUkuran DB sekarang: ${photos.total_mb.toFixed(2)} MB\n\nAksi ini idempotent — aman diulang.`,
+      [
+        { text: "Batal", style: "cancel" },
+        {
+          text: "Kompres Sekarang",
+          onPress: async () => {
+            setCompressing(true);
+            try {
+              const r = await api.compressPhotos(false);
+              toast.show(
+                `✅ ${r.processed} foto dikompres · hemat ${r.saved_mb.toFixed(2)} MB (${r.saved_pct.toFixed(0)}%)`,
+                "success",
+              );
+              await load();
+            } catch (e: any) {
+              toast.show(e?.message || "Gagal kompres foto", "error");
+            } finally {
+              setCompressing(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
@@ -142,6 +186,50 @@ export default function BackupExportModal({ visible, onClose }: Props) {
                     : `${preview?.collections.length || 0} koleksi akan diekspor`}
                 </Text>
               </View>
+            </View>
+
+            <Text style={styles.label}>Kompres Foto Pelanggan</Text>
+            <View style={styles.compressBox}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={styles.compressIcon}>
+                  <Ionicons name="images" size={20} color={theme.color.brand} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.compressTitle}>
+                    {photos ? `${photos.total_photos} foto · ${photos.total_mb.toFixed(2)} MB` : "Menghitung…"}
+                  </Text>
+                  <Text style={styles.compressSub}>
+                    {photos && photos.eligible_for_compress > 0
+                      ? `${photos.eligible_for_compress} foto bisa dikompres jadi max 1024px`
+                      : "Semua foto sudah ringan (< 60 KB)"}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={runCompress}
+                disabled={
+                  compressing || !photos || photos.eligible_for_compress === 0
+                }
+                style={[
+                  styles.compressBtn,
+                  (compressing || !photos || photos.eligible_for_compress === 0) && { opacity: 0.55 },
+                ]}
+                testID="compress-photos-btn"
+              >
+                {compressing ? (
+                  <>
+                    <ActivityIndicator size="small" color="#fff" />
+                    <Text style={styles.compressBtnText}>Mengompres…</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="contract" size={14} color="#fff" />
+                    <Text style={styles.compressBtnText}>
+                      {photos && photos.eligible_for_compress === 0 ? "Sudah Optimal" : "Kompres Sekarang"}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
 
             <Text style={styles.label}>Rincian Koleksi</Text>
@@ -260,6 +348,32 @@ const styles = StyleSheet.create({
     fontSize: 12, fontWeight: "700", color: theme.color.onSurface,
     marginBottom: 8, marginTop: 2, textTransform: "uppercase", letterSpacing: 0.4,
   },
+  compressBox: {
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: (theme.color as any).warningContainer || "#FEF3C7",
+    borderWidth: 1,
+    borderColor: (theme.color as any).warning || "#F59E0B",
+    marginBottom: 16,
+    gap: 10,
+  },
+  compressIcon: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: "rgba(15,118,110,0.1)",
+    alignItems: "center", justifyContent: "center",
+  },
+  compressTitle: { fontSize: 13, fontWeight: "800", color: theme.color.onSurface },
+  compressSub: { fontSize: 11, color: theme.color.muted, marginTop: 2 },
+  compressBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: theme.color.brand,
+  },
+  compressBtnText: { color: "#fff", fontWeight: "700", fontSize: 12 },
   row: {
     flexDirection: "row",
     alignItems: "center",

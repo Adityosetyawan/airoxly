@@ -131,8 +131,25 @@ export default function GudangInput() {
             const pq: Record<string, string> = {};
             Object.entries(d.part_qtys).forEach(([k, v]) => { pq[k] = String(v); });
             setPartQtys(pq);
+          } else {
+            setPartQtys({});
           }
           toast.show("Draft dimuat — lanjutkan input", "success");
+        } else {
+          // Tidak ada draft utk sales/tanggal/shift ini — kosongkan semua input
+          setForm((f) => ({
+            ...f,
+            bawa_pagi: "",
+            bawa_siang: "",
+            kosong_pagi: "",
+            kosong_siang: "",
+            kosong_kembali_siang: "",
+            kosong_kembali_sore: "",
+            sisa_pagi: "",
+            sisa_siang: "",
+            note: "",
+          }));
+          setPartQtys({});
         }
       } catch {}
     })();
@@ -164,6 +181,22 @@ export default function GudangInput() {
     return body;
   };
 
+  const resetInputs = () => {
+    setForm((f) => ({
+      ...f,
+      bawa_pagi: "",
+      bawa_siang: "",
+      kosong_pagi: "",
+      kosong_siang: "",
+      kosong_kembali_siang: "",
+      kosong_kembali_sore: "",
+      sisa_pagi: "",
+      sisa_siang: "",
+      note: "",
+    }));
+    setPartQtys({});
+  };
+
   const onSaveDraft = async () => {
     if (!form.sales_id) return toast.show("Pilih Sales dulu", "error");
     setSaving(true);
@@ -182,8 +215,10 @@ export default function GudangInput() {
     setSaving(true);
     try {
       await api.createWarehouseDaily(buildBody(false));
-      toast.show("✅ Input Gudang tersimpan (FINAL)", "success");
+      toast.show("✅ Input Gudang tersimpan (FINAL) — form direset", "success");
       await doValidate(form.sales_id, form.date);
+      // Reset form utk siap input Sales berikutnya
+      resetInputs();
     } catch (e: any) {
       toast.show(e?.message || "Gagal simpan", "error");
     } finally {

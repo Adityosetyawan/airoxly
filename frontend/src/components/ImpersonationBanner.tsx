@@ -1,7 +1,7 @@
 import React from "react";
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { theme } from "@/src/theme";
 import { useAuth } from "@/src/AuthContext";
@@ -20,6 +20,17 @@ export default function ImpersonationBanner() {
   const toast = useToast();
   const insets = useSafeAreaInsets();
   const [busy, setBusy] = React.useState(false);
+  const [redirectTo, setRedirectTo] = React.useState<string | null>(null);
+
+  // ROBUST FIX: pakai <Redirect> component sebagai fallback yg pasti bekerja
+  // di native. Setelah user state ter-update ke super_admin & we set
+  // redirectTo, Redirect akan fire dari sini (root layout) sehingga bypass
+  // masalah stack cache di (sales)/(admin)/dst layout.
+  if (redirectTo) {
+    // Clear state satu tick ke depan supaya tidak infinite redirect
+    setTimeout(() => setRedirectTo(null), 100);
+    return <Redirect href={redirectTo as any} />;
+  }
 
   if (!isImpersonating || !user) return null;
 
@@ -29,11 +40,6 @@ export default function ImpersonationBanner() {
     try {
       const orig = await stopImpersonation();
       toast.show(`Kembali ke ${orig?.name || orig?.username || "Super Admin"}`, "success");
-      // Navigate ke dashboard sesuai role user asli. Karena Stack navigator
-      // native bisa cache screen, kita:
-      //   1. dismissAll() untuk clear modal/pushed screens
-      //   2. router.replace("/") untuk trigger index.tsx re-evaluate auth
-      //   3. Fallback: navigate langsung ke role dashboard jika masih stuck
       const role = orig?.role;
       const targetPath =
         role === "super_admin"
@@ -47,16 +53,18 @@ export default function ImpersonationBanner() {
           : role === "sales"
           ? "/(sales)/dashboard"
           : "/";
-      // Beri React waktu untuk propagate state (setUser + setIsImpersonating)
-      setTimeout(() => {
-        try {
-          // @ts-ignore
-          if (typeof (router as any).dismissAll === "function") {
-            (router as any).dismissAll();
-          }
-        } catch {}
-        router.replace(targetPath as any);
-      }, 350);
+      // 1) Immediate imperative navigate (works on web / some native cases)
+      try {
+        // @ts-ignore
+        if (typeof (router as any).dismissAll === "function") {
+          (router as any).dismissAll();
+        }
+      } catch {}
+      router.replace(targetPath as any);
+      // 2) Fallback: render <Redirect> from banner to force expo-router
+      //    to properly switch route groups on native. Delay 100ms to ensure
+      //    setUser has propagated first.
+      setTimeout(() => setRedirectTo(targetPath), 100);
     } catch (e: any) {
       toast.show(e?.message || "Gagal keluar impersonate", "error");
     } finally {

@@ -7,7 +7,14 @@ export default function ProduksiLayout() {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (!user) return <Redirect href="/login" />;
-  if (user.role !== "produksi" && user.role !== "super_admin") return <Redirect href="/" />;
+  if (user.role !== "produksi" && user.role !== "super_admin") {
+    const target =
+      user.role === "admin" ? "/(admin)/dashboard"
+      : user.role === "sales" ? "/(sales)/dashboard"
+      : user.role === "gudang" ? "/(gudang)/dashboard"
+      : "/";
+    return <Redirect href={target as any} />;
+  }
 
   return (
     <Tabs

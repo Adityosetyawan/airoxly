@@ -7,7 +7,15 @@ export default function SuperAdminLayout() {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (!user) return <Redirect href="/login" />;
-  if (user.role !== "super_admin") return <Redirect href="/" />;
+  if (user.role !== "super_admin") {
+    const target =
+      user.role === "admin" ? "/(admin)/dashboard"
+      : user.role === "sales" ? "/(sales)/dashboard"
+      : user.role === "gudang" ? "/(gudang)/dashboard"
+      : user.role === "produksi" ? "/(produksi)/dashboard"
+      : "/";
+    return <Redirect href={target as any} />;
+  }
   return (
     <Tabs
       screenOptions={{

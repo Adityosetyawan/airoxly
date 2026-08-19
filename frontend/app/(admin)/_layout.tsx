@@ -3,11 +3,20 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/src/AuthContext";
 import { theme } from "@/src/theme";
 
+function roleHome(role?: string) {
+  if (role === "super_admin") return "/(superadmin)/dashboard";
+  if (role === "admin") return "/(admin)/dashboard";
+  if (role === "produksi") return "/(produksi)/dashboard";
+  if (role === "gudang") return "/(gudang)/dashboard";
+  if (role === "sales") return "/(sales)/dashboard";
+  return "/";
+}
+
 export default function AdminLayout() {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (!user) return <Redirect href="/login" />;
-  if (user.role !== "admin") return <Redirect href="/" />;
+  if (user.role !== "admin") return <Redirect href={roleHome(user.role) as any} />;
   return (
     <Tabs
       screenOptions={{

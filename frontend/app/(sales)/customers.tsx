@@ -196,6 +196,11 @@ export default function Customers() {
                     {item.purchase_count || 0}× beli
                   </Text>
                 </View>
+                {item.has_photo && (
+                  <View style={[styles.tag, { backgroundColor: theme.color.brandTertiary, flexDirection: "row", alignItems: "center", gap: 2 }]}>
+                    <Ionicons name="camera" size={11} color={theme.color.onBrandTertiary} />
+                  </View>
+                )}
               </View>
             </View>
             <Ionicons name="chevron-forward" size={20} color={theme.color.muted} />

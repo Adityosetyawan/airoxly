@@ -10,7 +10,7 @@ import { theme, rp } from "@/src/theme";
 import { api, Customer, Transaction } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
 import { saveShot, shareShot } from "@/src/utils/capture";
-import { getCachedCustomer, patchCachedCustomer } from "@/src/utils/offlineStore";
+import { getCachedCustomer, patchCachedCustomer, cacheCustomerDetail } from "@/src/utils/offlineStore";
 
 export default function CustomerDetail() {
   const params = useLocalSearchParams<{ id: string; action?: string }>();
@@ -51,6 +51,8 @@ export default function CustomerDetail() {
       ]);
       setC(cust);
       setTxns(list);
+      // Cache the FULL customer (with photo) so offline detail still shows photo.
+      cacheCustomerDetail(cust).catch(() => {});
     } catch (e: any) {
       // Offline fallback — show cached customer info; transaction history
       // stays empty until we're online again.

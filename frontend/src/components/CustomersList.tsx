@@ -236,6 +236,11 @@ export default function CustomersList({
                     {item.purchase_count || 0}× beli
                   </Text>
                 </View>
+                {item.has_photo && (
+                  <View style={[styles.tag, { backgroundColor: theme.color.brandTertiary, flexDirection: "row", alignItems: "center", gap: 2 }]}>
+                    <Ionicons name="camera" size={11} color={theme.color.onBrandTertiary} />
+                  </View>
+                )}
                 {(sort === "ranking" || sort === "debt" || sort === "loans") &&
                   item.total_purchases > 0 && (
                     <View style={[styles.tag, { backgroundColor: theme.color.surfaceSecondary }]}>

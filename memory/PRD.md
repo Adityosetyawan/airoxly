@@ -102,3 +102,10 @@ Aplikasi mobile (Expo/React Native) untuk penjualan air minum galon dengan hirar
 - Stats endpoint: `GET /api/backup/photo-stats` menampilkan total foto & ukuran
 - UI: card kuning di dalam Backup modal — tombol "Kompres Sekarang" dengan konfirmasi Alert
 - Hasil real-world test: 1.56 MB → 0.17 MB (89.2% saving)
+
+## Photo Lazy Loading (Aug 2026)
+- `GET /api/customers` (list) & `GET /api/customers/reminders` sekarang TIDAK mengirim field `photo_rumah` (base64). Response payload turun dari ~2.2 MB → ~25 KB untuk 57 pelanggan.
+- Ganti dengan boolean flag `has_photo` di setiap item list (via MongoDB aggregation `$strLenCP`) supaya UI bisa tampilkan ikon kamera 📷 pada pelanggan yang punya foto.
+- `GET /api/customers/{id}` (detail) tetap mengirim foto lengkap → foto hanya di-load saat user buka detail.
+- Frontend: `Customer` type dapat properti `has_photo?: boolean`. Ikon kamera muncul di `CustomersList.tsx` & `(sales)/customers.tsx`.
+- Detail cache offline: `cacheCustomerDetail` menyimpan 30 pelanggan yang paling baru dibuka lengkap dengan foto → tetap bisa lihat foto meski offline.

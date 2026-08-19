@@ -82,9 +82,44 @@ async def list_customers(
         "debt": [("total_debt", -1)],
         "recent": [("last_purchase_date", -1)],
     }
+    # Lazy-loading: never ship the base64 `photo_rumah` in list responses.
+    # Client fetches full doc via GET /customers/{id} when opening detail.
+    # We surface `has_photo` so the list UI can show a photo indicator.
+    list_projection = {"_id": 0, "photo_rumah": 0}
+
+    def _decorate(items: list[dict], raw_photos: dict[str, bool]) -> list[dict]:
+        for it in items:
+            it["has_photo"] = raw_photos.get(it.get("id") or "", False)
+        return items
+
+    async def _has_photo_map() -> dict[str, bool]:
+        # Only pull the id + short photo flag, not the full base64 payload.
+        # Mongo can't tell "field exists AND non-empty" cheaply without $expr,
+        # so we project the first byte via $substrCP.
+        cursor = db.customers.aggregate([
+            {"$match": filt},
+            {"$project": {
+                "_id": 0,
+                "id": 1,
+                "has_photo": {
+                    "$cond": [
+                        {"$and": [
+                            {"$ifNull": ["$photo_rumah", False]},
+                            {"$gt": [{"$strLenCP": {"$ifNull": ["$photo_rumah", ""]}}, 10]},
+                        ]},
+                        True,
+                        False,
+                    ],
+                },
+            }},
+        ])
+        return {d["id"]: bool(d.get("has_photo")) async for d in cursor}
+
     if sort in direct_sort_map:
-        cursor = db.customers.find(filt, {"_id": 0}).sort(direct_sort_map[sort])
+        cursor = db.customers.find(filt, list_projection).sort(direct_sort_map[sort])
         items = await cursor.to_list(2000)
+        photos = await _has_photo_map()
+        items = _decorate(items, photos)
         if sort == "recent":
             has_date = [c for c in items if c.get("last_purchase_date")]
             no_date = [c for c in items if not c.get("last_purchase_date")]
@@ -92,8 +127,10 @@ async def list_customers(
             items = has_date + no_date
         return items
 
-    cursor = db.customers.find(filt, {"_id": 0})
+    cursor = db.customers.find(filt, list_projection)
     items = await cursor.to_list(2000)
+    photos = await _has_photo_map()
+    items = _decorate(items, photos)
     if sort == "last":
         has_date = [c for c in items if c.get("last_purchase_date")]
         no_date = [c for c in items if not c.get("last_purchase_date")]
@@ -135,7 +172,7 @@ async def customer_reminders(
     inactive_cutoff_iso = inactive_cutoff.isoformat()
     today_str = now.strftime("%Y-%m-%d")
 
-    cursor = db.customers.find(filt, {"_id": 0})
+    cursor = db.customers.find(filt, {"_id": 0, "photo_rumah": 0})
     docs = await cursor.to_list(5000)
 
     debt_overdue = []

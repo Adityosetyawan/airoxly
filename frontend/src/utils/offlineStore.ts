@@ -18,6 +18,8 @@ const K_PRODUCTS_TS = "oxly.offline.products_ts.v1";
 const K_PENDING = "oxly.offline.pending_txns.v1";
 const K_PENDING_CUSTOMERS = "oxly.offline.pending_customers.v1";
 const K_LAST_SYNC = "oxly.offline.last_sync.v1";
+const K_CUSTOMER_DETAIL = "oxly.offline.customer_detail.v1."; // + id
+const K_CUSTOMER_DETAIL_INDEX = "oxly.offline.customer_detail_idx.v1";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 export type PendingTxnStatus = "pending" | "syncing" | "failed";
@@ -95,7 +97,37 @@ export async function getCustomersCacheTs(): Promise<string | null> {
 
 export async function getCachedCustomer(id: string): Promise<Customer | null> {
   const list = await getCachedCustomers();
-  return list.find((c) => c.id === id) ?? null;
+  const fromList = list.find((c) => c.id === id) ?? null;
+  // If we have a fuller detail cached recently, merge photo/etc from there.
+  try {
+    const raw = await AsyncStorage.getItem(K_CUSTOMER_DETAIL + id);
+    if (raw) {
+      const detail = JSON.parse(raw) as Customer;
+      if (fromList) return { ...fromList, ...detail };
+      return detail;
+    }
+  } catch {}
+  return fromList;
+}
+
+/** Cache a full customer detail (WITH photo) after opening detail screen.
+ *  This lets the detail screen render the photo when the user re-opens the
+ *  page offline. Only a handful of recently-viewed customers are kept. */
+export async function cacheCustomerDetail(c: Customer): Promise<void> {
+  try {
+    await AsyncStorage.setItem(K_CUSTOMER_DETAIL + c.id, JSON.stringify(c));
+    // LRU cap — keep at most N recently-viewed detail records
+    const raw = (await AsyncStorage.getItem(K_CUSTOMER_DETAIL_INDEX)) || "[]";
+    let idx = JSON.parse(raw) as string[];
+    idx = [c.id, ...idx.filter((x) => x !== c.id)];
+    const KEEP = 30;
+    const dropped = idx.slice(KEEP);
+    idx = idx.slice(0, KEEP);
+    await AsyncStorage.setItem(K_CUSTOMER_DETAIL_INDEX, JSON.stringify(idx));
+    for (const gone of dropped) {
+      await AsyncStorage.removeItem(K_CUSTOMER_DETAIL + gone).catch(() => {});
+    }
+  } catch {}
 }
 
 /** Patch a cached customer optimistically (used after pending txn enqueued). */
@@ -264,8 +296,14 @@ export async function getLastSync(): Promise<string | null> {
 
 // ── Purge (on logout) ────────────────────────────────────────────────────────
 export async function purgeOfflineStore(): Promise<void> {
+  // Purge all customer detail entries too
+  try {
+    const raw = (await AsyncStorage.getItem(K_CUSTOMER_DETAIL_INDEX)) || "[]";
+    const idx = JSON.parse(raw) as string[];
+    await Promise.all(idx.map((id) => AsyncStorage.removeItem(K_CUSTOMER_DETAIL + id).catch(() => {})));
+  } catch {}
   await Promise.all(
-    [K_CUSTOMERS, K_PRODUCTS, K_CUSTOMERS_TS, K_PRODUCTS_TS, K_PENDING, K_PENDING_CUSTOMERS, K_LAST_SYNC].map((k) =>
+    [K_CUSTOMERS, K_PRODUCTS, K_CUSTOMERS_TS, K_PRODUCTS_TS, K_PENDING, K_PENDING_CUSTOMERS, K_LAST_SYNC, K_CUSTOMER_DETAIL_INDEX].map((k) =>
       AsyncStorage.removeItem(k).catch(() => {}),
     ),
   );

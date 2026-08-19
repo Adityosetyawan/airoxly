@@ -51,6 +51,8 @@ export type Customer = {
   lat?: number | null;
   lng?: number | null;
   photo_rumah?: string | null;
+  /** Server-only flag on list endpoints: true if customer has a photo_rumah. Photo itself is lazy-loaded on detail. */
+  has_photo?: boolean;
 };
 
 export type TransactionItem = {

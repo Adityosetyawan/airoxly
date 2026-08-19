@@ -150,7 +150,14 @@ export default function Customers() {
         data={items}
         keyExtractor={(c) => c.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.color.brandPrimary} />}
-        contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 80 }}
+        style={{ flex: 1 }}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator
+        keyboardShouldPersistTaps="handled"
+        initialNumToRender={20}
+        maxToRenderPerBatch={20}
+        windowSize={10}
         renderItem={({ item, index }) => (
           <TouchableOpacity
             style={[styles.card, (item as any)._pending && styles.cardPending]}

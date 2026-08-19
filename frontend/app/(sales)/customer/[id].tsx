@@ -10,7 +10,7 @@ import { theme, rp } from "@/src/theme";
 import { api, Customer, Transaction } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
 import { saveShot, shareShot } from "@/src/utils/capture";
-import { getCachedCustomer } from "@/src/utils/offlineStore";
+import { getCachedCustomer, patchCachedCustomer } from "@/src/utils/offlineStore";
 
 export default function CustomerDetail() {
   const params = useLocalSearchParams<{ id: string; action?: string }>();
@@ -130,6 +130,12 @@ export default function CustomerDetail() {
         lng: loc.coords.longitude,
       });
       setC(updated);
+      // Update cache offline juga supaya perubahan langsung terlihat
+      // walau offline / setelah re-focus screen
+      await patchCachedCustomer(c.id, {
+        lat: loc.coords.latitude,
+        lng: loc.coords.longitude,
+      });
       toast.show("Lokasi pelanggan tersimpan", "success");
     } catch (e: any) {
       toast.show(e?.message || "Gagal ambil lokasi", "error");

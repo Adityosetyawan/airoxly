@@ -37,6 +37,7 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [salesList, setSalesList] = useState<User[]>([]);
   const [salesId, setSalesId] = useState<string | null>(null);
+  const [salesQuery, setSalesQuery] = useState("");
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [editModal, setEditModal] = useState<{ type: "yellow" | "red" | "part"; item?: any } | null>(null);
@@ -126,8 +127,37 @@ export function MonthlyReportScreen({ canEditRed = false, canEditYellow = false 
             <Ionicons name="chevron-forward" size={20} color={theme.color.onSurface} />
           </TouchableOpacity>
         </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 }}>
+          <View style={styles.filterSearchWrap}>
+            <Ionicons name="search" size={14} color={theme.color.muted} />
+            <TextInput
+              value={salesQuery}
+              onChangeText={(v) => setSalesQuery(v.toUpperCase())}
+              placeholder="Cari kode sales (mis. A1)"
+              placeholderTextColor={theme.color.muted}
+              style={styles.filterSearchInput}
+              autoCapitalize="characters"
+              testID="monthly-sales-search"
+            />
+            {salesQuery ? (
+              <TouchableOpacity onPress={() => setSalesQuery("")} testID="clear-monthly-search">
+                <Ionicons name="close-circle" size={16} color={theme.color.muted} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.salesChipRow}>
-          {salesList.map((s) => (
+          {salesList
+            .filter((s) => {
+              const q = salesQuery.trim().toUpperCase();
+              if (!q) return true;
+              return (
+                (s.sales_code || "").toUpperCase().includes(q) ||
+                (s.username || "").toUpperCase().includes(q) ||
+                (s.name || "").toUpperCase().includes(q)
+              );
+            })
+            .map((s) => (
             <TouchableOpacity
               key={s.id}
               onPress={() => setSalesId(s.id)}
@@ -1110,6 +1140,19 @@ const styles = StyleSheet.create({
   legendText: { fontSize: 11, color: theme.color.muted, fontWeight: "500" },
   filterCard: { paddingHorizontal: 16, paddingBottom: 8, gap: 8 },
   filterRow: { flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "center" },
+  filterSearchWrap: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: "#fff",
+  },
+  filterSearchInput: { flex: 1, fontSize: 13, color: theme.color.onSurface, padding: 0 },
   dateBtn: { padding: 8, borderRadius: 8, backgroundColor: theme.color.surfaceSecondary },
   monthLabel: { fontSize: 16, fontWeight: "600", color: theme.color.onSurface, minWidth: 100, textAlign: "center" },
   salesChipRow: { gap: 6 },

@@ -7,6 +7,7 @@ import { theme } from "@/src/theme";
 import { api } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
 import { PhotoCapture } from "@/src/components/PhotoCapture";
+import { patchCachedCustomer } from "@/src/utils/offlineStore";
 
 export default function EditCustomer() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -46,6 +47,13 @@ export default function EditCustomer() {
         body.photo_rumah = photoRumah || ""; // "" utk hapus
       }
       await api.updateCustomer(id!, body);
+      // Patch cache offline supaya list & detail langsung refresh
+      await patchCachedCustomer(id!, {
+        name,
+        wa_number: wa,
+        address,
+        ...(photoRumah !== origPhoto ? { photo_rumah: photoRumah || undefined } : {}),
+      });
       toast.show("Tersimpan", "success");
       router.back();
     } catch (e: any) {

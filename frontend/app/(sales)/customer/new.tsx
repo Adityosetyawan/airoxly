@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -11,7 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Location from "expo-location";
 import { theme } from "@/src/theme";
 import { api } from "@/src/api";
@@ -32,7 +33,21 @@ export default function NewCustomer() {
   const [loading, setLoading] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locBusy, setLocBusy] = useState(false);
+  const [locBlocked, setLocBlocked] = useState(false);
   const [photoRumah, setPhotoRumah] = useState<string | null>(null);
+
+  // Reset form setiap kali screen re-focus supaya tidak menyisakan data lama
+  useFocusEffect(
+    useCallback(() => {
+      setName("");
+      setWa("");
+      setAddress("");
+      setBarcode(params.barcode || "");
+      setCoords(null);
+      setPhotoRumah(null);
+      setLocBlocked(false);
+    }, [params.barcode])
+  );
 
   const captureLocation = async () => {
     setLocBusy(true);
@@ -40,22 +55,33 @@ export default function NewCustomer() {
       let perm = await Location.getForegroundPermissionsAsync();
       if (!perm.granted) {
         if (!perm.canAskAgain) {
-          toast.show("Izin lokasi ditolak. Buka Settings.", "error");
+          setLocBlocked(true);
+          toast.show("Izin lokasi diblokir. Tap tombol Buka Pengaturan.", "error");
           return;
         }
         perm = await Location.requestForegroundPermissionsAsync();
         if (!perm.granted) {
-          toast.show("Izin lokasi diperlukan", "error");
+          if (!perm.canAskAgain) setLocBlocked(true);
+          toast.show("Izin lokasi diperlukan untuk simpan titik GPS", "error");
           return;
         }
       }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       setCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+      setLocBlocked(false);
       toast.show("Lokasi tersimpan", "success");
     } catch (e: any) {
       toast.show(e?.message || "Gagal ambil lokasi", "error");
     } finally {
       setLocBusy(false);
+    }
+  };
+
+  const openSettings = async () => {
+    try {
+      await Linking.openSettings();
+    } catch {
+      toast.show("Gagal buka pengaturan", "error");
     }
   };
 
@@ -161,6 +187,12 @@ export default function NewCustomer() {
                 : "Ambil Lokasi GPS Sekarang"}
             </Text>
           </TouchableOpacity>
+          {locBlocked ? (
+            <TouchableOpacity onPress={openSettings} style={styles.settingsBtn} testID="open-settings-btn">
+              <Ionicons name="settings-outline" size={16} color="#fff" />
+              <Text style={styles.settingsBtnText}>Buka Pengaturan Izin Lokasi</Text>
+            </TouchableOpacity>
+          ) : null}
           <Text style={styles.hint}>
             Ambil sambil berdiri di depan rumah pelanggan agar akurat. Digunakan untuk overlay peta.
           </Text>
@@ -224,6 +256,17 @@ const styles = StyleSheet.create({
     backgroundColor: theme.color.brandTertiary,
   },
   locBtnText: { color: theme.color.brand, fontWeight: "600", fontSize: 13 },
+  settingsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#DC2626",
+    marginTop: 8,
+  },
+  settingsBtnText: { color: "#fff", fontWeight: "700", fontSize: 13 },
   btn: {
     backgroundColor: theme.color.brandPrimary,
     padding: 16,

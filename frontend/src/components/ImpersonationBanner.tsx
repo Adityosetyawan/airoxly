@@ -29,7 +29,18 @@ export default function ImpersonationBanner() {
     try {
       const orig = await stopImpersonation();
       toast.show(`Kembali ke ${orig?.name || orig?.username || "Super Admin"}`, "success");
-      setTimeout(() => router.replace("/"), 200);
+      // Navigate langsung ke dashboard sesuai role user asli (super_admin).
+      // Pakai `/` tidak reliable karena Stack navigator caching — arahkan eksplisit.
+      const targetPath = (() => {
+        const role = orig?.role;
+        if (role === "super_admin") return "/(superadmin)/dashboard";
+        if (role === "admin") return "/(admin)/dashboard";
+        if (role === "produksi") return "/(produksi)/dashboard";
+        if (role === "gudang") return "/(gudang)/dashboard";
+        if (role === "sales") return "/(sales)/dashboard";
+        return "/";
+      })();
+      setTimeout(() => router.replace(targetPath as any), 300);
     } catch (e: any) {
       toast.show(e?.message || "Gagal keluar impersonate", "error");
     } finally {

@@ -18,6 +18,7 @@ import { useRouter } from "expo-router";
 import { theme } from "@/src/theme";
 import { api } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
+import BackupExportModal from "@/src/components/BackupExportModal";
 
 export default function SuperSettings() {
   const router = useRouter();
@@ -41,6 +42,7 @@ export default function SuperSettings() {
   const [resetType, setResetType] = useState<null | "sales" | "all">(null);
   const [confirmText, setConfirmText] = useState("");
   const [resetting, setResetting] = useState(false);
+  const [backupOpen, setBackupOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -488,6 +490,20 @@ export default function SuperSettings() {
           </Text>
 
           <TouchableOpacity
+            onPress={() => setBackupOpen(true)}
+            style={styles.backupBtn}
+            testID="open-backup-btn"
+          >
+            <Ionicons name="cloud-download" size={20} color="#fff" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.dangerBtnTitle}>💾 BACKUP SEMUA DATA (ZIP)</Text>
+              <Text style={styles.dangerBtnDesc}>
+                Unduh 1 file ZIP berisi CSV per koleksi (pelanggan, transaksi, user, produksi, gudang, dll).
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             onPress={() => openReset("sales")}
             style={styles.dangerBtn}
             testID="reset-sales-btn"
@@ -615,6 +631,8 @@ export default function SuperSettings() {
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
+
+      <BackupExportModal visible={backupOpen} onClose={() => setBackupOpen(false)} />
     </SafeAreaView>
   );
 }
@@ -684,6 +702,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     backgroundColor: theme.color.error,
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  backupBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: theme.color.brandPrimary,
     padding: 14,
     borderRadius: 12,
     marginBottom: 10,

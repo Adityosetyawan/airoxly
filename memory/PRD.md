@@ -85,3 +85,13 @@ Aplikasi mobile (Expo/React Native) untuk penjualan air minum galon dengan hirar
 - Users (CRUD semua role)
 - Products (CRUD produk & harga)
 - Live GPS
+
+
+## Manual Full Backup (Aug 2026)
+- Super Admin bisa unduh 1 file ZIP berisi semua koleksi (CSV per koleksi) dari:
+  - Quick Access dashboard → "Backup Data"
+  - Pengaturan Sistem → Zona Berbahaya → "💾 BACKUP SEMUA DATA (ZIP)"
+- Endpoint: `GET /api/backup/preview`, `GET /api/backup/export-all.zip` (Super Admin only)
+- CSV pakai UTF-8 BOM (langsung rapi di Excel/Sheets), nested field dijadikan JSON string
+- Field `password_hash` dan `_id` tidak diekspor
+- Isi ZIP: users, products, part_prices, customers, transactions, expenses, warehouse_daily, warehouse_incoming, production_daily, monthly_reports, lottery_periods, lottery_tickets, locations, settings, README.txt, manifest.json

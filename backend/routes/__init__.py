@@ -7,6 +7,7 @@ from routes import (
     admin,
     ai,
     auth,
+    backup,
     customers,
     expenses,
     exports,
@@ -42,6 +43,7 @@ ALL_ROUTERS = [
     shifts.router,
     ai.router,
     exports.router,
+    backup.router,
     health.router,
 ]
 

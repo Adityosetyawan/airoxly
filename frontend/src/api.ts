@@ -540,6 +540,43 @@ export const api = {
     }
     return res.blob();
   },
+
+  // === FULL BACKUP: ZIP with CSV per collection (Super Admin only) ===
+  previewBackup: () =>
+    req<{
+      collections: { name: string; count: number }[];
+      total_rows: number;
+      generated_at: string;
+    }>("/backup/preview"),
+
+  /** Returns a Blob + suggested filename so caller can download or share. */
+  downloadFullBackup: async (): Promise<{ blob: Blob; filename: string }> => {
+    const token = await storage.getItem<string>(TOKEN_KEY, "");
+    const res = await fetch(`${API_BASE}/backup/export-all.zip`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      let msg = `Gagal unduh backup (HTTP ${res.status})`;
+      try {
+        const j = await res.json();
+        if (j?.detail) msg = j.detail;
+      } catch {}
+      throw new Error(msg);
+    }
+    const stamp = new Date()
+      .toISOString()
+      .replace(/[-:T]/g, "")
+      .replace(/\..+$/, "");
+    const fallback = `AirOXLY_Backup_${stamp}.zip`;
+    // Try to extract from Content-Disposition (needs the header to be exposed)
+    let filename = fallback;
+    const cd = res.headers.get("content-disposition") || res.headers.get("Content-Disposition") || "";
+    const m = cd.match(/filename\s*=\s*"?([^";]+)"?/i);
+    if (m && m[1]) filename = m[1];
+    const xb = res.headers.get("X-Backup-Filename") || res.headers.get("x-backup-filename") || "";
+    if (xb) filename = xb;
+    return { blob: await res.blob(), filename };
+  },
 };
 
 export async function getSavedUser(): Promise<User | null> {

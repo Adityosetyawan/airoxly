@@ -7,6 +7,7 @@ import { theme, rp } from "@/src/theme";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/AuthContext";
 import { useToast } from "@/src/components/Toast";
+import BackupExportModal from "@/src/components/BackupExportModal";
 
 export default function SuperDashboard() {
   const { user, logout } = useAuth();
@@ -15,6 +16,7 @@ export default function SuperDashboard() {
   const [stats, setStats] = useState<any>(null);
   const [report, setReport] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [backupOpen, setBackupOpen] = useState(false);
   const tapCount = useRef(0);
   const tapTimer = useRef<any>(null);
   const today = new Date().toISOString().slice(0, 10);
@@ -97,6 +99,7 @@ export default function SuperDashboard() {
           <ActBtn icon="trophy" label="Riwayat Pemenang" onPress={() => router.push("/(superadmin)/winners")} />
           <ActBtn icon="hammer" label="Data Produksi & Gudang" onPress={() => router.push("/(superadmin)/produksi-data")} />
           <ActBtn icon="git-compare" label="Selisih Galon" onPress={() => router.push("/(superadmin)/selisih")} />
+          <ActBtn icon="cloud-download" label="Backup Data" onPress={() => setBackupOpen(true)} />
           <ActBtn icon="book" label="Buku Panduan" onPress={() => router.push("/panduan")} />
         </View>
 
@@ -132,6 +135,8 @@ export default function SuperDashboard() {
           <Text style={styles.versionText}>Air OXLY · v1.0.0</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <BackupExportModal visible={backupOpen} onClose={() => setBackupOpen(false)} />
     </SafeAreaView>
   );
 }

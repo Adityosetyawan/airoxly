@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { Platform } from "react-native";
 import * as Linking from "expo-linking";
+import { router } from "expo-router";
 import { api, getSavedUser, User, TOKEN_KEY } from "./api";
 import { storage } from "./utils/storage";
 import {
@@ -8,6 +9,34 @@ import {
   extractSessionId,
   startGoogleSignIn,
 } from "./googleAuth";
+
+// Helper: navigate to role-specific dashboard.
+// Dipanggil dari stopImpersonation & impersonate untuk memastikan pindah
+// route group native Stack Navigator dengan reliable.
+function navigateToRoleHome(role?: string) {
+  const target =
+    role === "super_admin" ? "/(superadmin)/dashboard"
+    : role === "admin" ? "/(admin)/dashboard"
+    : role === "produksi" ? "/(produksi)/dashboard"
+    : role === "gudang" ? "/(gudang)/dashboard"
+    : role === "sales" ? "/(sales)/dashboard"
+    : "/";
+  try {
+    // @ts-ignore
+    if (typeof (router as any).dismissAll === "function") {
+      (router as any).dismissAll();
+    }
+  } catch {}
+  try {
+    router.replace(target as any);
+  } catch {}
+  // Fallback: retry setelah 500ms kalau native Stack cache belum switch group
+  setTimeout(() => {
+    try {
+      router.replace(target as any);
+    } catch {}
+  }, 500);
+}
 
 type AuthCtx = {
   user: User | null;
@@ -127,6 +156,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const r = await api.impersonate(target_user_id);
     setUser(r.user);
     setIsImpersonating(true);
+    // Force navigate ke dashboard role target (native reliable)
+    navigateToRoleHome(r.user?.role);
     return r.user;
   };
 
@@ -134,6 +165,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const orig = await api.stopImpersonation();
     if (orig) setUser(orig);
     setIsImpersonating(false);
+    // Force navigate ke dashboard role user asli (super_admin biasanya)
+    navigateToRoleHome(orig?.role);
     return orig;
   };
 

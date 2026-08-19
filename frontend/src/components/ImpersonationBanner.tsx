@@ -1,7 +1,6 @@
 import React from "react";
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Redirect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { theme } from "@/src/theme";
 import { useAuth } from "@/src/AuthContext";
@@ -16,21 +15,9 @@ import { useToast } from "@/src/components/Toast";
  */
 export default function ImpersonationBanner() {
   const { user, isImpersonating, stopImpersonation } = useAuth();
-  const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
   const [busy, setBusy] = React.useState(false);
-  const [redirectTo, setRedirectTo] = React.useState<string | null>(null);
-
-  // ROBUST FIX: pakai <Redirect> component sebagai fallback yg pasti bekerja
-  // di native. Setelah user state ter-update ke super_admin & we set
-  // redirectTo, Redirect akan fire dari sini (root layout) sehingga bypass
-  // masalah stack cache di (sales)/(admin)/dst layout.
-  if (redirectTo) {
-    // Clear state satu tick ke depan supaya tidak infinite redirect
-    setTimeout(() => setRedirectTo(null), 100);
-    return <Redirect href={redirectTo as any} />;
-  }
 
   if (!isImpersonating || !user) return null;
 
@@ -40,31 +27,8 @@ export default function ImpersonationBanner() {
     try {
       const orig = await stopImpersonation();
       toast.show(`Kembali ke ${orig?.name || orig?.username || "Super Admin"}`, "success");
-      const role = orig?.role;
-      const targetPath =
-        role === "super_admin"
-          ? "/(superadmin)/dashboard"
-          : role === "admin"
-          ? "/(admin)/dashboard"
-          : role === "produksi"
-          ? "/(produksi)/dashboard"
-          : role === "gudang"
-          ? "/(gudang)/dashboard"
-          : role === "sales"
-          ? "/(sales)/dashboard"
-          : "/";
-      // 1) Immediate imperative navigate (works on web / some native cases)
-      try {
-        // @ts-ignore
-        if (typeof (router as any).dismissAll === "function") {
-          (router as any).dismissAll();
-        }
-      } catch {}
-      router.replace(targetPath as any);
-      // 2) Fallback: render <Redirect> from banner to force expo-router
-      //    to properly switch route groups on native. Delay 100ms to ensure
-      //    setUser has propagated first.
-      setTimeout(() => setRedirectTo(targetPath), 100);
+      // Navigasi utama sudah dihandle di AuthContext.stopImpersonation()
+      // Ini fallback tambahan kalau navigasi dari context gagal
     } catch (e: any) {
       toast.show(e?.message || "Gagal keluar impersonate", "error");
     } finally {

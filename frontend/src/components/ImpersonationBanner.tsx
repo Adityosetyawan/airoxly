@@ -29,18 +29,34 @@ export default function ImpersonationBanner() {
     try {
       const orig = await stopImpersonation();
       toast.show(`Kembali ke ${orig?.name || orig?.username || "Super Admin"}`, "success");
-      // Navigate langsung ke dashboard sesuai role user asli (super_admin).
-      // Pakai `/` tidak reliable karena Stack navigator caching — arahkan eksplisit.
-      const targetPath = (() => {
-        const role = orig?.role;
-        if (role === "super_admin") return "/(superadmin)/dashboard";
-        if (role === "admin") return "/(admin)/dashboard";
-        if (role === "produksi") return "/(produksi)/dashboard";
-        if (role === "gudang") return "/(gudang)/dashboard";
-        if (role === "sales") return "/(sales)/dashboard";
-        return "/";
-      })();
-      setTimeout(() => router.replace(targetPath as any), 300);
+      // Navigate ke dashboard sesuai role user asli. Karena Stack navigator
+      // native bisa cache screen, kita:
+      //   1. dismissAll() untuk clear modal/pushed screens
+      //   2. router.replace("/") untuk trigger index.tsx re-evaluate auth
+      //   3. Fallback: navigate langsung ke role dashboard jika masih stuck
+      const role = orig?.role;
+      const targetPath =
+        role === "super_admin"
+          ? "/(superadmin)/dashboard"
+          : role === "admin"
+          ? "/(admin)/dashboard"
+          : role === "produksi"
+          ? "/(produksi)/dashboard"
+          : role === "gudang"
+          ? "/(gudang)/dashboard"
+          : role === "sales"
+          ? "/(sales)/dashboard"
+          : "/";
+      // Beri React waktu untuk propagate state (setUser + setIsImpersonating)
+      setTimeout(() => {
+        try {
+          // @ts-ignore
+          if (typeof (router as any).dismissAll === "function") {
+            (router as any).dismissAll();
+          }
+        } catch {}
+        router.replace(targetPath as any);
+      }, 350);
     } catch (e: any) {
       toast.show(e?.message || "Gagal keluar impersonate", "error");
     } finally {

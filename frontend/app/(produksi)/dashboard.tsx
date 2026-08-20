@@ -50,6 +50,36 @@ export default function ProduksiDashboard() {
     return n;
   };
 
+  // Detailed per-item breakdown for a single production_daily row.
+  // Returns { "Bearing": 2, "Seal": 1, ... } combining legacy fields & part_qtys.
+  const LEGACY_TO_NAME: Record<string, string> = {
+    sil_ganti: "Seal",
+    mur_ganti: "Mur",
+    kran_ganti: "Kran",
+    stiker_ganti: "Stiker",
+    stoper_ganti: "Stoper",
+    karet_kran_ganti: "Karet Kran",
+  };
+  const partsBreakdown = (r: any): Record<string, number> => {
+    const out: Record<string, number> = {};
+    for (const [f, name] of Object.entries(LEGACY_TO_NAME)) {
+      const v = Number(r[f] || 0);
+      if (v > 0) out[name] = (out[name] || 0) + v;
+    }
+    if (r.part_qtys && typeof r.part_qtys === "object") {
+      for (const [name, qty] of Object.entries(r.part_qtys)) {
+        const v = Number(qty) || 0;
+        if (v > 0) out[name] = (out[name] || 0) + v;
+      }
+    }
+    return out;
+  };
+  const mergeBreakdown = (a: Record<string, number>, b: Record<string, number>): Record<string, number> => {
+    const out = { ...a };
+    for (const [k, v] of Object.entries(b)) out[k] = (out[k] || 0) + v;
+    return out;
+  };
+
   const todayTotals = finalEntries.reduce(
     (acc, r) => ({
       produksi_galon: acc.produksi_galon + (r.produksi_galon || 0),
@@ -74,11 +104,20 @@ export default function ProduksiDashboard() {
   // Group by SALES — for click detail
   const bySales = finalEntries.reduce((acc: Record<string, any>, r) => {
     const key = r.sales_code || "-";
-    if (!acc[key]) acc[key] = { count: 0, produksi_galon: 0, galon_ganti: 0, sparepart: 0, entries: [] as any[] };
+    if (!acc[key]) acc[key] = {
+      count: 0, produksi_galon: 0, galon_ganti: 0,
+      galon_kran: 0, galon_polos: 0,
+      sparepart: 0,
+      parts: {} as Record<string, number>,
+      entries: [] as any[],
+    };
     acc[key].count += 1;
     acc[key].produksi_galon += r.produksi_galon || 0;
     acc[key].galon_ganti += r.galon_ganti || 0;
+    acc[key].galon_kran += r.galon_kran || 0;
+    acc[key].galon_polos += r.galon_polos || 0;
     acc[key].sparepart += sumSparepart(r);
+    acc[key].parts = mergeBreakdown(acc[key].parts, partsBreakdown(r));
     acc[key].entries.push(r);
     return acc;
   }, {});
@@ -153,11 +192,27 @@ export default function ProduksiDashboard() {
                       <Ionicons name="chevron-forward" size={16} color={theme.color.muted} />
                     </View>
                   </View>
+                  {/* Galon row: Prod Gln + Galon Kran + Galon Polos + Ganti Total */}
                   <View style={styles.kelRow}>
                     <KelItem label="Prod Gln" value={v.produksi_galon} />
+                    <KelItem label="Gln Kran" value={v.galon_kran} />
+                    <KelItem label="Gln Polos" value={v.galon_polos} />
                     <KelItem label="Gln Gt" value={v.galon_ganti} />
-                    <KelItem label="Sparepart" value={v.sparepart} />
                   </View>
+                  {/* Sparepart breakdown chips */}
+                  {Object.keys(v.parts).length > 0 && (
+                    <View style={styles.partsWrap}>
+                      <Text style={styles.partsLabel}>Penggantian Sparepart:</Text>
+                      <View style={styles.chipsWrap}>
+                        {Object.entries(v.parts as Record<string, number>).map(([name, qty]) => (
+                          <View key={name} style={styles.partChip}>
+                            <Text style={styles.partChipName}>{name}</Text>
+                            <Text style={styles.partChipQty}>{qty}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
                 </TouchableOpacity>
               ))}
             </View>
@@ -298,7 +353,7 @@ function EntryCard({ entry, onImgTap }: { entry: any; onImgTap: (url: string) =>
       {allParts.length > 0 ? (
         <View style={styles.partsSection}>
           <Text style={styles.partsTitle}>🔧 Penggantian Part</Text>
-          <View style={styles.partsWrap}>
+          <View style={styles.partsRow}>
             {allParts.map(([name, qty]: any) => (
               <View key={name} style={styles.partPill}>
                 <Text style={styles.partName}>{name}</Text>
@@ -384,6 +439,32 @@ const styles = StyleSheet.create({
   kelName: { fontSize: 14, fontWeight: "800", color: "#8B5CF6" },
   kelRow: { flexDirection: "row", gap: 4 },
   salesCard: { backgroundColor: theme.color.surface, borderRadius: 12, padding: 12, gap: 8, borderLeftWidth: 4, borderLeftColor: theme.color.brand },
+  partsWrap: {
+    borderTopWidth: 1,
+    borderTopColor: theme.color.border,
+    paddingTop: 8,
+    marginTop: 2,
+    gap: 6,
+  },
+  partsLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: theme.color.muted,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  chipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
+  partChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: theme.color.brandTertiary,
+  },
+  partChipName: { fontSize: 11, fontWeight: "600", color: theme.color.onBrandTertiary },
+  partChipQty: { fontSize: 11, fontWeight: "800", color: theme.color.brand },
   salesHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   salesBadge: { fontSize: 13, fontWeight: "800", color: theme.color.brand, backgroundColor: theme.color.brandTertiary, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },
   salesEntry: { fontSize: 11, color: theme.color.muted },
@@ -428,7 +509,7 @@ const styles = StyleSheet.create({
   photoLabel: { fontSize: 10, textAlign: "center", padding: 4, backgroundColor: theme.color.surfaceSecondary, color: theme.color.onSurfaceSecondary, fontWeight: "600" },
   partsSection: { gap: 6 },
   partsTitle: { fontSize: 12, fontWeight: "700", color: theme.color.onSurfaceSecondary },
-  partsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  partsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   partPill: {
     flexDirection: "row", gap: 6, alignItems: "center",
     paddingHorizontal: 10, paddingVertical: 5,

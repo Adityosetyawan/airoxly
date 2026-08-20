@@ -43,16 +43,19 @@ export default function SuperSettings() {
   const [confirmText, setConfirmText] = useState("");
   const [resetting, setResetting] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
+  const [hidePrices, setHidePrices] = useState(false);
+  const [savingHide, setSavingHide] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [r, g, sh, pp, lot] = await Promise.all([
+      const [r, g, sh, pp, lot, hp] = await Promise.all([
         api.getSetting("visit_radius_m").catch(() => null),
         api.getSetting("gps_min_move_m").catch(() => null),
         api.getShifts().catch(() => null),
         api.listPartPrices().catch(() => null),
         api.getSetting("lottery_min_price_per_galon").catch(() => null),
+        api.getSetting("hide_prices_from_sales").catch(() => null),
       ]);
       if (r?.value) setRadius(String(r.value));
       if (g?.value) setGpsMin(String(g.value));
@@ -62,6 +65,7 @@ export default function SuperSettings() {
         setParts(sorted);
       }
       if (lot?.value != null) setLotteryMin(String(lot.value));
+      setHidePrices(Boolean(hp?.value));
     } catch (e: any) {
       toast.show(e.message || "Gagal memuat pengaturan", "error");
     } finally {
@@ -479,6 +483,49 @@ export default function SuperSettings() {
           </TouchableOpacity>
         </View>
 
+        {/* Privasi Harga */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="eye-off" size={20} color={theme.color.brand} />
+            <Text style={styles.sectionTitle}>Privasi Harga Produk</Text>
+          </View>
+          <Text style={styles.sectionDesc}>
+            Sembunyikan harga produk dari tampilan Sales (form transaksi baru). Superadmin & Admin tetap bisa lihat.
+          </Text>
+          <TouchableOpacity
+            onPress={async () => {
+              setSavingHide(true);
+              const next = !hidePrices;
+              try {
+                await api.setSetting("hide_prices_from_sales", next);
+                setHidePrices(next);
+                toast.show(next ? "Harga disembunyikan dari Sales" : "Harga tampil kembali di Sales", "success");
+              } catch (e: any) {
+                toast.show(e?.message || "Gagal simpan", "error");
+              } finally {
+                setSavingHide(false);
+              }
+            }}
+            disabled={savingHide}
+            style={[styles.toggleRow, hidePrices && styles.toggleRowActive]}
+            testID="toggle-hide-prices"
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.toggleTitle, hidePrices && { color: "#fff" }]}>
+                {hidePrices ? "✅ Harga TERSEMBUNYI dari Sales" : "Tampilkan harga ke Sales"}
+              </Text>
+              <Text style={[styles.toggleDesc, hidePrices && { color: "rgba(255,255,255,0.85)" }]}>
+                {hidePrices
+                  ? "Sales lihat produk tanpa nominal Rp — hanya nama & satuan"
+                  : "Sales lihat 'Rp XX.XXX / unit' di form transaksi"}
+              </Text>
+            </View>
+            <View style={[styles.toggleKnob, hidePrices && styles.toggleKnobActive]}>
+              <View style={[styles.toggleDot, hidePrices && styles.toggleDotActive]} />
+            </View>
+          </TouchableOpacity>
+        </View>
+
         {/* Danger zone */}
         <View style={styles.dangerBox}>
           <View style={styles.dangerHeader}>
@@ -693,6 +740,37 @@ const styles = StyleSheet.create({
     borderColor: theme.color.error,
     padding: 16,
     backgroundColor: "#FEF2F2",
+  },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+    backgroundColor: theme.color.surfaceSecondary,
+  },
+  toggleRowActive: {
+    backgroundColor: theme.color.brand,
+    borderColor: theme.color.brand,
+  },
+  toggleTitle: { fontSize: 13, fontWeight: "800", color: theme.color.onSurface },
+  toggleDesc: { fontSize: 11, color: theme.color.muted, marginTop: 2 },
+  toggleKnob: {
+    width: 42, height: 24, borderRadius: 12,
+    backgroundColor: theme.color.border,
+    justifyContent: "center",
+    padding: 2,
+  },
+  toggleKnobActive: { backgroundColor: "rgba(255,255,255,0.35)" },
+  toggleDot: {
+    width: 20, height: 20, borderRadius: 10,
+    backgroundColor: "#fff",
+  },
+  toggleDotActive: {
+    backgroundColor: "#fff",
+    transform: [{ translateX: 18 }],
   },
   dangerHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
   dangerTitle: { fontSize: 15, fontWeight: "700", color: theme.color.error },

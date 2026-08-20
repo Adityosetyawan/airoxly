@@ -16,6 +16,7 @@ import { theme } from "@/src/theme";
 import { api } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
 import { StockSplitPanel } from "@/src/components/StockSplitPanel";
+import { useCalcBar } from "@/src/components/KeyboardCalcBar";
 
 type PartPrice = { id: string; name: string; rp_per_pcs: number; order?: number };
 type Transfer = {
@@ -39,6 +40,11 @@ export default function GudangStock() {
   const [qty, setQty] = useState("");
   const [notes, setNotes] = useState("");
   const [sending, setSending] = useState(false);
+
+  const qtyBar = useCalcBar(qty, {
+    hint: `Kirim ${selectedPart || "part"}`,
+    format: (r) => `${parseInt(r, 10) || 0} unit`,
+  });
 
   const load = useCallback(async () => {
     try {
@@ -195,6 +201,8 @@ export default function GudangStock() {
                 <TextInput
                   value={qty}
                   onChangeText={(v) => setQty(v.replace(/[^\d]/g, ""))}
+                  onFocus={qtyBar.onFocus}
+                  onBlur={qtyBar.onBlur}
                   keyboardType="number-pad"
                   placeholder="0"
                   placeholderTextColor={theme.color.muted}

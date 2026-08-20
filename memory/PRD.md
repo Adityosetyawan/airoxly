@@ -131,3 +131,21 @@ Aplikasi mobile (Expo/React Native) untuk penjualan air minum galon dengan hirar
 - Form transaksi baru (`/(sales)/transaction/new`) sekarang eksplisit reset `qtys/bayar/pinjam/kembali` saat buka untuk transaksi baru (bukan edit).
 - Tambah label "💡 Wajib bayar sesuai belanja: Rp X" di bawah input Uang dibayar.
 - Tombol quick "Bayar lunas Rp X" untuk auto-fill bayar = total.
+- Label "(baru)" dihapus → sekarang cuma "Pinjam Galon".
+
+## Keyboard Calc Bar (Aug 2026)
+- Komponen global `KeyboardCalcBar.tsx` di-mount di root layout.
+- Ketika user fokus TextInput numeric, muncul bar hitam melayang di atas keyboard yang tampilkan angka besar (Rp XX.XXX atau "X galon" atau "X unit").
+- Registrasi via hook `useCalcBar(value, { hint, format })`.
+- Diaplikasikan di: bayar/pinjam/kembali di transaction form + qty transfer di Gudang.
+
+## Privasi Harga Produk (Aug 2026)
+- Toggle Superadmin di Pengaturan → "Privasi Harga Produk"
+- Setting key: `hide_prices_from_sales` (boolean)
+- Ketika ON: form transaksi Sales tampilkan produk hanya dgn "/ box" atau "/ gln" tanpa nominal Rp
+- Superadmin, Admin tetap bisa lihat harga
+
+## Produksi Rekap per Sales Detail (Aug 2026)
+- Kolom galon dipisah: Prod Gln / Gln Kran / Gln Polos / Gln Gt
+- Sparepart tidak lagi ditampilkan agregat — sekarang breakdown chip per item ("Seal 2, Mur 1, Karet Kran 3, ...")
+- Chip warna brand tertiary di bawah row galon

@@ -24,6 +24,7 @@ import {
   getCachedProducts,
   patchCachedCustomer,
 } from "@/src/utils/offlineStore";
+import { useCalcBar } from "@/src/components/KeyboardCalcBar";
 
 export default function TransactionForm() {
   const params = useLocalSearchParams<{ customer_id?: string; edit_id?: string }>();
@@ -35,6 +36,7 @@ export default function TransactionForm() {
 
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [hidePrices, setHidePrices] = useState(false);
   const [qtys, setQtys] = useState<Record<string, number>>({});
   const [bayar, setBayar] = useState("");
   const [pinjam, setPinjam] = useState("");
@@ -54,6 +56,12 @@ export default function TransactionForm() {
           prods = await getCachedProducts();
         }
         setProducts(prods);
+
+        // Load "hide prices" toggle (Super Admin setting). Sales-only respect.
+        try {
+          const s = await api.getSetting("hide_prices_from_sales");
+          setHidePrices(Boolean(s?.value));
+        } catch { /* keep default false */ }
 
         if (params.edit_id) {
           const t = await api.listTransactions({ customer_id: params.customer_id });
@@ -102,6 +110,11 @@ export default function TransactionForm() {
       }
     })();
   }, [params.customer_id, params.edit_id, toast]);
+
+  // Calc bars for numeric fields
+  const bayarBar = useCalcBar(bayar, { hint: "Uang dibayar" });
+  const pinjamBar = useCalcBar(pinjam, { hint: "Pinjam galon", format: (r) => `${parseInt(r, 10) || 0} galon` });
+  const kembaliBar = useCalcBar(kembali, { hint: "Galon kembali", format: (r) => `${parseInt(r, 10) || 0} galon` });
 
   const items: TransactionItem[] = useMemo(
     () =>
@@ -315,7 +328,7 @@ export default function TransactionForm() {
             <View key={p.id} style={styles.pRow} testID={`product-${p.id}`}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.pName}>{p.name}</Text>
-                <Text style={styles.pPrice}>Rp {rp(p.price)} / {p.unit}</Text>
+                <Text style={styles.pPrice}>{hidePrices ? `/ ${p.unit}` : `Rp ${rp(p.price)} / ${p.unit}`}</Text>
               </View>
               <View style={styles.stepper}>
                 <TouchableOpacity onPress={() => setQ(p.id, -1)} style={styles.stepBtn} testID={`minus-${p.id}`}>
@@ -338,10 +351,12 @@ export default function TransactionForm() {
           <Text style={styles.section}>Galon</Text>
           <View style={styles.gallonRow}>
             <View style={styles.gallonBox}>
-              <Text style={styles.gLabel}>Pinjam Galon (baru)</Text>
+              <Text style={styles.gLabel}>Pinjam Galon</Text>
               <TextInput
                 value={pinjam}
                 onChangeText={(v) => setPinjam(v.replace(/[^\d]/g, ""))}
+                onFocus={pinjamBar.onFocus}
+                onBlur={pinjamBar.onBlur}
                 keyboardType="number-pad"
                 placeholder="0"
                 placeholderTextColor={theme.color.muted}
@@ -354,6 +369,8 @@ export default function TransactionForm() {
               <TextInput
                 value={kembali}
                 onChangeText={(v) => setKembali(v.replace(/[^\d]/g, ""))}
+                onFocus={kembaliBar.onFocus}
+                onBlur={kembaliBar.onBlur}
                 keyboardType="number-pad"
                 placeholder="0"
                 placeholderTextColor={theme.color.muted}
@@ -385,6 +402,8 @@ export default function TransactionForm() {
             <TextInput
               value={bayar}
               onChangeText={(v) => setBayar(v.replace(/[^\d]/g, ""))}
+              onFocus={bayarBar.onFocus}
+              onBlur={bayarBar.onBlur}
               keyboardType="number-pad"
               placeholder="0"
               placeholderTextColor={theme.color.muted}

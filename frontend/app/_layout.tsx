@@ -10,6 +10,7 @@ import { AuthProvider } from "@/src/AuthContext";
 import { ToastProvider } from "@/src/components/Toast";
 import PwaInstallHint from "@/src/components/PwaInstallHint";
 import ImpersonationBanner from "@/src/components/ImpersonationBanner";
+import { KeyboardCalcBar } from "@/src/components/KeyboardCalcBar";
 
 
 LogBox.ignoreAllLogs(true);
@@ -34,6 +35,7 @@ export default function RootLayout() {
             <Stack screenOptions={{ headerShown: false, animation: "fade" }} />
             <ImpersonationBanner />
             <PwaInstallHint />
+            <KeyboardCalcBar />
           </ToastProvider>
         </AuthProvider>
       </SafeAreaProvider>

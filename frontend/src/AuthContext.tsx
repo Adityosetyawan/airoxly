@@ -11,31 +11,23 @@ import {
 } from "./googleAuth";
 
 // Helper: navigate to role-specific dashboard.
-// Dipanggil dari stopImpersonation & impersonate untuk memastikan pindah
-// route group native Stack Navigator dengan reliable.
-function navigateToRoleHome(role?: string) {
-  const target =
-    role === "super_admin" ? "/(superadmin)/dashboard"
-    : role === "admin" ? "/(admin)/dashboard"
-    : role === "produksi" ? "/(produksi)/dashboard"
-    : role === "gudang" ? "/(gudang)/dashboard"
-    : role === "sales" ? "/(sales)/dashboard"
-    : "/";
-  try {
-    // @ts-ignore
-    if (typeof (router as any).dismissAll === "function") {
-      (router as any).dismissAll();
-    }
-  } catch {}
-  try {
-    router.replace(target as any);
-  } catch {}
-  // Fallback: retry setelah 500ms kalau native Stack cache belum switch group
+// Reliable for native Stack: go to root (index.tsx) which routes based on
+// user state (that we already updated via setUser). Avoids native Stack
+// group-switching bugs that produced blank screens in previous attempts.
+function navigateToRoleHome() {
+  // Small delay so React finishes propagating the new `user` state before
+  // index.tsx reads it (its useEffect depends on `user`).
   setTimeout(() => {
     try {
-      router.replace(target as any);
+      router.replace("/");
     } catch {}
-  }, 500);
+  }, 60);
+  // Belt-and-braces: fire again after 600ms for stubborn Android Stack cache.
+  setTimeout(() => {
+    try {
+      router.replace("/");
+    } catch {}
+  }, 600);
 }
 
 type AuthCtx = {
@@ -156,8 +148,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const r = await api.impersonate(target_user_id);
     setUser(r.user);
     setIsImpersonating(true);
-    // Force navigate ke dashboard role target (native reliable)
-    navigateToRoleHome(r.user?.role);
+    // Route via / (index) which reads updated user state and picks correct dashboard
+    navigateToRoleHome();
     return r.user;
   };
 
@@ -165,8 +157,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const orig = await api.stopImpersonation();
     if (orig) setUser(orig);
     setIsImpersonating(false);
-    // Force navigate ke dashboard role user asli (super_admin biasanya)
-    navigateToRoleHome(orig?.role);
+    // Route via / (index) which reads updated user state and picks correct dashboard
+    navigateToRoleHome();
     return orig;
   };
 

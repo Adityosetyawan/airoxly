@@ -37,6 +37,7 @@ _BACKUP_COLLECTIONS: list[tuple[str, dict]] = [
     ("expenses", {"_id": 0}),
     ("warehouse_daily", {"_id": 0}),
     ("warehouse_incoming", {"_id": 0}),
+    ("sparepart_transfers", {"_id": 0}),
     ("production_daily", {"_id": 0}),
     ("monthly_reports", {"_id": 0}),
     ("lottery_periods", {"_id": 0}),

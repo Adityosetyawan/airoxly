@@ -55,44 +55,71 @@ async def compute_stock() -> dict:
     Only WAREHOUSE INCOMING adds stock; production & warehouse-daily reduce it.
     Draft rows (is_draft=True) are excluded.
     """
+    split = await compute_stock_split()
+    return split.get("combined", {})
+
+
+async def compute_stock_split() -> dict:
+    """Compute stock split into Gudang & Produksi buckets.
+
+    Flow:
+      • warehouse_incoming     → +Gudang
+      • sparepart_transfers    → -Gudang, +Produksi (Gudang kirim ke Produksi)
+      • warehouse_daily.part_* → -Gudang (Gudang pakai untuk sales via part_qtys/legacy)
+      • production_daily.part_* → -Produksi (Produksi pakai — tetap tercatat per sales)
+
+    Returns: { gudang: {name: qty}, produksi: {name: qty}, combined: {name: gudang+produksi} }
+    """
     parts_docs = await db.part_prices.find({}, {"_id": 0, "name": 1}).to_list(200)
     part_names = [p.get("name") for p in parts_docs if p.get("name")]
-    stock: dict = {n: 0 for n in part_names}
+    gudang: dict = {n: 0 for n in part_names}
+    produksi: dict = {n: 0 for n in part_names}
 
-    def _bump(name: str, delta: int):
+    def _bump(bucket: dict, name: str, delta: int):
         if not name:
             return
-        stock[name] = int(stock.get(name, 0) or 0) + int(delta or 0)
+        bucket[name] = int(bucket.get(name, 0) or 0) + int(delta or 0)
 
+    # Warehouse incoming → +Gudang
     async for row in db.warehouse_incoming.find({}, {"_id": 0}):
         item = row.get("item") or ""
         qty = int(row.get("qty", 0) or 0)
-        _bump(canonical_item(item), qty)
+        _bump(gudang, canonical_item(item), qty)
 
+    # Sparepart transfers Gudang → Produksi
+    async for row in db.sparepart_transfers.find({}, {"_id": 0}):
+        name = row.get("part_name") or ""
+        qty = int(row.get("qty", 0) or 0)
+        _bump(gudang, name, -qty)
+        _bump(produksi, name, qty)
+
+    # Produksi menggunakan sparepart → -Produksi
     async for row in db.production_daily.find({"is_draft": {"$ne": True}}, {"_id": 0}):
         for f, name in LEGACY_FIELD_TO_PART_NAME_PRODUKSI.items():
             v = int(row.get(f, 0) or 0)
             if v:
-                _bump(name, -v)
+                _bump(produksi, name, -v)
         pq = row.get("part_qtys") or {}
         if isinstance(pq, dict):
             for name, qty in pq.items():
                 try:
-                    _bump(name, -int(qty or 0))
+                    _bump(produksi, name, -int(qty or 0))
                 except (TypeError, ValueError):
                     pass
 
+    # Warehouse daily part usage (Gudang) → -Gudang
     async for row in db.warehouse_daily.find({"is_draft": {"$ne": True}}, {"_id": 0}):
         for f, name in LEGACY_FIELD_TO_PART_NAME_GUDANG.items():
             v = int(row.get(f, 0) or 0)
             if v:
-                _bump(name, -v)
+                _bump(gudang, name, -v)
         pq = row.get("part_qtys") or {}
         if isinstance(pq, dict):
             for name, qty in pq.items():
                 try:
-                    _bump(name, -int(qty or 0))
+                    _bump(gudang, name, -int(qty or 0))
                 except (TypeError, ValueError):
                     pass
 
-    return stock
+    combined = {n: (gudang.get(n, 0) + produksi.get(n, 0)) for n in part_names}
+    return {"gudang": gudang, "produksi": produksi, "combined": combined}

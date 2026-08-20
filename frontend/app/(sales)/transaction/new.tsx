@@ -67,6 +67,14 @@ export default function TransactionForm() {
             setPinjam(String(tx.pinjam_galon || ""));
             setKembali(String(tx.galon_kembali || ""));
           }
+        } else {
+          // NEW transaction — reset any stale inputs from a previous session
+          // (e.g., Sales balik ke customer yang sama & buat transaksi baru).
+          setEditingTxn(null);
+          setQtys({});
+          setBayar("");
+          setPinjam("");
+          setKembali("");
         }
 
         if (params.customer_id) {
@@ -361,7 +369,19 @@ export default function TransactionForm() {
             <Text style={styles.totalText}>Rp {rp(total)}</Text>
           </View>
           <View style={{ marginTop: 8 }}>
-            <Text style={styles.gLabel}>Uang dibayar</Text>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <Text style={styles.gLabel}>Uang dibayar</Text>
+              {total > 0 && bayarNum !== total && (
+                <TouchableOpacity
+                  onPress={() => setBayar(String(total))}
+                  style={styles.wajibBtn}
+                  testID="fill-wajib-bayar-btn"
+                >
+                  <Ionicons name="cash" size={12} color={theme.color.brand} />
+                  <Text style={styles.wajibBtnText}>Bayar lunas Rp {rp(total)}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             <TextInput
               value={bayar}
               onChangeText={(v) => setBayar(v.replace(/[^\d]/g, ""))}
@@ -371,6 +391,11 @@ export default function TransactionForm() {
               style={styles.payInput}
               testID="bayar-input"
             />
+            {total > 0 && (
+              <Text style={styles.wajibHint}>
+                💡 Wajib bayar sesuai belanja: <Text style={{ fontWeight: "700", color: theme.color.brand }}>Rp {rp(total)}</Text>
+              </Text>
+            )}
           </View>
 
           <View style={styles.summary}>
@@ -511,6 +536,17 @@ const styles = StyleSheet.create({
   },
   summary: { marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: theme.color.surfaceSecondary, gap: 6 },
   sumLine: { fontSize: 13, color: theme.color.onSurfaceSecondary },
+  wajibBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: theme.color.brandTertiary,
+  },
+  wajibBtnText: { fontSize: 11, fontWeight: "700", color: theme.color.onBrandTertiary },
+  wajibHint: { fontSize: 11, color: theme.color.muted, marginTop: 6, marginLeft: 2 },
   stickyBar: {
     position: "absolute",
     bottom: 0,

@@ -436,6 +436,29 @@ export const api = {
   // Warehouse stock
   getWarehouseStock: () => req<Record<string, number>>("/warehouse/stock"),
 
+  // Sparepart transfer Gudang → Produksi
+  getStockSplit: () =>
+    req<{
+      gudang: Record<string, number>;
+      produksi: Record<string, number>;
+      combined: Record<string, number>;
+    }>("/warehouse/stock-split"),
+
+  createSparepartTransfer: (body: { date: string; part_name: string; qty: number; notes?: string }) =>
+    req<any>("/warehouse/transfer", { method: "POST", body: JSON.stringify(body) }),
+
+  listSparepartTransfers: (params: { date_from?: string; date_to?: string; part_name?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.date_from) q.set("date_from", params.date_from);
+    if (params.date_to) q.set("date_to", params.date_to);
+    if (params.part_name) q.set("part_name", params.part_name);
+    const s = q.toString();
+    return req<any[]>(`/warehouse/transfers${s ? "?" + s : ""}`);
+  },
+
+  deleteSparepartTransfer: (id: string) =>
+    req(`/warehouse/transfer/${id}`, { method: "DELETE" }),
+
   // Validate bawa-sisa vs transactions
   validateSalesBawaSisa: (sales_id: string, date: string) =>
     req<{ bawa_total: number; sisa_total: number; terjual_by_gudang: number; terjual_by_transaksi: number; match: boolean; diff: number }>(

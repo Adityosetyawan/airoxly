@@ -109,3 +109,25 @@ Aplikasi mobile (Expo/React Native) untuk penjualan air minum galon dengan hirar
 - `GET /api/customers/{id}` (detail) tetap mengirim foto lengkap → foto hanya di-load saat user buka detail.
 - Frontend: `Customer` type dapat properti `has_photo?: boolean`. Ikon kamera muncul di `CustomersList.tsx` & `(sales)/customers.tsx`.
 - Detail cache offline: `cacheCustomerDetail` menyimpan 30 pelanggan yang paling baru dibuka lengkap dengan foto → tetap bisa lihat foto meski offline.
+
+## Sparepart Transfer Gudang → Produksi (Aug 2026)
+- New collection: `sparepart_transfers` `{id, date, part_name, qty, notes, from_location, to_location, created_by_name, created_at}`
+- Endpoints: `POST /api/warehouse/transfer`, `GET /api/warehouse/transfers`, `GET /api/warehouse/stock-split`, `DELETE /api/warehouse/transfer/{id}`
+- Business rules:
+  • `warehouse_incoming` → menambah stok Gudang
+  • `sparepart_transfers` → kurangi Gudang, tambah Produksi
+  • `production_daily.part_qtys` → kurangi Produksi (tetap tercatat per sales — logika lama tidak berubah)
+  • `warehouse_daily.part_qtys` → kurangi Gudang (pemakaian Gudang untuk sales)
+- Frontend:
+  • Gudang → tab "Stok" — CTA "Kirim Sparepart ke Produksi" + kotak pantau Gudang/Produksi/Total + riwayat transfer
+  • Produksi → tab "Stok" — kotak pantau (readonly, highlight kolom Produksi) + riwayat kiriman dari Gudang
+  • Shared component: `StockSplitPanel.tsx`
+
+## Impersonation Fix Final (Aug 2026)
+- `AuthContext.navigateToRoleHome()` sekarang route via `/` (index.tsx) yang membaca `user` state terbaru untuk pick dashboard yang benar → menghindari race condition native Stack group-switch.
+- Double-fire pattern: `setTimeout 60ms` + `setTimeout 600ms` untuk menahan native Android Stack cache.
+
+## Sales Transaction Form Improvements (Aug 2026)
+- Form transaksi baru (`/(sales)/transaction/new`) sekarang eksplisit reset `qtys/bayar/pinjam/kembali` saat buka untuk transaksi baru (bukan edit).
+- Tambah label "💡 Wajib bayar sesuai belanja: Rp X" di bawah input Uang dibayar.
+- Tombol quick "Bayar lunas Rp X" untuk auto-fill bayar = total.

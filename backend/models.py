@@ -61,3 +61,12 @@ class TransferCreate(BaseModel):
     partId: str
     qty: int
     note: Optional[str] = ""
+
+
+class PingReq(BaseModel):
+    lat: float
+    lng: float
+
+
+class ResetReq(BaseModel):
+    type: str  # "half" atau "all"

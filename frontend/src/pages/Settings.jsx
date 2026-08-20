@@ -7,23 +7,34 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "../components/ui/dialog";
 import { useToast } from "../hooks/use-toast";
+import api from "../api";
 
 const ResetModal = ({ open, onOpenChange, type }) => {
   const { toast } = useToast();
   const [text, setText] = useState("");
+  const [loading, setLoading] = useState(false);
   const phrase = type === "half" ? "RESET PENJUALAN" : "RESET SEMUA";
   const match = text === phrase;
 
   const del = type === "half"
-    ? ["Semua transaksi", "Semua pengeluaran", "Semua laporan", "Riwayat GPS"]
-    : ["Semua transaksi", "Semua pengeluaran", "Semua pelanggan", "Semua laporan & GPS"];
+    ? ["Semua transaksi", "Semua pengeluaran", "Riwayat transfer", "Riwayat GPS"]
+    : ["Semua transaksi", "Semua pengeluaran", "Semua pelanggan", "Riwayat transfer & GPS"];
   const keep = type === "half"
     ? ["Akun user", "Produk", "Kelola part", "Pelanggan"]
     : ["Akun user", "Produk", "Kelola part"];
 
-  const confirm = () => {
-    toast({ title: "Reset dijalankan (mock)", description: `${phrase} berhasil.` });
-    setText(""); onOpenChange(false);
+  const confirm = async () => {
+    setLoading(true);
+    try {
+      await api.post("/admin/reset", { type });
+      toast({ title: "Reset berhasil", description: `${phrase} telah dijalankan.` });
+      setText(""); onOpenChange(false);
+      setTimeout(() => window.location.reload(), 800);
+    } catch (e) {
+      toast({ title: "Gagal reset", description: e?.response?.data?.detail || "Terjadi kesalahan", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -53,9 +64,9 @@ const ResetModal = ({ open, onOpenChange, type }) => {
               {text === "" ? "Belum diketik" : match ? "✓ Teks cocok" : `Belum cocok (${text.length}/${phrase.length} karakter)`}
             </p>
           </div>
-          <Button onClick={confirm} disabled={!match}
-            className={`w-full h-11 font-semibold ${match ? "bg-red-600 hover:bg-red-700" : "bg-secondary text-muted-foreground cursor-not-allowed"}`}>
-            RESET SEKARANG
+          <Button onClick={confirm} disabled={!match || loading}
+            className={`w-full h-11 font-semibold ${match && !loading ? "bg-red-600 hover:bg-red-700" : "bg-secondary text-muted-foreground cursor-not-allowed"}`}>
+            {loading ? "Memproses..." : "RESET SEKARANG"}
           </Button>
         </div>
       </DialogContent>

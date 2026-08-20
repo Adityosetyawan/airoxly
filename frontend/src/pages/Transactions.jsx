@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { ShoppingCart, Plus, Minus, Check, Receipt } from "lucide-react";
+import { ShoppingCart, Plus, Minus, Check, Receipt, MessageCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { rupiah } from "../mock/mockData";
 import { PageHeader, Panel, Badge } from "../components/common";
@@ -45,6 +45,34 @@ const Transactions = () => {
   const total = items.reduce((s, i) => s + i.qty * i.price, 0);
 
   const setQty = (id, delta) => setQtys((q) => ({ ...q, [id]: Math.max(0, (q[id] || 0) + delta) }));
+
+  const waLink = (t) => {
+    const cust = customers.find((c) => c.id === t.customerId);
+    const phoneRaw = (cust?.phone || "").replace(/\D/g, "");
+    const phone = phoneRaw.startsWith("0") ? "62" + phoneRaw.slice(1) : phoneRaw;
+    const lines = [
+      "*STRUK AIR OXLY*",
+      `Pelanggan: ${t.customer}`,
+      `Tanggal: ${new Date(t.date).toLocaleString("id-ID")}`,
+      "--------------------------",
+      ...t.items.map((i) => `${i.qty}x ${i.name} = ${rupiah(i.qty * i.price)}`),
+      "--------------------------",
+      `Total: ${rupiah(t.total)}`,
+      `Bayar: ${rupiah(t.bayar)}`,
+      `Kembali: ${rupiah(t.kembali)}`,
+      `Status: ${t.status.toUpperCase()}`,
+    ];
+    if (t.galonPinjam) lines.push(`Galon dipinjam: ${t.galonPinjam}`);
+    if (t.galonKembali) lines.push(`Galon dikembalikan: ${t.galonKembali}`);
+    lines.push("", "Terima kasih telah berbelanja di Air OXLY!");
+    const text = encodeURIComponent(lines.join("\n"));
+    return phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
+  };
+
+  const sendWhatsApp = (t) => {
+    window.open(waLink(t), "_blank");
+    toast({ title: "Membuka WhatsApp", description: `Struk untuk ${t.customer}` });
+  };
 
   const submit = async () => {
     if (!customerId || items.length === 0) {
@@ -138,10 +166,14 @@ const Transactions = () => {
                 <Badge tone={t.status === "lunas" ? "emerald" : "amber"}>{t.status}</Badge>
               </div>
             </div>
-            <div className="mt-3 pt-3 border-t border-border flex flex-wrap gap-2">
+            <div className="mt-3 pt-3 border-t border-border flex flex-wrap items-center gap-2">
               {t.items.map((i) => <Badge key={i.productId} tone="gray">{i.qty}× {i.name}</Badge>)}
               {t.galonPinjam > 0 && <Badge tone="amber">Pinjam {t.galonPinjam} galon</Badge>}
               {t.galonKembali > 0 && <Badge tone="blue">Kembali {t.galonKembali} galon</Badge>}
+              <button onClick={() => sendWhatsApp(t)}
+                className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors">
+                <MessageCircle className="w-3.5 h-3.5" /> Kirim Struk WhatsApp
+              </button>
             </div>
           </Panel>
         ))}

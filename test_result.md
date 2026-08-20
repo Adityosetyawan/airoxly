@@ -249,6 +249,42 @@ backend:
         agent: "testing"
         comment: "✅ Auth requirement working. Calling GET /api/products without Bearer token correctly returns 401 Unauthorized."
 
+  - task: "GPS Locations - Ping and list endpoints"
+    implemented: true
+    working: true
+    file: "/app/backend/routes_extra.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ GPS locations endpoints working perfectly. GET /api/locations returns list of sales locations with seeded data (Agus Sales, Dewi Sales). POST /api/locations/ping as sales A1 with {lat: -6.20, lng: 106.85} successfully updates location and lastPing timestamp. Verified location update by fetching locations again - A1's (u3) lat/lng correctly updated to pinged values. POST /api/locations/ping without token correctly returns 401."
+
+  - task: "Export Reports - CSV and PDF generation"
+    implemented: true
+    working: true
+    file: "/app/backend/routes_extra.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ Export reports working perfectly. GET /api/reports/export?fmt=csv&scope=all as superadmin returns HTTP 200 with Content-Type text/csv, Content-Disposition attachment filename Laporan-AirOXLY-Semua.csv, and CSV body contains correct header row 'Tanggal,Pelanggan,Sales,Produk,Total,Bayar,Status' with 12 data rows. GET /api/reports/export?fmt=pdf&scope=all as superadmin returns HTTP 200 with Content-Type application/pdf and body starts with %PDF magic bytes. GET /api/reports/export?fmt=csv&scope=today as sales A1 returns 200 (sales can export own data). GET /api/reports/export without token correctly returns 401."
+
+  - task: "Reset Data - Admin reset endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/routes_extra.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ Reset data endpoint working correctly. POST /api/admin/reset {type:'invalid'} as superadmin correctly returns ok:false with detail 'Tipe reset tidak valid'. POST /api/admin/reset {type:'half'} as sales A1 correctly returns 403 (only superadmin allowed). POST /api/admin/reset {type:'half'} as superadmin returns {ok:true, type:'half'}. Verified after reset: GET /api/transactions returns empty list, GET /api/expenses empty, GET /api/warehouse/transfers empty, GET /api/locations empty. Master data preserved: GET /api/products returns 6 products (not empty), GET /api/customers returns 9 customers (not empty)."
+
 frontend:
   - task: "Login & Auth flow (JWT)"
     implemented: true
@@ -327,8 +363,8 @@ frontend:
 
 metadata:
   created_by: "testing_agent"
-  version: "1.2"
-  test_sequence: 3
+  version: "1.3"
+  test_sequence: 4
   run_ui: true
 
 test_plan:
@@ -344,3 +380,5 @@ agent_communication:
     message: "Backend verified. Now requesting FULL frontend UI testing. Base URL from frontend/.env REACT_APP_BACKEND_URL. Demo logins: superadmin/super123, adminA/admin123, A1/sales123, gudang/gudang123, produksi/prod123. Please test: (1) login each role & correct sidebar menus + route guards, (2) superadmin dashboard shows stats/chart/recent tx, (3) sales creates a transaction via POS modal (pick customer, add product qty, click 'Bayar lunas', submit) and it appears in list, (4) add a customer (barcode auto) and add a product as superadmin, (5) gudang transfers sparepart to produksi (stock updates), (6) superadmin 'Lihat sebagai user ini' impersonation shows amber banner and 'Kembali ke Super Admin' works, (7) logout returns to login. Report pass/fail per flow."
   - agent: "testing"
     message: "✅ FRONTEND TESTING COMPLETE - ALL MAJOR FLOWS WORKING. Tested all 7 requested flows: (1) Login & roles: ✅ superadmin shows all 13 menu items, sales shows only 5, logout works. (2) Dashboard: ✅ stat cards, weekly trend chart, top products, recent transactions all present. (3) Transaction POS: ✅ created transaction as sales, count increased 3→5, appears in list with 'lunas' status. (4) CRUD: ✅ added customer with auto barcode AOX-0008, added product Rp 7.500. (5) Warehouse: ✅ transferred 10 units, Gudang 130→120, Produksi 35→45. (6) Impersonation: ✅ banner appears correctly, shows impersonated user name/role. (7) Logout: ✅ returns to login. Minor issue: impersonation banner may persist after clicking 'Kembali ke Super Admin' (needs page refresh or timing adjustment). No console errors. All core functionality working perfectly. Ready for production."
+  - agent: "testing"
+    message: "✅ NEW ENDPOINTS TESTING COMPLETE - ALL 13 NEW TESTS PASSED (50 total tests, 0 failures). Tested NEW Air OXLY backend endpoints: (1) GPS LOCATIONS: ✅ GET /api/locations returns seeded sales locations (Agus Sales, Dewi Sales). ✅ POST /api/locations/ping as sales A1 with {lat:-6.20, lng:106.85} returns {ok:true}, verified location updated with correct lat/lng and recent lastPing. ✅ POST /api/locations/ping without token returns 401. (2) EXPORT REPORTS: ✅ GET /api/reports/export?fmt=csv&scope=all as superadmin returns HTTP 200, Content-Type text/csv, Content-Disposition attachment filename Laporan-AirOXLY-Semua.csv, CSV header 'Tanggal,Pelanggan,Sales,Produk,Total,Bayar,Status' with 12 data rows. ✅ GET /api/reports/export?fmt=pdf&scope=all as superadmin returns HTTP 200, Content-Type application/pdf, body starts with %PDF bytes. ✅ GET /api/reports/export?fmt=csv&scope=today as sales A1 returns 200 (sales can export own data). ✅ GET /api/reports/export without token returns 401. (3) RESET DATA: ✅ POST /api/admin/reset {type:'invalid'} as superadmin returns ok:false with detail 'Tipe reset tidak valid'. ✅ POST /api/admin/reset {type:'half'} as sales A1 returns 403 (only superadmin allowed). ✅ POST /api/admin/reset {type:'half'} as superadmin returns {ok:true, type:'half'}, verified transactions/expenses/transfers/locations all empty after reset, master data (products=6, customers=9) preserved. All NEW endpoints working perfectly."

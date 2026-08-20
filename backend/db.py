@@ -86,3 +86,22 @@ async def seed_if_empty():
             {"id": "w2", "name": "Cafe Kopi Senja", "coupon": "AOX-1290", "prize": "Voucher Rp 50.000"},
         ],
     })
+
+    now_iso = datetime.utcnow().isoformat()
+    await db.locations.insert_many([
+        {"id": "u3", "salesId": "u3", "name": "Agus Sales", "lat": -6.2088, "lng": 106.8456, "lastPing": now_iso, "status": "aktif"},
+        {"id": "u4", "salesId": "u4", "name": "Dewi Sales", "lat": -6.1751, "lng": 106.8650, "lastPing": now_iso, "status": "aktif"},
+    ])
+
+
+async def ensure_locations():
+    """Seed lokasi GPS jika koleksi kosong (untuk DB yang sudah ter-seed sebelumnya)."""
+    if await db.locations.count_documents({}) > 0:
+        return
+    if await db.users.count_documents({}) == 0:
+        return
+    now_iso = datetime.utcnow().isoformat()
+    await db.locations.insert_many([
+        {"id": "u3", "salesId": "u3", "name": "Agus Sales", "lat": -6.2088, "lng": 106.8456, "lastPing": now_iso, "status": "aktif"},
+        {"id": "u4", "salesId": "u4", "name": "Dewi Sales", "lat": -6.1751, "lng": 106.8650, "lastPing": now_iso, "status": "aktif"},
+    ])

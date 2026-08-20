@@ -576,6 +576,249 @@ def test_auth_required():
         log_test("Auth required test", False, f"Exception: {str(e)}")
 
 
+def test_gps_locations():
+    """Test GPS locations endpoints"""
+    if "sales_a1" not in tokens:
+        log_test("GPS locations test", False, "No sales_a1 token")
+        return False
+    
+    try:
+        headers = {"Authorization": f"Bearer {tokens['sales_a1']}"}
+        
+        # GET /api/locations (authenticated)
+        resp = requests.get(f"{BASE_URL}/locations", headers=headers, timeout=10)
+        
+        if resp.status_code == 200:
+            locations = resp.json()
+            log_test("GET /api/locations", True, f"Retrieved {len(locations)} locations")
+            
+            # Verify seeded sales locations exist (Agus Sales, Dewi Sales)
+            location_names = [loc.get("name") for loc in locations]
+            if "Agus Sales" in location_names or "Dewi Sales" in location_names:
+                log_test("GET /api/locations - seeded data", True, "Seeded sales locations found")
+            else:
+                log_test("GET /api/locations - seeded data", False, f"Expected seeded locations, got: {location_names}")
+        else:
+            log_test("GET /api/locations", False, f"Status {resp.status_code}: {resp.text}")
+            return False
+        
+        # POST /api/locations/ping as sales A1
+        ping_data = {"lat": -6.20, "lng": 106.85}
+        resp = requests.post(f"{BASE_URL}/locations/ping", json=ping_data, headers=headers, timeout=10)
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("ok") == True:
+                log_test("POST /api/locations/ping as sales", True, "Ping successful")
+                
+                # Verify location was updated
+                resp = requests.get(f"{BASE_URL}/locations", headers=headers, timeout=10)
+                if resp.status_code == 200:
+                    locations = resp.json()
+                    # Find A1's location (user id u3, name "Agus Sales")
+                    a1_location = next((loc for loc in locations if loc.get("id") == "u3"), None)
+                    
+                    if a1_location:
+                        if a1_location.get("lat") == -6.20 and a1_location.get("lng") == 106.85:
+                            # Check lastPing is recent (within last minute)
+                            from datetime import datetime, timedelta
+                            try:
+                                last_ping = datetime.fromisoformat(a1_location.get("lastPing", ""))
+                                now = datetime.utcnow()
+                                if (now - last_ping) < timedelta(minutes=1):
+                                    log_test("POST /api/locations/ping - location updated", True, 
+                                            f"A1 location updated to lat={a1_location['lat']}, lng={a1_location['lng']}, lastPing is recent")
+                                else:
+                                    log_test("POST /api/locations/ping - location updated", False, 
+                                            f"lastPing not recent: {a1_location.get('lastPing')}")
+                            except Exception as e:
+                                log_test("POST /api/locations/ping - location updated", False, f"Error parsing lastPing: {str(e)}")
+                        else:
+                            log_test("POST /api/locations/ping - location updated", False, 
+                                    f"Expected lat=-6.20, lng=106.85. Got lat={a1_location.get('lat')}, lng={a1_location.get('lng')}")
+                    else:
+                        log_test("POST /api/locations/ping - location updated", False, "A1 location (u3) not found after ping")
+            else:
+                log_test("POST /api/locations/ping as sales", False, f"Expected ok=true, got {data}")
+        else:
+            log_test("POST /api/locations/ping as sales", False, f"Status {resp.status_code}: {resp.text}")
+        
+        # POST /api/locations/ping without token (should return 401)
+        resp = requests.post(f"{BASE_URL}/locations/ping", json=ping_data, timeout=10)
+        
+        if resp.status_code == 401:
+            log_test("POST /api/locations/ping without token (should fail)", True, "Correctly returned 401")
+        else:
+            log_test("POST /api/locations/ping without token (should fail)", False, f"Expected 401, got {resp.status_code}")
+    
+    except Exception as e:
+        log_test("GPS locations test", False, f"Exception: {str(e)}")
+
+
+def test_export_reports():
+    """Test export reports endpoints - RUN BEFORE RESET"""
+    if "superadmin" not in tokens or "sales_a1" not in tokens:
+        log_test("Export reports test", False, "Missing required tokens")
+        return False
+    
+    try:
+        headers_admin = {"Authorization": f"Bearer {tokens['superadmin']}"}
+        headers_sales = {"Authorization": f"Bearer {tokens['sales_a1']}"}
+        
+        # GET /api/reports/export?fmt=csv&scope=all as superadmin
+        resp = requests.get(f"{BASE_URL}/reports/export?fmt=csv&scope=all", headers=headers_admin, timeout=10)
+        
+        if resp.status_code == 200:
+            # Check Content-Type
+            content_type = resp.headers.get("Content-Type", "")
+            if "text/csv" in content_type:
+                log_test("GET /api/reports/export CSV - Content-Type", True, f"Content-Type: {content_type}")
+            else:
+                log_test("GET /api/reports/export CSV - Content-Type", False, f"Expected text/csv, got {content_type}")
+            
+            # Check Content-Disposition
+            content_disp = resp.headers.get("Content-Disposition", "")
+            if "attachment" in content_disp and "Laporan-AirOXLY" in content_disp and ".csv" in content_disp:
+                log_test("GET /api/reports/export CSV - Content-Disposition", True, f"Content-Disposition: {content_disp}")
+            else:
+                log_test("GET /api/reports/export CSV - Content-Disposition", False, f"Invalid Content-Disposition: {content_disp}")
+            
+            # Check CSV content
+            csv_content = resp.text
+            if "Tanggal,Pelanggan,Sales,Produk,Total,Bayar,Status" in csv_content:
+                # Check if there's at least one data row (not just header)
+                lines = csv_content.strip().split("\n")
+                if len(lines) >= 2:  # Header + at least one data row
+                    log_test("GET /api/reports/export CSV - content", True, f"CSV has header and {len(lines)-1} data rows")
+                else:
+                    log_test("GET /api/reports/export CSV - content", False, f"CSV has only header, no data rows")
+            else:
+                log_test("GET /api/reports/export CSV - content", False, "CSV header row not found or incorrect")
+        else:
+            log_test("GET /api/reports/export CSV", False, f"Status {resp.status_code}: {resp.text}")
+        
+        # GET /api/reports/export?fmt=pdf&scope=all as superadmin
+        resp = requests.get(f"{BASE_URL}/reports/export?fmt=pdf&scope=all", headers=headers_admin, timeout=10)
+        
+        if resp.status_code == 200:
+            # Check Content-Type
+            content_type = resp.headers.get("Content-Type", "")
+            if "application/pdf" in content_type:
+                log_test("GET /api/reports/export PDF - Content-Type", True, f"Content-Type: {content_type}")
+            else:
+                log_test("GET /api/reports/export PDF - Content-Type", False, f"Expected application/pdf, got {content_type}")
+            
+            # Check PDF magic bytes
+            pdf_content = resp.content
+            if pdf_content.startswith(b"%PDF"):
+                log_test("GET /api/reports/export PDF - content", True, "PDF starts with %PDF magic bytes")
+            else:
+                log_test("GET /api/reports/export PDF - content", False, f"PDF does not start with %PDF, starts with: {pdf_content[:10]}")
+        else:
+            log_test("GET /api/reports/export PDF", False, f"Status {resp.status_code}: {resp.text}")
+        
+        # GET /api/reports/export?fmt=csv&scope=today as sales A1 (should work - sales can export own data)
+        resp = requests.get(f"{BASE_URL}/reports/export?fmt=csv&scope=today", headers=headers_sales, timeout=10)
+        
+        if resp.status_code == 200:
+            log_test("GET /api/reports/export as sales (scope=today)", True, "Sales can export own data")
+        else:
+            log_test("GET /api/reports/export as sales (scope=today)", False, f"Status {resp.status_code}: {resp.text}")
+        
+        # GET /api/reports/export without token (should return 401)
+        resp = requests.get(f"{BASE_URL}/reports/export?fmt=csv&scope=all", timeout=10)
+        
+        if resp.status_code == 401:
+            log_test("GET /api/reports/export without token (should fail)", True, "Correctly returned 401")
+        else:
+            log_test("GET /api/reports/export without token (should fail)", False, f"Expected 401, got {resp.status_code}")
+    
+    except Exception as e:
+        log_test("Export reports test", False, f"Exception: {str(e)}")
+
+
+def test_reset_data():
+    """Test reset data endpoint - RUN LAST (deletes data)"""
+    if "superadmin" not in tokens or "sales_a1" not in tokens:
+        log_test("Reset data test", False, "Missing required tokens")
+        return False
+    
+    try:
+        headers_admin = {"Authorization": f"Bearer {tokens['superadmin']}"}
+        headers_sales = {"Authorization": f"Bearer {tokens['sales_a1']}"}
+        
+        # POST /api/admin/reset with invalid type (should return ok:false)
+        resp = requests.post(f"{BASE_URL}/admin/reset", json={"type": "invalid"}, headers=headers_admin, timeout=10)
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("ok") == False:
+                log_test("POST /api/admin/reset with invalid type", True, f"Correctly returned ok=false: {data.get('detail')}")
+            else:
+                log_test("POST /api/admin/reset with invalid type", False, f"Expected ok=false, got {data}")
+        else:
+            log_test("POST /api/admin/reset with invalid type", False, f"Status {resp.status_code}: {resp.text}")
+        
+        # POST /api/admin/reset as sales (should return 403)
+        resp = requests.post(f"{BASE_URL}/admin/reset", json={"type": "half"}, headers=headers_sales, timeout=10)
+        
+        if resp.status_code == 403:
+            log_test("POST /api/admin/reset as sales (should fail)", True, "Correctly returned 403 - only superadmin allowed")
+        else:
+            log_test("POST /api/admin/reset as sales (should fail)", False, f"Expected 403, got {resp.status_code}")
+        
+        # POST /api/admin/reset with type="half" as superadmin
+        resp = requests.post(f"{BASE_URL}/admin/reset", json={"type": "half"}, headers=headers_admin, timeout=10)
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("ok") == True and data.get("type") == "half":
+                log_test("POST /api/admin/reset type=half", True, "Reset successful")
+                
+                # Verify transactional data is deleted
+                resp_tx = requests.get(f"{BASE_URL}/transactions", headers=headers_admin, timeout=10)
+                resp_exp = requests.get(f"{BASE_URL}/expenses", headers=headers_admin, timeout=10)
+                resp_trans = requests.get(f"{BASE_URL}/warehouse/transfers", headers=headers_admin, timeout=10)
+                resp_loc = requests.get(f"{BASE_URL}/locations", headers=headers_admin, timeout=10)
+                
+                tx_empty = resp_tx.status_code == 200 and len(resp_tx.json()) == 0
+                exp_empty = resp_exp.status_code == 200 and len(resp_exp.json()) == 0
+                trans_empty = resp_trans.status_code == 200 and len(resp_trans.json()) == 0
+                loc_empty = resp_loc.status_code == 200 and len(resp_loc.json()) == 0
+                
+                if tx_empty and exp_empty and trans_empty and loc_empty:
+                    log_test("POST /api/admin/reset - transactional data deleted", True, 
+                            "Transactions, expenses, transfers, locations all empty")
+                else:
+                    log_test("POST /api/admin/reset - transactional data deleted", False, 
+                            f"Expected empty collections. tx={len(resp_tx.json()) if resp_tx.status_code==200 else 'error'}, "
+                            f"exp={len(resp_exp.json()) if resp_exp.status_code==200 else 'error'}, "
+                            f"trans={len(resp_trans.json()) if resp_trans.status_code==200 else 'error'}, "
+                            f"loc={len(resp_loc.json()) if resp_loc.status_code==200 else 'error'}")
+                
+                # Verify master data is preserved
+                resp_prod = requests.get(f"{BASE_URL}/products", headers=headers_admin, timeout=10)
+                resp_cust = requests.get(f"{BASE_URL}/customers", headers=headers_admin, timeout=10)
+                
+                prod_not_empty = resp_prod.status_code == 200 and len(resp_prod.json()) > 0
+                cust_not_empty = resp_cust.status_code == 200 and len(resp_cust.json()) > 0
+                
+                if prod_not_empty and cust_not_empty:
+                    log_test("POST /api/admin/reset - master data preserved", True, 
+                            f"Products ({len(resp_prod.json())}) and customers ({len(resp_cust.json())}) preserved")
+                else:
+                    log_test("POST /api/admin/reset - master data preserved", False, 
+                            f"Expected non-empty master data. products={len(resp_prod.json()) if resp_prod.status_code==200 else 'error'}, "
+                            f"customers={len(resp_cust.json()) if resp_cust.status_code==200 else 'error'}")
+            else:
+                log_test("POST /api/admin/reset type=half", False, f"Expected ok=true, type=half. Got {data}")
+        else:
+            log_test("POST /api/admin/reset type=half", False, f"Status {resp.status_code}: {resp.text}")
+    
+    except Exception as e:
+        log_test("Reset data test", False, f"Exception: {str(e)}")
+
+
 def print_summary():
     """Print test summary"""
     print("\n" + "="*80)
@@ -652,6 +895,18 @@ def main():
     # 11. Auth required tests
     print("\n--- AUTH REQUIRED TESTS ---")
     test_auth_required()
+    
+    # 12. GPS Locations tests (NEW)
+    print("\n--- GPS LOCATIONS TESTS (NEW) ---")
+    test_gps_locations()
+    
+    # 13. Export Reports tests (NEW - run BEFORE reset)
+    print("\n--- EXPORT REPORTS TESTS (NEW) ---")
+    test_export_reports()
+    
+    # 14. Reset Data tests (NEW - run LAST since it deletes data)
+    print("\n--- RESET DATA TESTS (NEW - RUN LAST) ---")
+    test_reset_data()
     
     # Print summary
     print_summary()

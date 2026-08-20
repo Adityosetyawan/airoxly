@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { NavLink, useNavigate, Outlet } from "react-router-dom";
 import {
   Droplet, LayoutDashboard, Package, Users, ShoppingCart, BarChart3,
@@ -8,6 +8,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { ROLE_LABELS } from "../mock/mockData";
 import { Button } from "./ui/button";
+import api from "../api";
 
 const NAV = {
   superadmin: [
@@ -62,6 +63,31 @@ const Layout = () => {
   const items = NAV[user?.role] || [];
 
   const handleLogout = () => { logout(); navigate("/login"); };
+
+  // Ping GPS untuk peran sales (lokasi asli via browser, jam kerja 08:00-17:00)
+  useEffect(() => {
+    if (user?.role !== "sales") return;
+    const withinWorkingHours = () => {
+      const h = new Date().getHours();
+      return h >= 8 && h < 17;
+    };
+    const doPing = () => {
+      if (!withinWorkingHours()) return;
+      const send = (lat, lng) => api.post("/locations/ping", { lat, lng }).catch(() => {});
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => send(pos.coords.latitude, pos.coords.longitude),
+          () => send(-6.2088 + (Math.random() - 0.5) * 0.03, 106.8456 + (Math.random() - 0.5) * 0.03),
+          { enableHighAccuracy: true, timeout: 8000 }
+        );
+      } else {
+        send(-6.2088 + (Math.random() - 0.5) * 0.03, 106.8456 + (Math.random() - 0.5) * 0.03);
+      }
+    };
+    doPing();
+    const id = setInterval(doPing, 120000); // tiap 120 detik
+    return () => clearInterval(id);
+  }, [user?.role]);
 
   const initials = (user?.name || "?").split(" ").map((s) => s[0]).slice(0, 2).join("");
 

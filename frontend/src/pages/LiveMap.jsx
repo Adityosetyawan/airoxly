@@ -1,45 +1,101 @@
-import React from "react";
-import { MapPin, Navigation, Clock } from "lucide-react";
-import { GPS_POINTS } from "../mock/mockData";
+import React, { useEffect, useRef, useState } from "react";
+import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import { MapPin, Navigation, Clock, RefreshCw } from "lucide-react";
 import { PageHeader, Panel, Badge } from "../components/common";
+import { Button } from "../components/ui/button";
+import api from "../api";
+
+const salesIcon = (name) =>
+  L.divIcon({
+    className: "aox-marker",
+    html: `<div style="position:relative;transform:translate(-50%,-100%)">
+      <div style="width:38px;height:38px;border-radius:50%;background:#10B981;border:4px solid #fff;box-shadow:0 4px 10px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center">
+        <svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='#fff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polygon points='3 11 22 2 13 21 11 13 3 11'/></svg>
+      </div>
+      <div style="position:absolute;top:40px;left:50%;transform:translateX(-50%);white-space:nowrap;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:1px 7px;font-size:11px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.1)">${name}</div>
+    </div>`,
+    iconSize: [38, 38],
+    iconAnchor: [0, 0],
+  });
+
+const FitBounds = ({ points }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (points.length > 0) {
+      const bounds = L.latLngBounds(points.map((p) => [p.lat, p.lng]));
+      map.fitBounds(bounds.pad(0.4), { maxZoom: 14 });
+    }
+  }, [points, map]);
+  return null;
+};
 
 const LiveMap = () => {
+  const [points, setPoints] = useState([]);
+  const [updatedAt, setUpdatedAt] = useState(null);
+  const timer = useRef(null);
+
+  const load = async () => {
+    try {
+      const { data } = await api.get("/locations");
+      setPoints(data);
+      setUpdatedAt(new Date());
+    } catch (e) { /* ignore */ }
+  };
+
+  useEffect(() => {
+    load();
+    timer.current = setInterval(load, 15000); // auto-refresh 15 detik
+    return () => clearInterval(timer.current);
+  }, []);
+
+  const center = points[0] ? [points[0].lat, points[0].lng] : [-6.2088, 106.8456];
+
+  const sinceMin = (iso) => {
+    try {
+      const diff = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+      return diff <= 0 ? "baru saja" : `${diff} menit lalu`;
+    } catch { return "-"; }
+  };
+
   return (
     <div>
-      <PageHeader title="Peta Live" subtitle="Lokasi sales real-time (ping tiap 120 detik)" icon={MapPin} />
+      <PageHeader title="Peta Live" subtitle="Lokasi sales real-time (auto-refresh 15 detik)" icon={MapPin}
+        action={<Button variant="outline" onClick={load}><RefreshCw className="w-4 h-4 mr-1" /> Segarkan</Button>} />
       <div className="grid lg:grid-cols-3 gap-4">
         <Panel className="lg:col-span-2 p-0 overflow-hidden">
-          <div className="relative w-full h-[460px] bg-emerald-50"
-            style={{ backgroundImage: "linear-gradient(rgba(16,185,129,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(16,185,129,0.08) 1px, transparent 1px)", backgroundSize: "40px 40px" }}>
-            {/* fake roads */}
-            <div className="absolute left-0 right-0 top-1/2 h-3 bg-white/70 -translate-y-1/2" />
-            <div className="absolute top-0 bottom-0 left-1/3 w-3 bg-white/70" />
-            <div className="absolute top-0 bottom-0 left-2/3 w-3 bg-white/70" />
-            {GPS_POINTS.map((g) => (
-              <div key={g.id} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ top: `${g.top}%`, left: `${g.left}%` }}>
-                <span className="absolute inset-0 rounded-full bg-emerald-400/40 animate-ping" style={{ width: 40, height: 40, left: -20, top: -20 }} />
-                <div className="relative w-10 h-10 rounded-full bg-emerald-500 border-4 border-white shadow-lg flex items-center justify-center">
-                  <Navigation className="w-4 h-4 text-white" />
-                </div>
-                <div className="absolute top-11 left-1/2 -translate-x-1/2 whitespace-nowrap bg-card border border-border rounded-lg px-2 py-0.5 text-xs font-semibold shadow-sm">{g.name}</div>
-              </div>
+          <MapContainer center={center} zoom={12} style={{ height: 480, width: "100%", borderRadius: 16 }} scrollWheelZoom>
+            <TileLayer
+              attribution='&copy; OpenStreetMap'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            {points.map((p) => (
+              <Marker key={p.id} position={[p.lat, p.lng]} icon={salesIcon(p.name)}>
+                <Popup>
+                  <b>{p.name}</b><br />Ping: {sinceMin(p.lastPing)}<br />
+                  {p.lat.toFixed(4)}, {p.lng.toFixed(4)}
+                </Popup>
+              </Marker>
             ))}
-          </div>
+            <FitBounds points={points} />
+          </MapContainer>
         </Panel>
         <Panel title="Sales Aktif">
           <div className="space-y-3">
-            {GPS_POINTS.map((g) => (
+            {points.map((g) => (
               <div key={g.id} className="flex items-center gap-3 bg-secondary/50 rounded-xl p-3">
                 <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center"><Navigation className="w-5 h-5" /></div>
                 <div className="flex-1">
                   <p className="font-semibold text-sm">{g.name}</p>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" /> {g.lastPing}</p>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" /> {sinceMin(g.lastPing)}</p>
                 </div>
                 <Badge tone="emerald">{g.status}</Badge>
               </div>
             ))}
+            {points.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">Belum ada sales yang mengirim lokasi.</p>}
           </div>
-          <p className="text-xs text-muted-foreground mt-4">Catatan: peta ini adalah visual mock. Integrasi peta asli (Leaflet/Google Maps) dapat ditambahkan.</p>
+          {updatedAt && <p className="text-xs text-muted-foreground mt-4">Diperbarui: {updatedAt.toLocaleTimeString("id-ID")}</p>}
         </Panel>
       </div>
     </div>

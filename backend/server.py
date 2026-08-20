@@ -2,15 +2,17 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 import logging
 
-from db import db, seed_if_empty
+from db import db, seed_if_empty, ensure_locations
 import auth as auth_mod
 from routes_core import router as core_router
 from routes_ops import router as ops_router
+from routes_extra import router as extra_router
 
 app = FastAPI(title="Air OXLY API")
 
 app.include_router(core_router)
 app.include_router(ops_router)
+app.include_router(extra_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,6 +35,7 @@ async def root():
 async def on_startup():
     auth_mod.set_db(db)
     await seed_if_empty()
+    await ensure_locations()
     logger.info("Air OXLY backend siap & data ter-seed.")
 
 

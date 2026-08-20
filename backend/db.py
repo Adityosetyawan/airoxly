@@ -105,3 +105,32 @@ async def ensure_locations():
         {"id": "u3", "salesId": "u3", "name": "Agus Sales", "lat": -6.2088, "lng": 106.8456, "lastPing": now_iso, "status": "aktif"},
         {"id": "u4", "salesId": "u4", "name": "Dewi Sales", "lat": -6.1751, "lng": 106.8650, "lastPing": now_iso, "status": "aktif"},
     ])
+
+
+async def ensure_history():
+    """Seed jejak rute demo (ping tiap 120 detik, 08:00-17:00) jika kosong."""
+    import random
+    if await db.location_history.count_documents({}) > 0:
+        return
+    if await db.users.count_documents({}) == 0:
+        return
+    today = datetime.utcnow().date()
+    bases = {
+        "u3": ("Agus Sales", -6.2088, 106.8456),
+        "u4": ("Dewi Sales", -6.1751, 106.8650),
+    }
+    docs = []
+    for sid, (name, blat, blng) in bases.items():
+        lat, lng = blat, blng
+        t = datetime(today.year, today.month, today.day, 8, 0, 0)
+        end = datetime(today.year, today.month, today.day, 17, 0, 0)
+        # arah dominan agar rute terlihat seperti perjalanan
+        drift_lat = random.uniform(-0.0006, 0.0006)
+        drift_lng = random.uniform(-0.0006, 0.0006)
+        while t <= end:
+            lat += drift_lat + random.uniform(-0.0009, 0.0009)
+            lng += drift_lng + random.uniform(-0.0009, 0.0009)
+            docs.append({"salesId": sid, "name": name, "lat": round(lat, 6), "lng": round(lng, 6), "ts": t.isoformat()})
+            t += timedelta(seconds=120)
+    if docs:
+        await db.location_history.insert_many(docs)

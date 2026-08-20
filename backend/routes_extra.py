@@ -14,18 +14,43 @@ router = APIRouter(prefix="/api")
 # ---------- GPS LOCATIONS ----------
 @router.post("/locations/ping")
 async def ping(body: PingReq, user=Depends(get_current_user)):
+    ts = datetime.utcnow().isoformat()
     doc = {
         "id": user["id"], "salesId": user["id"], "name": user["name"],
-        "lat": body.lat, "lng": body.lng, "lastPing": datetime.utcnow().isoformat(),
+        "lat": body.lat, "lng": body.lng, "lastPing": ts,
         "status": "aktif",
     }
     await db.locations.update_one({"id": user["id"]}, {"$set": doc}, upsert=True)
+    # simpan ke riwayat lokasi (jejak rute)
+    await db.location_history.insert_one({
+        "salesId": user["id"], "name": user["name"],
+        "lat": body.lat, "lng": body.lng, "ts": ts,
+    })
     return {"ok": True}
 
 
 @router.get("/locations")
 async def list_locations(_=Depends(get_current_user)):
     return await db.locations.find({}, {"_id": 0}).to_list(500)
+
+
+@router.get("/locations/history")
+async def location_history(salesId: str = Query(None), date: str = Query(None), user=Depends(get_current_user)):
+    day = date or datetime.utcnow().date().isoformat()
+    q = {}
+    if user["role"] == "sales":
+        q["salesId"] = user["id"]
+    elif salesId:
+        q["salesId"] = salesId
+    rows = await db.location_history.find(q, {"_id": 0}).to_list(50000)
+    rows = [r for r in rows if str(r.get("ts", "")).startswith(day)]
+    trails = {}
+    for r in rows:
+        t = trails.setdefault(r["salesId"], {"salesId": r["salesId"], "name": r["name"], "points": []})
+        t["points"].append({"lat": r["lat"], "lng": r["lng"], "ts": r["ts"]})
+    for t in trails.values():
+        t["points"].sort(key=lambda p: p["ts"])
+    return list(trails.values())
 
 
 # ---------- RESET DATA ----------
@@ -38,6 +63,7 @@ async def reset_data(body: ResetReq, _=Depends(require_roles("superadmin"))):
     await db.expenses.delete_many({})
     await db.transfers.delete_many({})
     await db.locations.delete_many({})
+    await db.location_history.delete_many({})
     if body.type == "all":
         # All: hapus pelanggan juga (master user & produk tetap)
         await db.customers.delete_many({})

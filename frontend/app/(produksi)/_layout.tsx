@@ -55,6 +55,13 @@ export default function ProduksiLayout() {
         }}
       />
       <Tabs.Screen
+        name="barang-jadi"
+        options={{
+          title: "Barang Jadi",
+          tabBarIcon: ({ color, size }) => <Ionicons name="hammer-outline" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: "Profil",

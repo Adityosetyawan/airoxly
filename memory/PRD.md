@@ -149,3 +149,30 @@ Aplikasi mobile (Expo/React Native) untuk penjualan air minum galon dengan hirar
 - Kolom galon dipisah: Prod Gln / Gln Kran / Gln Polos / Gln Gt
 - Sparepart tidak lagi ditampilkan agregat — sekarang breakdown chip per item ("Seal 2, Mur 1, Karet Kran 3, ...")
 - Chip warna brand tertiary di bawah row galon
+
+## Inventory: Bahan & Barang Jadi (Aug 2026)
+
+### Collections & Endpoints
+- `inventory_items` — Superadmin CRUD (fields: id, name, category, unit, order)
+- `bahan_incoming` — Gudang input material masuk
+- `bahan_transfers` — Gudang → Produksi
+- `finished_production` — Produksi produce barang jadi
+- `finished_transfers` — Produksi → Gudang
+- Endpoints:
+  - `GET/POST/PUT/DELETE /api/inventory/items`
+  - `POST /api/inventory/bahan/incoming` + `GET .../incoming`
+  - `POST /api/inventory/bahan/transfer` + `GET .../transfers`
+  - `POST /api/inventory/finished/produce` + `GET .../production`
+  - `POST /api/inventory/finished/transfer` + `GET .../transfers`
+  - `GET /api/inventory/stock?category=bahan|barang_jadi`
+
+### Stock Formula
+- **Bahan Gudang** = sum(bahan_incoming.qty) − sum(bahan_transfers.qty)
+- **Bahan Produksi** = sum(bahan_transfers.qty)
+- **Barang Jadi Produksi** = sum(finished_production.qty) − sum(finished_transfers.qty)
+- **Barang Jadi Gudang** = sum(finished_transfers.qty) − sum(transactions.items.qty where product name matches, non-draft)
+
+### UI
+- SuperAdmin: `/(superadmin)/inventory` → tab Bahan/Barang Jadi, CRUD dengan nama + satuan
+- Gudang: tab baru "Bahan" (di sebelah "Stok") → Barang Masuk, Kirim ke Produksi, Kotak Pantau + Riwayat
+- Produksi: tab baru "Barang Jadi" (di sebelah "Stok") → Catat Produksi, Kirim ke Gudang, Kotak Pantau + Riwayat

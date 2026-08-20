@@ -459,6 +459,62 @@ export const api = {
   deleteSparepartTransfer: (id: string) =>
     req(`/warehouse/transfer/${id}`, { method: "DELETE" }),
 
+  // ═══ INVENTORY: Bahan & Barang Jadi ═══
+  listInventoryItems: (category?: "bahan" | "barang_jadi") =>
+    req<{ id: string; name: string; category: string; unit: string; order: number }[]>(
+      `/inventory/items${category ? `?category=${category}` : ""}`,
+    ),
+  createInventoryItem: (body: { name: string; category: "bahan" | "barang_jadi"; unit?: string; order?: number }) =>
+    req<any>("/inventory/items", { method: "POST", body: JSON.stringify(body) }),
+  updateInventoryItem: (id: string, body: { name: string; category: "bahan" | "barang_jadi"; unit?: string; order?: number }) =>
+    req<any>(`/inventory/items/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  deleteInventoryItem: (id: string) =>
+    req(`/inventory/items/${id}`, { method: "DELETE" }),
+
+  getInventoryStock: (category?: "bahan" | "barang_jadi") =>
+    req<{
+      bahan: { name: string; unit: string; gudang: number; produksi: number }[];
+      barang_jadi: { name: string; unit: string; produksi: number; gudang: number; sold: number; transferred_in: number }[];
+    }>(`/inventory/stock${category ? `?category=${category}` : ""}`),
+
+  bahanIncoming: (body: { date: string; item_name: string; qty: number; notes?: string }) =>
+    req<any>("/inventory/bahan/incoming", { method: "POST", body: JSON.stringify(body) }),
+  listBahanIncoming: (params: { date_from?: string; date_to?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.date_from) q.set("date_from", params.date_from);
+    if (params.date_to) q.set("date_to", params.date_to);
+    const s = q.toString();
+    return req<any[]>(`/inventory/bahan/incoming${s ? "?" + s : ""}`);
+  },
+  bahanTransfer: (body: { date: string; item_name: string; qty: number; notes?: string }) =>
+    req<any>("/inventory/bahan/transfer", { method: "POST", body: JSON.stringify(body) }),
+  listBahanTransfers: (params: { date_from?: string; date_to?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.date_from) q.set("date_from", params.date_from);
+    if (params.date_to) q.set("date_to", params.date_to);
+    const s = q.toString();
+    return req<any[]>(`/inventory/bahan/transfers${s ? "?" + s : ""}`);
+  },
+
+  finishedProduce: (body: { date: string; item_name: string; qty: number; notes?: string }) =>
+    req<any>("/inventory/finished/produce", { method: "POST", body: JSON.stringify(body) }),
+  listFinishedProduction: (params: { date_from?: string; date_to?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.date_from) q.set("date_from", params.date_from);
+    if (params.date_to) q.set("date_to", params.date_to);
+    const s = q.toString();
+    return req<any[]>(`/inventory/finished/production${s ? "?" + s : ""}`);
+  },
+  finishedTransfer: (body: { date: string; item_name: string; qty: number; notes?: string }) =>
+    req<any>("/inventory/finished/transfer", { method: "POST", body: JSON.stringify(body) }),
+  listFinishedTransfers: (params: { date_from?: string; date_to?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.date_from) q.set("date_from", params.date_from);
+    if (params.date_to) q.set("date_to", params.date_to);
+    const s = q.toString();
+    return req<any[]>(`/inventory/finished/transfers${s ? "?" + s : ""}`);
+  },
+
   // Validate bawa-sisa vs transactions
   validateSalesBawaSisa: (sales_id: string, date: string) =>
     req<{ bawa_total: number; sisa_total: number; terjual_by_gudang: number; terjual_by_transaksi: number; match: boolean; diff: number }>(

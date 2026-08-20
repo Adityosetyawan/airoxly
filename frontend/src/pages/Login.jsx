@@ -16,19 +16,17 @@ const Login = () => {
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
-      const res = login(username.trim(), password);
-      setLoading(false);
-      if (res.ok) {
-        toast({ title: `Selamat datang, ${res.user.name}!`, description: "Berhasil masuk ke Air OXLY" });
-        navigate("/");
-      } else {
-        toast({ title: "Gagal masuk", description: res.error, variant: "destructive" });
-      }
-    }, 500);
+    const res = await login(username.trim(), password);
+    setLoading(false);
+    if (res.ok) {
+      toast({ title: `Selamat datang, ${res.user.name}!`, description: "Berhasil masuk ke Air OXLY" });
+      navigate("/");
+    } else {
+      toast({ title: "Gagal masuk", description: res.error, variant: "destructive" });
+    }
   };
 
   const quickFill = (u, p) => { setUsername(u); setPassword(p); };

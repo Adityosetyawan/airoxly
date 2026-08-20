@@ -1,6 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Warehouse, Send, ArrowRight } from "lucide-react";
-import { SPAREPARTS, TRANSFERS } from "../mock/mockData";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader, Panel, Badge } from "../components/common";
 import { Button } from "../components/ui/button";
@@ -10,6 +9,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "../components/ui/dialog";
 import { useToast } from "../hooks/use-toast";
+import api from "../api";
 
 const PRESETS = [5, 10, 25, 50, 100];
 
@@ -17,30 +17,38 @@ const WarehousePage = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const readOnly = user?.role === "produksi";
-  const [parts, setParts] = useState(SPAREPARTS);
-  const [transfers, setTransfers] = useState(TRANSFERS);
+  const [parts, setParts] = useState([]);
+  const [transfers, setTransfers] = useState([]);
   const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState(SPAREPARTS[0].id);
+  const [selected, setSelected] = useState("");
   const [qty, setQty] = useState(0);
   const [note, setNote] = useState("");
 
+  const load = async () => {
+    const [sp, tr] = await Promise.all([api.get("/spareparts"), api.get("/warehouse/transfers")]);
+    setParts(sp.data); setTransfers(tr.data);
+    if (sp.data[0] && !selected) setSelected(sp.data[0].id);
+  };
+  useEffect(() => { load(); }, []);
+
   const part = parts.find((p) => p.id === selected);
 
-  const doTransfer = () => {
-    if (qty <= 0 || qty > part.gudang) {
-      toast({ title: "Jumlah tidak valid", description: `Stok gudang tersedia: ${part.gudang}`, variant: "destructive" });
+  const doTransfer = async () => {
+    if (!part || qty <= 0 || qty > part.gudang) {
+      toast({ title: "Jumlah tidak valid", description: `Stok gudang tersedia: ${part?.gudang ?? 0}`, variant: "destructive" });
       return;
     }
-    setParts(parts.map((p) => p.id === selected ? { ...p, gudang: p.gudang - qty, produksi: p.produksi + qty } : p));
-    setTransfers([{ id: `tr${Date.now()}`, part: part.name, qty, note, by: user?.name, date: new Date().toISOString() }, ...transfers]);
-    toast({ title: "Transfer berhasil", description: `${qty}× ${part.name} dikirim ke Produksi` });
-    setQty(0); setNote(""); setOpen(false);
+    try {
+      await api.post("/warehouse/transfer", { partId: selected, qty, note });
+      toast({ title: "Transfer berhasil", description: `${qty}× ${part.name} dikirim ke Produksi` });
+      setQty(0); setNote(""); setOpen(false); load();
+    } catch (e) { toast({ title: "Gagal", description: e?.response?.data?.detail, variant: "destructive" }); }
   };
 
   return (
     <div>
       <PageHeader title={readOnly ? "Stok Produksi" : "Stok Gudang"} subtitle={readOnly ? "Pantau kiriman sparepart dari gudang" : "Kelola stok & kirim ke produksi"} icon={Warehouse}
-        action={!readOnly && (
+        action={!readOnly && part && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild><Button className="bg-emerald-500 hover:bg-emerald-600"><Send className="w-4 h-4 mr-1" /> Kirim Sparepart ke Produksi</Button></DialogTrigger>
             <DialogContent className="max-w-md">
@@ -94,6 +102,7 @@ const WarehousePage = () => {
               <Badge tone="emerald">Gudang → Produksi</Badge>
             </div>
           ))}
+          {transfers.length === 0 && <p className="text-sm text-muted-foreground py-6 text-center">Belum ada transfer.</p>}
         </div>
       </Panel>
     </div>

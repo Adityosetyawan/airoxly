@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { UserCog, Plus, ArrowRightLeft } from "lucide-react";
-import { DEMO_USERS, ROLE_LABELS } from "../mock/mockData";
+import { ROLE_LABELS } from "../mock/mockData";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { PageHeader, Panel, Badge } from "../components/common";
@@ -14,6 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "../components/ui/select";
 import { useToast } from "../hooks/use-toast";
+import api from "../api";
 
 const roleTone = { superadmin: "violet", admin: "blue", sales: "emerald", gudang: "amber", produksi: "gray" };
 
@@ -21,21 +22,26 @@ const Users = () => {
   const { user, impersonate } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [users, setUsers] = useState(DEMO_USERS);
+  const [users, setUsers] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", username: "", role: "sales", area: "Area A" });
 
-  const add = () => {
+  const load = async () => { const { data } = await api.get("/users"); setUsers(data); };
+  useEffect(() => { load(); }, []);
+
+  const add = async () => {
     if (!form.name || !form.username) return;
-    setUsers([...users, { id: `u${Date.now()}`, ...form, password: "123456" }]);
-    toast({ title: "User dibuat", description: `${form.name} (${ROLE_LABELS[form.role]})` });
-    setForm({ name: "", username: "", role: "sales", area: "Area A" }); setOpen(false);
+    try {
+      await api.post("/users", { ...form, password: "123456" });
+      toast({ title: "User dibuat", description: `${form.name} (${ROLE_LABELS[form.role]}) · password: 123456` });
+      setForm({ name: "", username: "", role: "sales", area: "Area A" }); setOpen(false); load();
+    } catch (e) { toast({ title: "Gagal", description: e?.response?.data?.detail, variant: "destructive" }); }
   };
 
-  const doImpersonate = (u) => {
-    impersonate(u);
-    toast({ title: "Impersonation aktif", description: `Melihat sebagai ${u.name}` });
-    navigate("/");
+  const doImpersonate = async (u) => {
+    const res = await impersonate(u);
+    if (res.ok) { toast({ title: "Impersonation aktif", description: `Melihat sebagai ${u.name}` }); navigate("/"); }
+    else toast({ title: "Gagal", description: res.error, variant: "destructive" });
   };
 
   return (

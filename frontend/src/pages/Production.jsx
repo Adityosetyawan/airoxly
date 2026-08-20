@@ -1,7 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Factory, Plus, Droplet } from "lucide-react";
-import { SPAREPARTS, TRANSFERS, rupiah } from "../mock/mockData";
-import { useAuth } from "../context/AuthContext";
 import { PageHeader, Panel, StatCard, Badge } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -10,13 +8,21 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "../components/ui/dialog";
 import { useToast } from "../hooks/use-toast";
+import api from "../api";
 
 const Production = () => {
   const { toast } = useToast();
-  const [parts, setParts] = useState(SPAREPARTS);
+  const [parts, setParts] = useState([]);
+  const [transfers, setTransfers] = useState([]);
   const [produced, setProduced] = useState(0);
   const [open, setOpen] = useState(false);
   const [qty, setQty] = useState(0);
+
+  const load = async () => {
+    const [sp, tr] = await Promise.all([api.get("/spareparts"), api.get("/warehouse/transfers")]);
+    setParts(sp.data); setTransfers(tr.data);
+  };
+  useEffect(() => { load(); }, []);
 
   const galonPart = parts.find((p) => p.name === "Galon Polos");
 
@@ -26,7 +32,7 @@ const Production = () => {
       toast({ title: "Stok galon kurang", description: `Tersedia ${galonPart.produksi} galon di produksi`, variant: "destructive" });
       return;
     }
-    setParts(parts.map((p) => p.name === "Galon Polos" ? { ...p, produksi: p.produksi - qty } : p));
+    // catatan produksi bersifat lokal (mock) - pengurangan stok server via transfer
     setProduced((n) => n + qty);
     toast({ title: "Produksi tercatat", description: `${qty} galon selesai diproduksi` });
     setQty(0); setOpen(false);
@@ -42,7 +48,7 @@ const Production = () => {
               <DialogHeader><DialogTitle>Catat Produksi Galon</DialogTitle></DialogHeader>
               <div className="space-y-4">
                 <div className="space-y-1.5"><Label>Jumlah Galon</Label><Input type="number" value={qty} onChange={(e) => setQty(+e.target.value)} /></div>
-                <p className="text-sm text-muted-foreground">Akan mengurangi stok galon di produksi sebanyak jumlah ini.</p>
+                <p className="text-sm text-muted-foreground">Mencatat jumlah galon yang selesai diproduksi hari ini.</p>
                 <Button onClick={doProduce} className="w-full h-11 bg-emerald-500 hover:bg-emerald-600">Simpan</Button>
               </div>
             </DialogContent>
@@ -58,7 +64,7 @@ const Production = () => {
 
       <Panel title="Kiriman dari Gudang">
         <div className="divide-y divide-border">
-          {TRANSFERS.map((t) => (
+          {transfers.map((t) => (
             <div key={t.id} className="flex items-center justify-between py-3">
               <div>
                 <p className="font-semibold text-sm">{t.qty}× {t.part}</p>
@@ -67,6 +73,7 @@ const Production = () => {
               <Badge tone="blue">Diterima</Badge>
             </div>
           ))}
+          {transfers.length === 0 && <p className="text-sm text-muted-foreground py-6 text-center">Belum ada kiriman.</p>}
         </div>
       </Panel>
     </div>

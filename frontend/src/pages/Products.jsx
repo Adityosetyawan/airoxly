@@ -1,6 +1,7 @@
-import React, { useState } from "react";
-import { Package, Plus, Droplet, Pencil, Trash2 } from "lucide-react";
-import { PRODUCTS, rupiah } from "../mock/mockData";
+import React, { useEffect, useState } from "react";
+import { Package, Plus, Droplet, Trash2 } from "lucide-react";
+import { rupiah } from "../mock/mockData";
+import { useAuth } from "../context/AuthContext";
 import { PageHeader, Panel, Badge } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -9,31 +10,43 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from "../components/ui/dialog";
 import { useToast } from "../hooks/use-toast";
+import api from "../api";
 
 const Products = () => {
-  const [products, setProducts] = useState(PRODUCTS);
+  const { user } = useAuth();
+  const canEdit = ["superadmin", "admin"].includes(user?.role);
+  const [products, setProducts] = useState([]);
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [stock, setStock] = useState("");
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
-  const add = () => {
+  const load = async () => {
+    const { data } = await api.get("/products");
+    setProducts(data);
+  };
+  useEffect(() => { load(); }, []);
+
+  const add = async () => {
     if (!name || !price) return;
-    setProducts([...products, { id: `p${Date.now()}`, name, price: +price, stock: +stock || 0, refill: false, icon: "package" }]);
-    toast({ title: "Produk ditambahkan", description: name });
-    setName(""); setPrice(""); setStock(""); setOpen(false);
+    try {
+      await api.post("/products", { name, price: +price, stock: +stock || 0, refill: false });
+      toast({ title: "Produk ditambahkan", description: name });
+      setName(""); setPrice(""); setStock(""); setOpen(false); load();
+    } catch (e) { toast({ title: "Gagal", description: e?.response?.data?.detail, variant: "destructive" }); }
   };
 
-  const remove = (id) => {
-    setProducts(products.filter((p) => p.id !== id));
+  const remove = async (id) => {
+    await api.delete(`/products/${id}`);
     toast({ title: "Produk dihapus" });
+    load();
   };
 
   return (
     <div>
       <PageHeader title="Produk" subtitle="Kelola daftar produk air minum" icon={Package}
-        action={
+        action={canEdit &&
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button className="bg-emerald-500 hover:bg-emerald-600"><Plus className="w-4 h-4 mr-1" /> Tambah Produk</Button>
@@ -57,10 +70,9 @@ const Products = () => {
               <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
                 <Droplet className="w-6 h-6" />
               </div>
-              <div className="flex gap-1">
-                <button className="p-2 rounded-lg text-muted-foreground hover:bg-secondary"><Pencil className="w-4 h-4" /></button>
+              {canEdit && (
                 <button onClick={() => remove(p.id)} className="p-2 rounded-lg text-muted-foreground hover:bg-red-50 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
-              </div>
+              )}
             </div>
             <h3 className="font-bold mt-3">{p.name}</h3>
             <p className="text-2xl font-extrabold text-emerald-600 mt-1">{rupiah(p.price)}</p>

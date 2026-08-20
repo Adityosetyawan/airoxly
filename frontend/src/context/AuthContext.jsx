@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { DEMO_USERS } from "../mock/mockData";
+import api from "../api";
 
 const AuthContext = createContext(null);
 
@@ -7,52 +7,65 @@ export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [impersonating, setImpersonating] = useState(null); // {realUser}
+  const [impersonating, setImpersonating] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const saved = localStorage.getItem("aox_user");
     const imp = localStorage.getItem("aox_impersonate");
-    if (saved) setUser(JSON.parse(saved));
+    const token = localStorage.getItem("aox_token");
+    if (saved && token) setUser(JSON.parse(saved));
     if (imp) setImpersonating(JSON.parse(imp));
     setLoading(false);
   }, []);
 
-  const login = (username, password) => {
-    const found = DEMO_USERS.find(
-      (u) => u.username.toLowerCase() === username.toLowerCase() && u.password === password
-    );
-    if (found) {
-      const safe = { ...found, password: undefined };
-      setUser(safe);
-      localStorage.setItem("aox_user", JSON.stringify(safe));
-      return { ok: true, user: safe };
+  const login = async (username, password) => {
+    try {
+      const { data } = await api.post("/auth/login", { username, password });
+      localStorage.setItem("aox_token", data.access_token);
+      localStorage.setItem("aox_user", JSON.stringify(data.user));
+      setUser(data.user);
+      return { ok: true, user: data.user };
+    } catch (e) {
+      return { ok: false, error: e?.response?.data?.detail || "Gagal masuk. Coba lagi." };
     }
-    return { ok: false, error: "Username atau password salah" };
   };
 
   const logout = () => {
     setUser(null);
     setImpersonating(null);
     localStorage.removeItem("aox_user");
+    localStorage.removeItem("aox_token");
     localStorage.removeItem("aox_impersonate");
+    localStorage.removeItem("aox_real_token");
   };
 
-  const impersonate = (target) => {
-    // simpan user asli lalu ganti ke target
-    setImpersonating(user);
-    localStorage.setItem("aox_impersonate", JSON.stringify(user));
-    const safe = { ...target, password: undefined };
-    setUser(safe);
-    localStorage.setItem("aox_user", JSON.stringify(safe));
+  const impersonate = async (target) => {
+    try {
+      const { data } = await api.get(`/auth/impersonate/${target.id}`);
+      // simpan sesi asli
+      setImpersonating(user);
+      localStorage.setItem("aox_impersonate", JSON.stringify(user));
+      localStorage.setItem("aox_real_token", localStorage.getItem("aox_token"));
+      // ganti ke target
+      localStorage.setItem("aox_token", data.access_token);
+      localStorage.setItem("aox_user", JSON.stringify(data.user));
+      setUser(data.user);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e?.response?.data?.detail || "Gagal impersonasi" };
+    }
   };
 
   const stopImpersonate = () => {
     if (impersonating) {
-      setUser(impersonating);
+      const realToken = localStorage.getItem("aox_real_token");
+      if (realToken) localStorage.setItem("aox_token", realToken);
       localStorage.setItem("aox_user", JSON.stringify(impersonating));
+      setUser(impersonating);
       setImpersonating(null);
       localStorage.removeItem("aox_impersonate");
+      localStorage.removeItem("aox_real_token");
     }
   };
 

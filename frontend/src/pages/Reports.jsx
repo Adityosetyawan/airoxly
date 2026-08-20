@@ -1,20 +1,29 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { BarChart3, Download, ShoppingCart, TrendingUp, Wallet } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { TRANSACTIONS, EXPENSES, rupiah } from "../mock/mockData";
+import { rupiah } from "../mock/mockData";
 import { PageHeader, Panel, StatCard, Badge } from "../components/common";
 import { Button } from "../components/ui/button";
 import { useToast } from "../hooks/use-toast";
+import api from "../api";
 
 const Reports = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [range, setRange] = useState("Hari Ini");
-
+  const [range, setRange] = useState("Semua");
+  const [tx, setTx] = useState([]);
+  const [expenses, setExpenses] = useState([]);
   const isSales = user?.role === "sales";
-  const tx = isSales ? TRANSACTIONS.filter((t) => t.salesId === user?.id) : TRANSACTIONS;
+
+  useEffect(() => {
+    (async () => {
+      const [t, e] = await Promise.all([api.get("/transactions"), api.get("/expenses")]);
+      setTx(t.data); setExpenses(e.data);
+    })();
+  }, []);
+
   const totalSales = tx.reduce((s, t) => s + t.total, 0);
-  const totalExpense = EXPENSES.reduce((s, e) => s + e.amount, 0);
+  const totalExpense = expenses.reduce((s, e) => s + e.amount, 0);
   const totalUtang = tx.filter((t) => t.status === "utang").reduce((s, t) => s + (t.total - t.bayar), 0);
 
   return (
@@ -23,7 +32,7 @@ const Reports = () => {
         action={<Button variant="outline" onClick={() => toast({ title: "Ekspor laporan", description: "Fitur ekspor CSV/PDF (mock)" })}><Download className="w-4 h-4 mr-1" /> Ekspor</Button>} />
 
       <div className="flex gap-2 mb-4 flex-wrap">
-        {["Hari Ini", "Minggu Ini", "Bulan Ini"].map((r) => (
+        {["Hari Ini", "Minggu Ini", "Semua"].map((r) => (
           <button key={r} onClick={() => setRange(r)}
             className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${range === r ? "bg-emerald-500 text-white" : "bg-card border border-border hover:bg-secondary"}`}>{r}</button>
         ))}
@@ -60,6 +69,7 @@ const Reports = () => {
               ))}
             </tbody>
           </table>
+          {tx.length === 0 && <p className="text-sm text-muted-foreground py-6 text-center">Belum ada data.</p>}
         </div>
       </Panel>
     </div>

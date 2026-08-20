@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Gift, Trophy, Ticket, Calendar } from "lucide-react";
-import { LOTTERY } from "../mock/mockData";
 import { PageHeader, Panel, StatCard, Badge } from "../components/common";
+import api from "../api";
 
 const Lottery = () => {
-  const l = LOTTERY;
+  const [l, setL] = useState(null);
+  useEffect(() => { (async () => { const { data } = await api.get("/lottery"); setL(data); })(); }, []);
+  if (!l || !l.title) return <div><PageHeader title="Undian Berhadiah" subtitle="Program loyalitas pelanggan" icon={Gift} /><p className="text-sm text-muted-foreground">Belum ada undian aktif.</p></div>;
   return (
     <div>
       <PageHeader title="Undian Berhadiah" subtitle="Program loyalitas pelanggan" icon={Gift} />

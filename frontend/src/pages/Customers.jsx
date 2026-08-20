@@ -1,6 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Users, Plus, Search, Phone, MapPin, Droplet } from "lucide-react";
-import { CUSTOMERS } from "../mock/mockData";
 import { PageHeader, Panel, Badge } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -9,23 +8,26 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from "../components/ui/dialog";
 import { useToast } from "../hooks/use-toast";
+import api from "../api";
 
 const Customers = () => {
-  const [customers, setCustomers] = useState(CUSTOMERS);
+  const [customers, setCustomers] = useState([]);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "", address: "", area: "Area A" });
   const { toast } = useToast();
 
+  const load = async () => { const { data } = await api.get("/customers"); setCustomers(data); };
+  useEffect(() => { load(); }, []);
+
   const filtered = customers.filter((c) => c.name.toLowerCase().includes(q.toLowerCase()));
 
-  const add = () => {
+  const add = async () => {
     if (!form.name) return;
-    const barcode = `AOX-${String(customers.length + 1).padStart(4, "0")}`;
-    setCustomers([...customers, { id: `c${Date.now()}`, ...form, barcode, galonPinjam: 0, lastBuy: new Date().toISOString().slice(0, 10) }]);
-    toast({ title: "Pelanggan ditambahkan", description: `${form.name} · ${barcode}` });
+    const { data } = await api.post("/customers", form);
+    toast({ title: "Pelanggan ditambahkan", description: `${data.name} · ${data.barcode}` });
     setForm({ name: "", phone: "", address: "", area: "Area A" });
-    setOpen(false);
+    setOpen(false); load();
   };
 
   return (
@@ -62,8 +64,8 @@ const Customers = () => {
             </div>
             <p className="text-xs font-mono text-emerald-600 mt-1">{c.barcode}</p>
             <div className="space-y-1.5 mt-3 text-sm text-muted-foreground">
-              <p className="flex items-center gap-2"><Phone className="w-3.5 h-3.5" /> {c.phone}</p>
-              <p className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5" /> {c.address}</p>
+              <p className="flex items-center gap-2"><Phone className="w-3.5 h-3.5" /> {c.phone || "-"}</p>
+              <p className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5" /> {c.address || "-"}</p>
               <p className="flex items-center gap-2"><Droplet className="w-3.5 h-3.5" /> {c.area} · Terakhir beli {new Date(c.lastBuy).toLocaleDateString("id-ID")}</p>
             </div>
           </Panel>

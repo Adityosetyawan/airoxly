@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from "react";
-import { ShoppingCart, Plus, Minus, X, Check, Receipt } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { ShoppingCart, Plus, Minus, Check, Receipt } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { PRODUCTS, CUSTOMERS, TRANSACTIONS, rupiah } from "../mock/mockData";
+import { rupiah } from "../mock/mockData";
 import { PageHeader, Panel, Badge } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -13,12 +13,15 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "../components/ui/dialog";
 import { useToast } from "../hooks/use-toast";
+import api from "../api";
 
 const Transactions = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const isSales = user?.role === "sales";
-  const [txList, setTxList] = useState(TRANSACTIONS);
+  const [txList, setTxList] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [open, setOpen] = useState(false);
 
   const [customerId, setCustomerId] = useState("");
@@ -27,33 +30,35 @@ const Transactions = () => {
   const [pinjam, setPinjam] = useState(0);
   const [kembali, setKembali] = useState(0);
 
+  const load = async () => {
+    const [tx, pr, cu] = await Promise.all([
+      api.get("/transactions"), api.get("/products"), api.get("/customers"),
+    ]);
+    setTxList(tx.data); setProducts(pr.data); setCustomers(cu.data);
+  };
+  useEffect(() => { load(); }, []);
+
   const resetForm = () => { setCustomerId(""); setQtys({}); setBayar(""); setPinjam(0); setKembali(0); };
 
-  const items = useMemo(() => PRODUCTS.filter((p) => (qtys[p.id] || 0) > 0)
-    .map((p) => ({ productId: p.id, name: p.name, qty: qtys[p.id], price: p.price })), [qtys]);
+  const items = useMemo(() => products.filter((p) => (qtys[p.id] || 0) > 0)
+    .map((p) => ({ productId: p.id, name: p.name, qty: qtys[p.id], price: p.price })), [qtys, products]);
   const total = items.reduce((s, i) => s + i.qty * i.price, 0);
 
   const setQty = (id, delta) => setQtys((q) => ({ ...q, [id]: Math.max(0, (q[id] || 0) + delta) }));
 
-  const submit = () => {
+  const submit = async () => {
     if (!customerId || items.length === 0) {
       toast({ title: "Lengkapi transaksi", description: "Pilih pelanggan dan minimal 1 produk", variant: "destructive" });
       return;
     }
-    const cust = CUSTOMERS.find((c) => c.id === customerId);
-    const paid = +bayar || 0;
-    const status = paid >= total ? "lunas" : "utang";
-    const tx = {
-      id: `t${Date.now()}`, customerId, customer: cust.name, salesId: user?.id, sales: user?.name,
-      items, total, bayar: paid, kembali: Math.max(0, paid - total), galonPinjam: +pinjam, galonKembali: +kembali,
-      date: new Date().toISOString(), status,
-    };
-    setTxList([tx, ...txList]);
-    toast({ title: "Transaksi tersimpan", description: `${cust.name} · ${rupiah(total)} · ${status}` });
-    resetForm(); setOpen(false);
+    try {
+      const { data } = await api.post("/transactions", {
+        customerId, items, bayar: +bayar || 0, galonPinjam: +pinjam, galonKembali: +kembali,
+      });
+      toast({ title: "Transaksi tersimpan", description: `${data.customer} · ${rupiah(data.total)} · ${data.status}` });
+      resetForm(); setOpen(false); load();
+    } catch (e) { toast({ title: "Gagal", description: e?.response?.data?.detail, variant: "destructive" }); }
   };
-
-  const shown = isSales ? txList.filter((t) => t.salesId === user?.id) : txList;
 
   return (
     <div>
@@ -71,14 +76,14 @@ const Transactions = () => {
                   <Select value={customerId} onValueChange={setCustomerId}>
                     <SelectTrigger><SelectValue placeholder="Pilih pelanggan" /></SelectTrigger>
                     <SelectContent>
-                      {CUSTOMERS.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                      {customers.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
                   <Label>Produk</Label>
-                  {PRODUCTS.map((p) => (
+                  {products.map((p) => (
                     <div key={p.id} className="flex items-center justify-between bg-secondary/50 rounded-xl px-3 py-2">
                       <div>
                         <p className="text-sm font-semibold">{p.name}</p>
@@ -118,7 +123,7 @@ const Transactions = () => {
         } />
 
       <div className="space-y-3">
-        {shown.map((t) => (
+        {txList.map((t) => (
           <Panel key={t.id} className="animate-fade-up">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
@@ -140,6 +145,7 @@ const Transactions = () => {
             </div>
           </Panel>
         ))}
+        {txList.length === 0 && <p className="text-sm text-muted-foreground py-8 text-center">Belum ada transaksi. Buat transaksi baru.</p>}
       </div>
     </div>
   );

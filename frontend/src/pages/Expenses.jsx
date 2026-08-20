@@ -1,7 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Wallet, Plus } from "lucide-react";
-import { EXPENSES, rupiah } from "../mock/mockData";
-import { useAuth } from "../context/AuthContext";
+import { rupiah } from "../mock/mockData";
 import { PageHeader, Panel, StatCard, Badge } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -13,22 +12,25 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "../components/ui/select";
 import { useToast } from "../hooks/use-toast";
+import api from "../api";
 
 const CATS = ["Transport", "Perawatan", "Bahan", "Gaji", "Lain-lain"];
 
 const Expenses = () => {
-  const { user } = useAuth();
   const { toast } = useToast();
-  const [list, setList] = useState(EXPENSES);
+  const [list, setList] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: "", amount: "", category: "Transport" });
   const total = list.reduce((s, e) => s + e.amount, 0);
 
-  const add = () => {
+  const load = async () => { const { data } = await api.get("/expenses"); setList(data); };
+  useEffect(() => { load(); }, []);
+
+  const add = async () => {
     if (!form.title || !form.amount) return;
-    setList([{ id: `e${Date.now()}`, title: form.title, amount: +form.amount, category: form.category, by: user?.name, date: new Date().toISOString().slice(0, 10) }, ...list]);
+    await api.post("/expenses", { title: form.title, amount: +form.amount, category: form.category });
     toast({ title: "Pengeluaran dicatat", description: `${form.title} · ${rupiah(+form.amount)}` });
-    setForm({ title: "", amount: "", category: "Transport" }); setOpen(false);
+    setForm({ title: "", amount: "", category: "Transport" }); setOpen(false); load();
   };
 
   return (
@@ -72,6 +74,7 @@ const Expenses = () => {
               </div>
             </div>
           ))}
+          {list.length === 0 && <p className="text-sm text-muted-foreground py-6 text-center">Belum ada pengeluaran.</p>}
         </div>
       </Panel>
     </div>

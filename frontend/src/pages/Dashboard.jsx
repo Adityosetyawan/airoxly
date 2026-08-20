@@ -1,13 +1,14 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
-  TrendingUp, ShoppingCart, Users, Package, Wallet, Droplet, Factory, Warehouse, Target,
+  TrendingUp, ShoppingCart, Users, Package, Droplet, Factory, Warehouse, Target,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { OVERVIEW, TRANSACTIONS, SPAREPARTS, rupiah, ROLE_LABELS } from "../mock/mockData";
+import { rupiah, ROLE_LABELS } from "../mock/mockData";
 import { PageHeader, StatCard, Panel, Badge } from "../components/common";
+import api from "../api";
 
 const TrendChart = ({ data }) => {
-  const max = Math.max(...data.map((d) => d.value));
+  const max = Math.max(...data.map((d) => d.value), 1);
   return (
     <div className="flex items-end gap-2 h-44">
       {data.map((d) => (
@@ -25,11 +26,24 @@ const TrendChart = ({ data }) => {
 
 const Dashboard = () => {
   const { user } = useAuth();
-  const o = OVERVIEW;
+  const [o, setO] = useState(null);
+  const [txs, setTxs] = useState([]);
+  const [parts, setParts] = useState([]);
   const hour = new Date().getHours();
   const greet = hour < 11 ? "Selamat pagi" : hour < 15 ? "Selamat siang" : hour < 19 ? "Selamat sore" : "Selamat malam";
 
-  const myTx = TRANSACTIONS.filter((t) => t.salesId === user?.id);
+  useEffect(() => {
+    (async () => {
+      try {
+        const [ov, tx, sp] = await Promise.all([
+          api.get("/overview"), api.get("/transactions"), api.get("/spareparts"),
+        ]);
+        setO(ov.data); setTxs(tx.data); setParts(sp.data);
+      } catch (e) { /* handled by interceptor */ }
+    })();
+  }, []);
+
+  const myTx = txs.filter((t) => t.salesId === user?.id);
   const mySales = myTx.reduce((s, t) => s + t.total, 0);
 
   return (
@@ -37,15 +51,14 @@ const Dashboard = () => {
       <PageHeader title={`${greet}, ${user?.name?.split(" ")[0]}!`}
         subtitle={`Anda masuk sebagai ${ROLE_LABELS[user?.role]} · ${user?.area}`} icon={Droplet} />
 
-      {(user?.role === "superadmin" || user?.role === "admin") && (
+      {o && (user?.role === "superadmin" || user?.role === "admin") && (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard label="Penjualan Hari Ini" value={rupiah(o.todaySales)} sub={`${o.todayTransactions} transaksi`} icon={TrendingUp} />
-            <StatCard label="Penjualan Bulan Ini" value={rupiah(o.monthSales)} sub={`${o.monthTransactions} transaksi`} icon={ShoppingCart} tone="blue" />
+            <StatCard label="Total Penjualan" value={rupiah(o.monthSales)} sub={`${o.monthTransactions} transaksi`} icon={ShoppingCart} tone="blue" />
             <StatCard label="Total Pelanggan" value={o.totalCustomers} sub={`${o.activeSales} sales aktif`} icon={Users} tone="violet" />
             <StatCard label="Total Produk" value={o.totalProducts} sub="jenis produk" icon={Package} tone="amber" />
           </div>
-
           <div className="grid lg:grid-cols-3 gap-4 mt-4">
             <Panel title="Tren Penjualan Mingguan" className="lg:col-span-2">
               <TrendChart data={o.weeklyTrend} />
@@ -91,7 +104,7 @@ const Dashboard = () => {
 
       {user?.role === "gudang" && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {SPAREPARTS.map((s) => (
+          {parts.map((s) => (
             <StatCard key={s.id} label={s.name} value={s.gudang} sub="stok gudang" icon={Warehouse} tone="blue" />
           ))}
         </div>
@@ -99,7 +112,7 @@ const Dashboard = () => {
 
       {user?.role === "produksi" && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {SPAREPARTS.map((s) => (
+          {parts.map((s) => (
             <StatCard key={s.id} label={s.name} value={s.produksi} sub="stok produksi" icon={Factory} tone="violet" />
           ))}
         </div>
@@ -107,7 +120,7 @@ const Dashboard = () => {
 
       <Panel title="Transaksi Terbaru" className="mt-4">
         <div className="divide-y divide-border">
-          {TRANSACTIONS.slice(0, 5).map((t) => (
+          {txs.slice(0, 5).map((t) => (
             <div key={t.id} className="flex items-center justify-between py-3">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
@@ -124,6 +137,7 @@ const Dashboard = () => {
               </div>
             </div>
           ))}
+          {txs.length === 0 && <p className="text-sm text-muted-foreground py-6 text-center">Belum ada transaksi.</p>}
         </div>
       </Panel>
     </div>

@@ -361,10 +361,58 @@ frontend:
         agent: "testing"
         comment: "✅ Warehouse transfer working correctly. As gudang user, navigated to 'Stok Gudang', opened transfer modal, selected Galon Polos sparepart, set quantity to 10 using +10 preset button, clicked 'Kirim Sekarang'. Stock updated correctly: Gudang decreased from 130 to 120, Produksi increased from 35 to 45. Transfer appears in history. Impersonation working: as superadmin, clicked 'Lihat sebagai user ini' on Rina Admin user card, amber banner appeared with text 'Anda sedang melihat sebagai Rina Admin (Admin)' and 'Kembali ke Super Admin' button. Minor: Banner persistence after clicking return button (may need page refresh or timing adjustment)."
 
+  - task: "GPS Live Map UI (Leaflet integration)"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/pages/LiveMap.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ GPS Live Map fully functional. Leaflet map container renders correctly with OpenStreetMap tiles. Sales markers (Agus Sales, Dewi Sales) display with green custom icons and name labels. Right panel 'Sales Aktif' shows sales list with 'aktif' badges and 'Diperbarui:' timestamp. 'Segarkan' refresh button works without crash. Marker click opens popup with sales name, ping time, and coordinates. Auto-refresh every 15 seconds working. No console errors."
+
+  - task: "WhatsApp Receipt Button"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/pages/Transactions.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ WhatsApp receipt feature working correctly. Each transaction card displays green 'Kirim Struk WhatsApp' button with MessageCircle icon at bottom-right. Clicking button opens new browser tab/window to WhatsApp URL (https://api.whatsapp.com/send/) with formatted receipt text including customer name, date, items, totals, and galon info. Toast notification 'Membuka WhatsApp' appears on click. URL format is correct (api.whatsapp.com/send is official WhatsApp API endpoint, equivalent to wa.me)."
+
+  - task: "Report Export UI (CSV/PDF dropdown)"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/pages/Reports.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ Report export feature fully functional. Period filter buttons ('Hari Ini', 'Minggu Ini', 'Semua') correctly filter displayed transactions and update stat totals. Green 'Ekspor' button opens dropdown menu with 'Unduh Excel/CSV' (FileSpreadsheet icon) and 'Unduh PDF' (FileText icon) options. CSV export downloads 'Laporan-AirOXLY-Semua.csv' file and shows 'Ekspor berhasil' toast. PDF export downloads 'Laporan-AirOXLY-Semua.pdf' file and shows success toast. Both exports working correctly with proper file downloads."
+
+  - task: "Reset Data UI (Half Reset modal)"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/pages/Settings.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ Reset data feature working perfectly. 'Zona Berbahaya' section displays 'Half Reset' (amber) and 'All Reset' (red) cards. Clicking 'Half Reset' opens modal with 'HALF RESET' title and red warning. Modal shows two columns: 'Yang Dihapus' (transactions, expenses, transfers, GPS) and 'Yang Tetap' (users, products, parts, customers). Confirmation input requires exact text 'RESET PENJUALAN'. 'RESET SEKARANG' button initially disabled, remains disabled with incorrect text, enables and turns red when text matches exactly. '✓ Teks cocok' message appears when correct. Reset executes successfully, page reloads, transactions deleted (empty state), master data preserved (5 products, 6 customers with AOX- barcodes still visible). No console errors."
+
 metadata:
   created_by: "testing_agent"
-  version: "1.3"
-  test_sequence: 4
+  version: "1.4"
+  test_sequence: 5
   run_ui: true
 
 test_plan:
@@ -382,3 +430,7 @@ agent_communication:
     message: "✅ FRONTEND TESTING COMPLETE - ALL MAJOR FLOWS WORKING. Tested all 7 requested flows: (1) Login & roles: ✅ superadmin shows all 13 menu items, sales shows only 5, logout works. (2) Dashboard: ✅ stat cards, weekly trend chart, top products, recent transactions all present. (3) Transaction POS: ✅ created transaction as sales, count increased 3→5, appears in list with 'lunas' status. (4) CRUD: ✅ added customer with auto barcode AOX-0008, added product Rp 7.500. (5) Warehouse: ✅ transferred 10 units, Gudang 130→120, Produksi 35→45. (6) Impersonation: ✅ banner appears correctly, shows impersonated user name/role. (7) Logout: ✅ returns to login. Minor issue: impersonation banner may persist after clicking 'Kembali ke Super Admin' (needs page refresh or timing adjustment). No console errors. All core functionality working perfectly. Ready for production."
   - agent: "testing"
     message: "✅ NEW ENDPOINTS TESTING COMPLETE - ALL 13 NEW TESTS PASSED (50 total tests, 0 failures). Tested NEW Air OXLY backend endpoints: (1) GPS LOCATIONS: ✅ GET /api/locations returns seeded sales locations (Agus Sales, Dewi Sales). ✅ POST /api/locations/ping as sales A1 with {lat:-6.20, lng:106.85} returns {ok:true}, verified location updated with correct lat/lng and recent lastPing. ✅ POST /api/locations/ping without token returns 401. (2) EXPORT REPORTS: ✅ GET /api/reports/export?fmt=csv&scope=all as superadmin returns HTTP 200, Content-Type text/csv, Content-Disposition attachment filename Laporan-AirOXLY-Semua.csv, CSV header 'Tanggal,Pelanggan,Sales,Produk,Total,Bayar,Status' with 12 data rows. ✅ GET /api/reports/export?fmt=pdf&scope=all as superadmin returns HTTP 200, Content-Type application/pdf, body starts with %PDF bytes. ✅ GET /api/reports/export?fmt=csv&scope=today as sales A1 returns 200 (sales can export own data). ✅ GET /api/reports/export without token returns 401. (3) RESET DATA: ✅ POST /api/admin/reset {type:'invalid'} as superadmin returns ok:false with detail 'Tipe reset tidak valid'. ✅ POST /api/admin/reset {type:'half'} as sales A1 returns 403 (only superadmin allowed). ✅ POST /api/admin/reset {type:'half'} as superadmin returns {ok:true, type:'half'}, verified transactions/expenses/transfers/locations all empty after reset, master data (products=6, customers=9) preserved. All NEW endpoints working perfectly."
+  - agent: "main"
+    message: "Requesting testing of 4 NEW UI features: (1) GPS LIVE MAP as superadmin - verify Leaflet map loads with OpenStreetMap tiles, green sales markers with labels, 'Sales Aktif' panel with badges and timestamp, 'Segarkan' button works. (2) WHATSAPP RECEIPT as sales A1 - verify 'Kirim Struk WhatsApp' button on transaction cards opens wa.me URL in new tab with toast. (3) REPORT EXPORT as superadmin - verify period filters work, 'Ekspor' dropdown has CSV/PDF options, both downloads work with success toasts. (4) RESET DATA as superadmin - verify 'Half Reset' modal with confirmation input, button disabled until 'RESET PENJUALAN' typed, reset deletes transactions but preserves products/customers. Test in order, reset last."
+  - agent: "testing"
+    message: "✅ NEW FEATURES UI TESTING COMPLETE - ALL 4 FEATURES PASSED. (1) GPS LIVE MAP: ✅ Leaflet map renders with OpenStreetMap tiles, sales markers (Agus Sales, Dewi Sales) with green icons and name labels, 'Sales Aktif' panel with 'aktif' badges and 'Diperbarui:' timestamp, 'Segarkan' button works, marker click shows popup. (2) WHATSAPP RECEIPT: ✅ 'Kirim Struk WhatsApp' button found on transaction cards, opens WhatsApp URL (api.whatsapp.com/send - official API endpoint) in new tab with formatted receipt, toast 'Membuka WhatsApp' appears. (3) REPORT EXPORT: ✅ Period filters ('Hari Ini', 'Minggu Ini', 'Semua') change content, 'Ekspor' dropdown with CSV/PDF options, both downloads work (Laporan-AirOXLY-Semua.csv/pdf), success toasts appear. (4) RESET DATA: ✅ 'Zona Berbahaya' section with 'Half Reset' card, modal shows 'Yang Dihapus'/'Yang Tetap' columns, confirmation input requires 'RESET PENJUALAN', button disabled→enabled→red styling, '✓ Teks cocok' message, reset executes, transactions deleted (empty state), products (5) and customers (6 with AOX- barcodes) preserved. No console errors, no page errors. All NEW features working perfectly."

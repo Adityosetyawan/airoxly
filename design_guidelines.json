@@ -1,0 +1,141 @@
+{
+  "theme": "light",
+  "typography": {
+    "headings": {
+      "family": "Cabinet Grotesk",
+      "weights": ["bold", "extrabold"],
+      "usage": "Dashboard titles, KPI primary numbers, Section headers. Avoid Inter. Use tracking-tight for sizes above 32px."
+    },
+    "body": {
+      "family": "IBM Plex Sans",
+      "weights": ["regular", "medium", "semibold"],
+      "usage": "Data tables, charts, labels, nav items. Provides a highly readable, technical feel suited for dense data."
+    },
+    "scale": {
+      "h1": "text-3xl sm:text-4xl",
+      "h2": "text-2xl sm:text-3xl",
+      "h3": "text-xl sm:text-2xl",
+      "body": "text-sm md:text-base",
+      "small": "text-xs md:text-sm"
+    }
+  },
+  "colors": {
+    "archetype": "Swiss & High-Contrast (Authority, Clarity, Truth)",
+    "palette": {
+      "background": "#FFFFFF",
+      "foreground": "#0A0A0A",
+      "card": "#F8F9FA",
+      "card_foreground": "#0A0A0A",
+      "primary": "#0A0A0A",
+      "primary_foreground": "#FFFFFF",
+      "secondary": "#E9ECEF",
+      "secondary_foreground": "#0A0A0A",
+      "accent": "#F1F3F5",
+      "accent_foreground": "#0A0A0A",
+      "destructive": "#E03131",
+      "warning": "#F59F00",
+      "success": "#2F9E44",
+      "border": "#DEE2E6",
+      "input": "#DEE2E6",
+      "ring": "#0A0A0A"
+    },
+    "rules": [
+      "Use monochrome layout mainly. Colors exist only to guide action or indicate status (success/warning/destructive).",
+      "Avoid muddy gray transparency. No fully transparent backgrounds for overlays.",
+      "Ensure text meets APCA contrast standards. Never use pure #000000 or #808080."
+    ]
+  },
+  "visual_enhancers": {
+    "borders": "Visible grid skeletons. Use 1px subtle borders (border-border).",
+    "radius": "Subtle roundness, max 4px to 8px border-radius (rounded-sm or rounded-md). Gives a sharp, functional look.",
+    "shadows": "Minimal. Avoid soft UI everywhere. Hover states can have a slight lift (-translate-y-1) and a sharp, small shadow.",
+    "textures": "Flat, solid colors for readability in data."
+  },
+  "components": {
+    "Shadcn": [
+      "Button",
+      "Input",
+      "Select",
+      "Table",
+      "Card",
+      "DropdownMenu",
+      "Avatar",
+      "Tabs",
+      "Chart",
+      "Sonner"
+    ],
+    "Icons": "lucide-react",
+    "rules": [
+      "DO NOT use HTML-based components for advanced interactions.",
+      "Go cardless or use rectangular, dense styles where possible for the data grid.",
+      "Tables: Compact row height (32-40px), sticky header, zebra stripes on hover only.",
+      "KPI Cards: Include label, tabular numeral value, delta (+/- comparison), and no static decoration-only tiles."
+    ]
+  },
+  "grids": {
+    "mode": "High Density Grid (For Dashboards / Analytics)",
+    "base": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4",
+    "gap": "gap-4 md:gap-6",
+    "spans": {
+      "summary": "col-span-1",
+      "primary_data": "col-span-2 row-span-2 or col-span-3",
+      "feed_list": "col-span-1 row-span-2"
+    },
+    "rules": [
+      "Every pixel must be utilized. Use h-full on children.",
+      "No jagged bottoms.",
+      "Grid items MUST be direct children of grid containers."
+    ]
+  },
+  "layouts": {
+    "app_shell": "Fixed left sidebar (navigation) + Topbar (global search, user profile) + Main Content Area.",
+    "f_pattern": "Place the most critical North Star metric or KPI at the top left quadrant.",
+    "navigation": "Role-based menus (SuperAdmin, Admin, Sales). Highlight active route. Sidebar links must have icons.",
+    "spacing": "Dense but legible. Generous padding around the main container (p-6 or p-8), tighter padding inside cards (p-4)."
+  },
+  "motion": {
+    "rules": [
+      "Minimalist for dashboards. Focus on micro-interactions for feedback.",
+      "No generic transition-all. Use specific properties: transition-transform, transition-colors, transition-opacity.",
+      "Hover states must change color (lighter hue of active state) or subtle lift."
+    ]
+  },
+  "accessibility": {
+    "rules": [
+      "All interactive elements MUST include data-testid attribute (kebab-case, role-based).",
+      "Focus states must have higher contrast than default.",
+      "Support prefers-reduced-motion."
+    ]
+  },
+  "media": {
+    "image_urls": {
+      "login_background": {
+        "url": "https://images.unsplash.com/photo-1527576539890-dfa815648363?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MDV8MHwxfHNlYXJjaHwxfHxzd2lzcyUyMGFyY2hpdGVjdHVyZSUyMG1vbm9jaHJvbWV8ZW58MHx8fHwxNzg3MzI4MzU5fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Swiss architecture monochrome for the auth page split background"
+      },
+      "user_avatar": {
+        "url": "https://images.unsplash.com/photo-1580489944761-15a19d654956?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDN8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjBwb3J0cmFpdHxlbnwwfHx8fDE3ODczMjgzNTh8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Professional portrait for topbar user avatar (woman in white shirt)"
+      }
+    }
+  },
+  "3d_libraries": {
+    "rules": "Not applicable for this data-dense admin dashboard. Use Recharts via Shadcn for trend charts (Sales, Customers, Expenses)."
+  },
+  "specific_instructions": {
+    "language": "Bahasa Indonesia MUST be used for UI text (Penjualan, Pelanggan, Pengeluaran, Harian, Mingguan, Bulanan, etc).",
+    "role_based_access": "Ensure route guards and conditional rendering of sidebar items based on role (SuperAdmin, Admin, Sales).",
+    "states": "Implement clear Loading, Empty, and Error states for tables and charts. Do not leave blank spaces.",
+    "charts": "Trend charts must have time-range filters (Harian, Mingguan, Bulanan). Use Shadcn Charts (Recharts)."
+  },
+  "instructions_to_main_agent": [
+    "Prioritize using pre-existing components from src/components/ui when applicable.",
+    "Create new components that match the style and conventions of existing components when needed.",
+    "You MUST NOT center align the app container, ie do not add .App { text-align: center; }.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations.",
+    "Never use AI assistant Emoji characters like 🤖🧠💭💡.",
+    "Use sonner for toasts, located in /app/src/components/ui/sonner.js",
+    "Missing categories = main agent will use placeholder text which is FORBIDDEN. Use the provided image URLs.",
+    "Create data-testid attributes for all form inputs, buttons, and navigation items to facilitate testing."
+  ]
+}

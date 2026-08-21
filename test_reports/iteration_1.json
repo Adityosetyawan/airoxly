@@ -1,0 +1,62 @@
+{
+  "summary": "First test iteration for Air OXLY Admin v1. Backend pytest (16 tests): 15 passed, 1 failed (brute-force lockout not triggering behind load balancer). All RBAC and Dashboard UI flows verified end-to-end via Playwright: login (super + sales), route guard, wrong-password error alert (Indonesian), 5 KPI cards for super, 3 KPI cards for sales, trend chart (2 series for super / 1 for sales), recent transactions table (Sales column shown for super, hidden for sales), Ringkasan Periode with margin laba kotor, range tabs (harian/mingguan/bulanan), sidebar logout, and dashboard-error + retry recovery. Sales sidebar correctly hides Pengeluaran/Produk/Peta Live/Pengguna modules.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/auth/login",
+        "issue": "Brute-force lockout does NOT trigger. Even after 7 consecutive failed logins, backend keeps returning 401 instead of 429. Root cause: multiple backend pods run behind the ingress and login_attempts identifier is built from request.client.host (the proxy IP). The load balancer rotates the incoming request across two Kubernetes proxy IPs (observed 10.208.135.204 and 10.208.135.205), so counters split into two rows (e.g. 4+2 or 5+2) and neither row reaches >=5 on a single pod for the next hit routed to the OTHER pod. Result: an attacker can bypass the lockout indefinitely.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AuthContext (auth/me on mount)",
+        "issue": "When backend is completely unreachable (5xx/network error), /auth/me catch handler blindly removes token and redirects to /login. This logs the user out on transient outages instead of retaining the session and letting Dashboard show the dashboard-error state. Consider distinguishing 401 (invalid token -> logout) from network/5xx (keep token, surface error).",
+        "selector": "/app/frontend/src/context/AuthContext.jsx (useEffect .catch)",
+        "priority": "MEDIUM"
+      },
+      {
+        "component": "Login page error alert",
+        "issue": "When backend is down, Cloudflare returns HTML text that is rendered verbatim inside the login-error-alert (e.g. 'The origin web server returned an invalid or incomplete response to Cloudflare...'). The Indonesian fallback in formatApiErrorDetail is never used for non-JSON responses. Consider catching non-JSON/HTML upstream errors and showing the generic Indonesian message.",
+        "selector": "[data-testid=login-error-alert]",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Dashboard TrendChart",
+        "issues": ["Console warning from recharts: 'The width(-1) and height(-1) of chart should be greater than 0'. Initial render has 0-size container until layout; recommend setting minWidth/minHeight on ResponsiveContainer wrapper."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Fix brute-force lockout: use the client email alone (or X-Forwarded-For / X-Real-IP header) as identifier instead of request.client.host so all pods share a single counter, and/or store the counter atomically against email only.",
+    "AuthContext: only clear token on 401 from /auth/me; on network/5xx keep token and surface error UI.",
+    "Login error alert: sanitize/replace non-JSON upstream errors (HTML from Cloudflare) with the Indonesian fallback message.",
+    "TrendChart: set explicit min dimensions on ResponsiveContainer to silence recharts warnings."
+  ],
+  "critical_code_review_comments": [
+    "server.py login_attempts identifier includes request.client.host which is a proxy IP behind ingress — behind multiple ingress pods this splits the counter and defeats the lockout. Use email-only or a trusted forwarded-for header.",
+    "server.py sets cookie with samesite='none', secure=True unconditionally — fine in prod (https) but blocks local http testing; document this.",
+    "AuthContext.useEffect treats every /auth/me failure (including 502/503) as an auth error and forcibly logs the user out; should differentiate transport vs auth errors.",
+    "CORS middleware: allow_credentials=False despite backend setting httpOnly cookie — the frontend uses Bearer localStorage so this works, but cookie-based auth would silently fail across origins."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (new)"
+  ],
+  "success_rate": {"backend": "94% (15/16)", "frontend": "100% (all UI flows passed)"},
+  "test_credentials": "Read from /app/memory/test_credentials.md. SuperAdmin OK; login_attempts collection cleared post-test to avoid lockout side effects.",
+  "seed_data_creation": "None. Used existing seeded data (users + business seed at startup).",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "backend_test.py covers auth, RBAC, overview (super vs sales), trend buckets (14/12/12), invalid range, and brute-force. If the main agent fixes the lockout identifier, re-run only test_brute_force_lockout. Always run `mongosh test_database --eval 'db.login_attempts.deleteMany({})'` before/after brute-force test to avoid locking real accounts. Frontend flows fully covered; error-state test used page.route abort on /api/overview and /api/reports/trend rather than stopping backend (stopping backend triggers AuthContext logout bug).",
+  "rca of the issue": "Brute-force lockout bug — RCA: identifier = '{request.client.host}:{email}'. In the k8s preview environment the ingress forwards traffic from >=2 proxy pods (10.208.135.204/205). Requests round-robin, so the login_attempts row for one proxy IP reaches count=5 while the other stays at count=2; the 6th request lands on the pod with count=2 -> still 401. Verified by inspecting db.login_attempts: two rows for the same email with different IP prefixes and counts of 5 and 2. Reproduction: curl 6x wrong password for any account -> all return 401. Mitigation: key attempts by email only (or by a normalized true client IP header), and/or add a global cap keyed on email that ignores host."
+}

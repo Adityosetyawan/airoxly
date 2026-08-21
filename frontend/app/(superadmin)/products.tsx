@@ -1,10 +1,10 @@
 import React, { useCallback, useState } from "react";
-import { FlatList, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, KeyboardAvoidingView, Platform } from "react-native";
+import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import { theme, rp } from "@/src/theme";
-import { api, Product } from "@/src/api";
+import { api, Product, User } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
 
 export default function SuperProducts() {
@@ -68,6 +68,15 @@ export default function SuperProducts() {
                 if (effRoles.length > 0) return null;
                 return <Text style={styles.price}>Rp {rp(item.price)} / {item.unit}</Text>;
               })()}
+              {((item.allowed_groups?.length ?? 0) > 0 || (item.allowed_sales?.length ?? 0) > 0) && (
+                <View style={styles.accessBadge}>
+                  <Ionicons name="lock-closed" size={11} color={theme.color.warning} />
+                  <Text style={styles.accessBadgeText}>
+                    Khusus{item.allowed_groups && item.allowed_groups.length > 0 ? ` Wilayah ${item.allowed_groups.join("/")}` : ""}
+                    {item.allowed_sales && item.allowed_sales.length > 0 ? `${(item.allowed_groups?.length ?? 0) > 0 ? " · " : " "}${item.allowed_sales.join(", ")}` : ""}
+                  </Text>
+                </View>
+              )}
             </View>
             <TouchableOpacity onPress={() => setEditing(item)} style={styles.iconBtn} testID={`edit-product-${item.id}`}>
               <Ionicons name="create-outline" size={20} color={theme.color.brand} />
@@ -102,6 +111,22 @@ function ProductEditor({ visible, product, onClose, onSaved }: { visible: boolea
     gudang: false,
     produksi: false,
   });
+  const [allSales, setAllSales] = useState<User[]>([]);
+  const [allowedGroups, setAllowedGroups] = useState<string[]>([]);
+  const [allowedSales, setAllowedSales] = useState<string[]>([]);
+
+  // Load sales users list once when modal opens.
+  React.useEffect(() => {
+    if (!visible) return;
+    (async () => {
+      try {
+        const users = await api.listUsers({ role: "sales" });
+        // Sort by sales_code for consistent display.
+        users.sort((a, b) => (a.sales_code || a.username || "").localeCompare(b.sales_code || b.username || ""));
+        setAllSales(users);
+      } catch { /* ignore */ }
+    })();
+  }, [visible]);
 
   React.useEffect(() => {
     if (product) {
@@ -118,16 +143,33 @@ function ProductEditor({ visible, product, onClose, onSaved }: { visible: boolea
         gudang: roles.includes("gudang"),
         produksi: roles.includes("produksi"),
       });
+      setAllowedGroups(product.allowed_groups || []);
+      setAllowedSales(product.allowed_sales || []);
     } else {
       setName("");
       setUnit("gln");
       setPrice("");
       setOrder("");
       setHideRoles({ sales: false, admin: false, gudang: false, produksi: false });
+      setAllowedGroups([]);
+      setAllowedSales([]);
     }
   }, [product, visible]);
 
   const toggleRole = (r: string) => setHideRoles((s) => ({ ...s, [r]: !s[r] }));
+
+  const toggleGroup = (g: string) => setAllowedGroups((arr) => arr.includes(g) ? arr.filter((x) => x !== g) : [...arr, g]);
+  const toggleSalesCode = (code: string) => setAllowedSales((arr) => arr.includes(code) ? arr.filter((x) => x !== code) : [...arr, code]);
+
+  // Derive available group letters from loaded sales users (unique, uppercased).
+  const availableGroups = React.useMemo(() => {
+    const s = new Set<string>();
+    for (const u of allSales) {
+      const g = (u.group_letter || "").toUpperCase().trim();
+      if (g) s.add(g);
+    }
+    return Array.from(s).sort();
+  }, [allSales]);
 
   const save = async () => {
     if (!name.trim()) {
@@ -143,6 +185,8 @@ function ProductEditor({ visible, product, onClose, onSaved }: { visible: boolea
         order: parseInt(order) || 0,
         hide_price: roles.includes("sales"), // keep legacy in sync
         hide_price_roles: roles,
+        allowed_groups: allowedGroups.map((g) => g.toUpperCase()),
+        allowed_sales: allowedSales.map((s) => s.toUpperCase()),
       };
       if (product) await api.updateProduct(product.id, payload);
       else await api.createProduct(payload);
@@ -163,6 +207,7 @@ function ProductEditor({ visible, product, onClose, onSaved }: { visible: boolea
               <Ionicons name="close" size={24} color={theme.color.onSurface} />
             </TouchableOpacity>
           </View>
+          <ScrollView style={{ maxHeight: 560 }} contentContainerStyle={{ paddingBottom: 12 }} keyboardShouldPersistTaps="handled">
           <Text style={styles.label}>Nama Produk</Text>
           <TextInput value={name} onChangeText={setName} style={styles.input} testID="p-name-input" />
           <Text style={styles.label}>Satuan (gln / box / pcs)</Text>
@@ -204,9 +249,81 @@ function ProductEditor({ visible, product, onClose, onSaved }: { visible: boolea
             ))}
           </View>
 
+          {/* Akses Produk per-Wilayah & per-Sales */}
+          <View style={styles.privacyCard}>
+            <View style={styles.privacyHeader}>
+              <Ionicons name="lock-closed" size={16} color={theme.color.brand} />
+              <Text style={styles.privacyTitle}>Akses Produk (Prioritas Wilayah/Sales)</Text>
+            </View>
+            <Text style={styles.toggleHint}>
+              Kosongkan keduanya = terbuka untuk SEMUA sales. Kalau diisi, hanya sales yang cocok dengan{" "}
+              <Text style={{ fontWeight: "700" }}>Wilayah</Text> ATAU <Text style={{ fontWeight: "700" }}>Sales</Text>{" "}
+              yang bisa melihat & menjual produk ini.
+            </Text>
+
+            <Text style={styles.subLabel}>Wilayah (Group Letter)</Text>
+            {availableGroups.length === 0 ? (
+              <Text style={styles.emptyChip}>Belum ada sales terdaftar</Text>
+            ) : (
+              <View style={styles.chipsWrap}>
+                {availableGroups.map((g) => {
+                  const active = allowedGroups.includes(g);
+                  return (
+                    <TouchableOpacity
+                      key={g}
+                      onPress={() => toggleGroup(g)}
+                      style={[styles.chip, active && styles.chipOn]}
+                      testID={`p-group-${g}`}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.chipText, active && styles.chipTextOn]}>Wilayah {g}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+
+            <Text style={styles.subLabel}>Sales Spesifik</Text>
+            {allSales.length === 0 ? (
+              <Text style={styles.emptyChip}>Belum ada sales terdaftar</Text>
+            ) : (
+              <View style={styles.chipsWrap}>
+                {allSales.map((u) => {
+                  const code = (u.sales_code || u.username || "").toUpperCase();
+                  const active = allowedSales.includes(code);
+                  return (
+                    <TouchableOpacity
+                      key={u.id}
+                      onPress={() => toggleSalesCode(code)}
+                      style={[styles.chip, active && styles.chipOn]}
+                      testID={`p-sales-${code}`}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.chipText, active && styles.chipTextOn]}>
+                        {code}{u.name ? ` · ${u.name}` : ""}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+
+            {(allowedGroups.length > 0 || allowedSales.length > 0) && (
+              <TouchableOpacity
+                onPress={() => { setAllowedGroups([]); setAllowedSales([]); }}
+                style={styles.clearBtn}
+                testID="clear-access-btn"
+              >
+                <Ionicons name="close-circle" size={14} color={theme.color.error} />
+                <Text style={styles.clearBtnText}>Bersihkan (buka untuk semua)</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
           <TouchableOpacity onPress={save} style={styles.saveBtn} testID="save-product-btn">
             <Text style={styles.saveBtnText}>Simpan</Text>
           </TouchableOpacity>
+          </ScrollView>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -246,4 +363,15 @@ const styles = StyleSheet.create({
   roleDesc: { fontSize: 11, color: theme.color.muted, marginTop: 1 },
   checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: theme.color.border, alignItems: "center", justifyContent: "center", backgroundColor: "#fff" },
   checkboxOn: { backgroundColor: theme.color.brandPrimary, borderColor: theme.color.brandPrimary },
+  subLabel: { fontSize: 12, fontWeight: "700", color: theme.color.onSurfaceSecondary, marginTop: 10, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 },
+  chipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: theme.color.border, backgroundColor: "#fff" },
+  chipOn: { backgroundColor: theme.color.brandPrimary, borderColor: theme.color.brandPrimary },
+  chipText: { fontSize: 12, fontWeight: "600", color: theme.color.onSurface },
+  chipTextOn: { color: "#fff" },
+  emptyChip: { fontSize: 12, color: theme.color.muted, fontStyle: "italic" },
+  clearBtn: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", marginTop: 10, paddingVertical: 4 },
+  clearBtnText: { fontSize: 12, fontWeight: "600", color: theme.color.error },
+  accessBadge: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4, alignSelf: "flex-start", backgroundColor: "#FEF3C7", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  accessBadgeText: { fontSize: 11, fontWeight: "600", color: theme.color.warning },
 });

@@ -33,6 +33,8 @@ export type Product = {
   order: number;
   hide_price?: boolean;
   hide_price_roles?: string[];
+  allowed_groups?: string[];
+  allowed_sales?: string[];
 };
 
 export type Customer = {

@@ -195,3 +195,17 @@ Aplikasi mobile (Expo/React Native) untuk penjualan air minum galon dengan hirar
   - Sales `transaction/new.tsx` menyembunyikan baris harga produk bila role "sales" ada di list.
   - Detail transaksi Sales (`transaction/[id].tsx`) TETAP menampilkan harga (per keputusan bisnis: Sales berhak lihat harga dari transaksi yang dia buat sendiri).
   - Admin/Gudang/Produksi belum menampilkan harga produk di UI saat ini — toggle disimpan untuk masa depan (future-proof).
+
+## Akses Produk per-Wilayah / per-Sales (Sept 2026)
+- Field baru di schema `Product`:
+  - `allowed_groups: List[str]` — group letters (mis. ["Z"])
+  - `allowed_sales: List[str]` — sales_codes (mis. ["Z1","Z2"])
+- Default keduanya `[]` = produk **terbuka untuk semua sales** (backward compatible dengan produk lama).
+- UI Superadmin `Produk & Harga` → editor produk menampilkan section **"Akses Produk (Prioritas Wilayah/Sales)"** dengan:
+  - Chip **Wilayah** (di-generate dari group letters unik yang aktif di user Sales)
+  - Chip **Sales Spesifik** (list semua user role=sales dengan format "CODE · Nama")
+  - Tombol "Bersihkan (buka untuk semua)" untuk reset cepat
+- Card produk menampilkan badge **"🔒 Khusus Wilayah Z · Z1, Z2"** bila ada restriction.
+- Efek Sales:
+  - `transaction/new.tsx` filter client-side: produk hanya muncul bila `allowed_groups=[]` & `allowed_sales=[]` (open) ATAU user.group_letter cocok ATAU user.sales_code cocok.
+  - Filter berlaku baik saat online (network fetch) maupun offline (cached products).

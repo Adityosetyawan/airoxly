@@ -54,6 +54,18 @@ export default function TransactionForm() {
         } catch {
           prods = await getCachedProducts();
         }
+        // Filter products by access control (allowed_groups / allowed_sales).
+        // Empty lists on both = terbuka untuk semua.
+        const myGroup = (user?.group_letter || "").toUpperCase().trim();
+        const mySalesCode = (user?.sales_code || user?.username || "").toUpperCase().trim();
+        prods = prods.filter((p) => {
+          const groups = (p.allowed_groups || []).map((g) => (g || "").toUpperCase());
+          const sales = (p.allowed_sales || []).map((s) => (s || "").toUpperCase());
+          if (groups.length === 0 && sales.length === 0) return true;
+          if (groups.includes(myGroup)) return true;
+          if (sales.includes(mySalesCode)) return true;
+          return false;
+        });
         setProducts(prods);
 
         if (params.edit_id) {
@@ -102,7 +114,7 @@ export default function TransactionForm() {
         setLoading(false);
       }
     })();
-  }, [params.customer_id, params.edit_id, toast]);
+  }, [params.customer_id, params.edit_id, toast, user?.group_letter, user?.sales_code, user?.username]);
 
   // Calc bars for numeric fields
   const bayarBar = useCalcBar(bayar, { hint: "Uang dibayar" });

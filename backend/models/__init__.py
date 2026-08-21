@@ -95,6 +95,8 @@ class Product(BaseModel):
     order: int = 0
     hide_price: bool = False  # legacy — mirrors ("sales" in hide_price_roles)
     hide_price_roles: List[str] = []  # roles: "sales" | "admin" | "gudang" | "produksi"
+    allowed_groups: List[str] = []  # group letters (e.g., "Z"). Empty = open to all groups.
+    allowed_sales: List[str] = []   # sales_code (e.g., "Z1"). Empty = open to all sales.
 
 
 class ProductCreate(BaseModel):
@@ -104,6 +106,8 @@ class ProductCreate(BaseModel):
     order: int = 0
     hide_price: bool = False
     hide_price_roles: List[str] = []
+    allowed_groups: List[str] = []
+    allowed_sales: List[str] = []
 
 
 class ProductUpdate(BaseModel):
@@ -113,6 +117,8 @@ class ProductUpdate(BaseModel):
     order: Optional[int] = None
     hide_price: Optional[bool] = None
     hide_price_roles: Optional[List[str]] = None
+    allowed_groups: Optional[List[str]] = None
+    allowed_sales: Optional[List[str]] = None
 
 
 # ============================================================

@@ -48,7 +48,7 @@ function App() {
     <div className="App">
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <BrowserRouter>
+          <BrowserRouter basename={process.env.PUBLIC_URL || "/"}>
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route

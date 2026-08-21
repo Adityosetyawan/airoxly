@@ -59,8 +59,15 @@ Web admin companion untuk airoxly (Expo tetap untuk lapangan). v1 fokus: Login (
 - [!] Insiden saat tes (21 Agu): bug backend POST /warehouse/daily & /production/daily = UPSERT diam-diam per (date, shift, sales_id) → 2 record operator (warehouse `81490340`, production `67b5aba0`) tertimpa payload uji lalu terhapus. Konten asli kedua record terekam di log probe main agent (dapat direstorasi manual bila perilaku backend dibetulkan)
 - [!] Bug backend dilaporkan ke pemilik airoxly: (1) upsert diam-diam harusnya 409/create-baru, (2) GET /api/warehouse/transfers & /stock-split → 500
 
+## Deploy Vercel sub-path /admin (21 Agu 2026)
+- [x] Build script `PUBLIC_URL=/admin craco build` + BrowserRouter `basename` dinamis (PUBLIC_URL) — preview Emergent tetap jalan di root. Catatan: craco mengabaikan PUBLIC_URL dari `.env.production`, harus inline di script build.
+- [x] `frontend/vercel.json` (SPA fallback) + `frontend/.env.production` (REACT_APP_AIROXLY_API_URL)
+- [x] `/app/DEPLOY.md`: panduan lengkap — project Vercel terpisah untuk admin, rewrite `/admin/*` di project PWA utama, cek service worker (`navigateFallbackDenylist`), checklist verifikasi
+- [x] Build produksi terverifikasi: aset ter-prefix `/admin/static/*`
+- [x] Replica backend diselaraskan (login menerima `username`, query ber-projection + limit) — deployment_agent pass
+
 ## Backlog Prioritas
-- P1: Deploy sub-path /admin di Vercel
+- P1: Eksekusi deploy Vercel mengikuti /app/DEPLOY.md (butuh akses akun Vercel user)
 - P2 (Fase 4 sisa): AI Vision, import Excel, reminder pelanggan
 - P2 (backend airoxly, di luar repo ini): perbaiki upsert POST warehouse/production daily + 500 di /warehouse/transfers & /stock-split
 - P2: Migrasi TypeScript + Vite, refresh token flow penuh, lupa/reset password UI
@@ -68,4 +75,4 @@ Web admin companion untuk airoxly (Expo tetap untuk lapangan). v1 fokus: Login (
 ## Next Tasks
 1. (Opsional) Minta pemilik backend airoxly membuka POST /api/customers untuk super_admin/admin bila ingin tambah pelanggan dari web — saat ini backend membatasi create pelanggan ke role sales (by design aplikasi lapangan: butuh foto + GPS).
 2. Fase 4 sisa: AI Vision, import Excel, reminder pelanggan.
-3. Siapkan deploy Vercel sub-path /admin (base path + rewrite + cek service worker PWA root).
+3. Eksekusi deploy Vercel mengikuti /app/DEPLOY.md (import repo → project admin, tambah rewrite di project PWA, cek service worker).

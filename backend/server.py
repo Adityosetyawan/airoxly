@@ -75,13 +75,13 @@ async def get_current_user(request: Request) -> dict:
 
 
 class LoginRequest(BaseModel):
-    email: str
+    username: str
     password: str
 
 
 @api_router.post("/auth/login")
 async def login(payload: LoginRequest, request: Request, response: Response):
-    email = payload.email.strip().lower()
+    email = payload.username.strip().lower()
     now = datetime.now(timezone.utc)
     identifier = email
     attempt = await db.login_attempts.find_one({"identifier": identifier})
@@ -139,9 +139,10 @@ async def get_overview(range: str = Query("mingguan", alias="range"), user: dict
         tx_filter["sales_id"] = uid
         cust_filter["created_by"] = uid
 
-    txns = await db.transactions.find(tx_filter).to_list(100000)
-    customers = await db.customers.find(cust_filter).to_list(100000)
-    expenses = [] if user["role"] == "sales" else await db.expenses.find({"created_at": {"$gte": prev_start}}).to_list(100000)
+    tx_projection = {"total": 1, "hpp": 1, "created_at": 1, "sales_id": 1, "customer_name": 1, "sales_name": 1, "items.qty": 1}
+    txns = await db.transactions.find(tx_filter, tx_projection, limit=5000).to_list(5000)
+    customers = await db.customers.find(cust_filter, {"created_at": 1, "created_by": 1}, limit=5000).to_list(5000)
+    expenses = [] if user["role"] == "sales" else await db.expenses.find({"created_at": {"$gte": prev_start}}, {"amount": 1, "created_at": 1}, limit=5000).to_list(5000)
 
     cur_tx = [t for t in txns if t["created_at"] >= cur_start]
     prev_tx = [t for t in txns if t["created_at"] < cur_start]
@@ -169,7 +170,7 @@ async def get_overview(range: str = Query("mingguan", alias="range"), user: dict
         ]
 
     recent_filter = {} if user["role"] != "sales" else {"sales_id": str(user["_id"])}
-    recent_docs = await db.transactions.find(recent_filter).sort("created_at", -1).limit(6).to_list(6)
+    recent_docs = await db.transactions.find(recent_filter, {"customer_name": 1, "sales_name": 1, "items.qty": 1, "total": 1, "created_at": 1}).sort("created_at", -1).limit(6).to_list(6)
     recent = [
         {
             "id": str(t["_id"]),
@@ -226,9 +227,9 @@ async def get_trend(range_key: str = Query("mingguan", alias="range"), user: dic
     tx_filter = {"created_at": {"$gte": buckets[0]}}
     if user["role"] == "sales":
         tx_filter["sales_id"] = str(user["_id"])
-    txns = await db.transactions.find(tx_filter).to_list(200000)
+    txns = await db.transactions.find(tx_filter, {"total": 1, "created_at": 1, "sales_id": 1}, limit=5000).to_list(5000)
     show_expenses = user["role"] != "sales"
-    expenses = await db.expenses.find({"created_at": {"$gte": buckets[0]}}).to_list(100000) if show_expenses else []
+    expenses = await db.expenses.find({"created_at": {"$gte": buckets[0]}}, {"amount": 1, "created_at": 1}, limit=5000).to_list(5000) if show_expenses else []
 
     points = []
     for b in buckets:

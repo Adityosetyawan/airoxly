@@ -30,6 +30,26 @@ function navigateToRoleHome() {
   }, 600);
 }
 
+/**
+ * Navigate directly to a role's dashboard by URL. Used for STOP-IMPERSONATION
+ * to guarantee we land on the Super Admin dashboard even if index-based
+ * routing has stale state.
+ */
+function navigateToRoleDashboard(role: string | undefined | null) {
+  const target =
+    role === "super_admin" ? "/(superadmin)/dashboard"
+    : role === "admin" ? "/(admin)/dashboard"
+    : role === "gudang" ? "/(gudang)/dashboard"
+    : role === "produksi" ? "/(produksi)/dashboard"
+    : role === "sales" ? "/(sales)/dashboard"
+    : "/";
+  // Fire multiple times to defeat native Stack caching quirks.
+  const fire = () => { try { router.replace(target as any); } catch {} };
+  setTimeout(fire, 0);
+  setTimeout(fire, 200);
+  setTimeout(fire, 700);
+}
+
 type AuthCtx = {
   user: User | null;
   loading: boolean;
@@ -155,10 +175,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const stopImpersonation = async () => {
     const orig = await api.stopImpersonation();
+    // Update React state FIRST so any dependent screens re-render with the
+    // restored Super Admin identity before we navigate.
     if (orig) setUser(orig);
     setIsImpersonating(false);
-    // Route via / (index) which reads updated user state and picks correct dashboard
-    navigateToRoleHome();
+    // Clear any cached data that belonged to the impersonated user (best-effort).
+    try {
+      const { purgeOfflineStore } = await import("@/src/utils/offlineStore");
+      await purgeOfflineStore();
+    } catch {}
+    // Go DIRECTLY to the restored user's dashboard (default: super_admin).
+    navigateToRoleDashboard(orig?.role || "super_admin");
     return orig;
   };
 

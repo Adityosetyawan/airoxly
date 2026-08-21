@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { Platform, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Platform, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -38,6 +38,8 @@ export default function LiveLocations() {
   const [refreshing, setRefreshing] = useState(false);
   const [showCustomers, setShowCustomers] = useState(true);
   const [selectedSalesId, setSelectedSalesId] = useState<string | null>(null);
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [q, setQ] = useState("");
 
   const routeGroup = user?.role === "super_admin" ? "(superadmin)" : "(admin)";
 
@@ -69,9 +71,48 @@ export default function LiveLocations() {
     return m;
   }, [items]);
 
+  // Derive available wilayah (group letters) from live sales list.
+  const availableGroups = useMemo<string[]>(() => {
+    const set = new Set<string>();
+    items.forEach((s) => {
+      const g = (s.group_letter || (s.sales_code ? String(s.sales_code).charAt(0) : "") || "").toUpperCase().trim();
+      if (g) set.add(g);
+    });
+    return Array.from(set).sort();
+  }, [items]);
+
+  const toggleGroup = (g: string) => setSelectedGroups((arr) => arr.includes(g) ? arr.filter((x) => x !== g) : [...arr, g]);
+
+  const groupOfSales = (s: any): string => {
+    return (s.group_letter || (s.sales_code ? String(s.sales_code).charAt(0) : "") || "").toUpperCase().trim();
+  };
+
+  const groupOfCustomer = (c: Customer): string => {
+    const code = (c.sales_code || "").toUpperCase();
+    if (code) return code.charAt(0);
+    // Fallback: find owner sales in items list
+    const owner = items.find((s) => s.id === c.created_by);
+    return owner ? groupOfSales(owner) : "";
+  };
+
+  const matchGroup = (g: string) => selectedGroups.length === 0 || selectedGroups.includes(g);
+
+  const filteredSales = useMemo(() => {
+    const kw = q.trim().toLowerCase();
+    return items.filter((s) => {
+      if (selectedSalesId && s.id !== selectedSalesId) return false;
+      if (!matchGroup(groupOfSales(s))) return false;
+      if (!kw) return true;
+      const name = (s.name || "").toLowerCase();
+      const code = (s.sales_code || "").toLowerCase();
+      return name.includes(kw) || code.includes(kw);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, selectedSalesId, selectedGroups, q]);
+
   const salesMarkers = useMemo<MapMarker[]>(() => {
-    return items
-      .filter((s) => s.last_location && (!selectedSalesId || s.id === selectedSalesId))
+    return filteredSales
+      .filter((s) => s.last_location)
       .map((s) => ({
         lat: s.last_location.lat,
         lng: s.last_location.lng,
@@ -80,13 +121,16 @@ export default function LiveLocations() {
         popup: `<b>${escapeHtml(s.sales_code || "?")}</b><br>${escapeHtml(s.name || "")}<br>${timeAgo(s.last_location.ts)}`,
         variant: "badge" as const,
       }));
-  }, [items, salesColorMap, selectedSalesId]);
+  }, [filteredSales, salesColorMap]);
 
   const customerMarkers = useMemo<MapMarker[]>(() => {
     if (!showCustomers) return [];
+    const kw = q.trim().toLowerCase();
     return customers
       .filter((c) => typeof c.lat === "number" && typeof c.lng === "number")
       .filter((c) => !selectedSalesId || c.created_by === selectedSalesId)
+      .filter((c) => matchGroup(groupOfCustomer(c)))
+      .filter((c) => !kw || (c.name || "").toLowerCase().includes(kw) || String(c.customer_no || "").includes(kw))
       .map((c) => ({
         lat: c.lat as number,
         lng: c.lng as number,
@@ -99,7 +143,8 @@ export default function LiveLocations() {
           (c.wa_number ? `<br>WA: ${escapeHtml(c.wa_number)}` : ""),
         variant: "dot" as const,
       }));
-  }, [customers, showCustomers, salesColorMap, selectedSalesId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customers, showCustomers, salesColorMap, selectedSalesId, selectedGroups, q, items]);
 
   const allMarkers = useMemo(() => [...customerMarkers, ...salesMarkers], [customerMarkers, salesMarkers]);
 
@@ -127,6 +172,54 @@ export default function LiveLocations() {
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.color.brandPrimary} />}
       >
+        {/* Wilayah filter (chips) */}
+        {availableGroups.length > 0 && (
+          <View style={styles.wilayahWrap}>
+            <Text style={styles.wilayahLabel}>Wilayah:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+              <TouchableOpacity
+                onPress={() => setSelectedGroups([])}
+                style={[styles.wilChip, selectedGroups.length === 0 && styles.wilChipActive]}
+                testID="wilayah-all"
+              >
+                <Text style={[styles.wilChipText, selectedGroups.length === 0 && styles.wilChipTextActive]}>Semua</Text>
+              </TouchableOpacity>
+              {availableGroups.map((g) => {
+                const active = selectedGroups.includes(g);
+                return (
+                  <TouchableOpacity
+                    key={g}
+                    onPress={() => toggleGroup(g)}
+                    style={[styles.wilChip, active && styles.wilChipActive]}
+                    testID={`wilayah-${g}`}
+                  >
+                    <Text style={[styles.wilChipText, active && styles.wilChipTextActive]}>Wilayah {g}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Search */}
+        <View style={styles.searchWrap}>
+          <Ionicons name="search" size={14} color={theme.color.muted} />
+          <TextInput
+            value={q}
+            onChangeText={setQ}
+            placeholder="Cari nama sales / pelanggan / kode / no.pelanggan…"
+            placeholderTextColor={theme.color.muted}
+            style={styles.searchInput}
+            autoCapitalize="none"
+            testID="live-search-input"
+          />
+          {q ? (
+            <TouchableOpacity onPress={() => setQ("")}>
+              <Ionicons name="close-circle" size={14} color={theme.color.muted} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
         {/* Overlay toggle */}
         <View style={styles.overlayBar}>
           <TouchableOpacity
@@ -184,10 +277,10 @@ export default function LiveLocations() {
         )}
 
         <Text style={styles.section}>Daftar Sales</Text>
-        <Text style={styles.hint}>Tap sales untuk memfilter peta hanya wilayahnya.</Text>
-        {items.map((s, idx) => {
+        <Text style={styles.hint}>Tap sales untuk fokus peta ke wilayahnya. Long-press untuk lihat riwayat rute.</Text>
+        {filteredSales.map((s, idx) => {
           const l = s.last_location;
-          const color = "#" + PIN_COLORS[idx % PIN_COLORS.length];
+          const color = "#" + PIN_COLORS[items.indexOf(s) % PIN_COLORS.length];
           const active = s.id === selectedSalesId;
           return (
             <TouchableOpacity
@@ -225,6 +318,12 @@ export default function LiveLocations() {
           <View style={styles.empty}>
             <Ionicons name="people-outline" size={40} color={theme.color.muted} />
             <Text style={styles.emptyText}>Belum ada sales</Text>
+          </View>
+        )}
+        {items.length > 0 && filteredSales.length === 0 && (
+          <View style={styles.empty}>
+            <Ionicons name="funnel-outline" size={32} color={theme.color.muted} />
+            <Text style={styles.emptyText}>Tidak ada sales yang cocok dengan filter</Text>
           </View>
         )}
       </ScrollView>
@@ -330,4 +429,12 @@ const styles = StyleSheet.create({
   dot: { width: 10, height: 10, borderRadius: 5 },
   empty: { alignItems: "center", padding: 40 },
   emptyText: { color: theme.color.muted, marginTop: 12 },
+  wilayahWrap: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
+  wilayahLabel: { fontSize: 12, fontWeight: "700", color: theme.color.onSurfaceSecondary },
+  wilChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: theme.color.border, backgroundColor: theme.color.surface },
+  wilChipActive: { backgroundColor: theme.color.brand, borderColor: theme.color.brand },
+  wilChipText: { fontSize: 12, fontWeight: "600", color: theme.color.onSurface },
+  wilChipTextActive: { color: "#fff" },
+  searchWrap: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: theme.color.border, backgroundColor: theme.color.surfaceSecondary },
+  searchInput: { flex: 1, fontSize: 12, color: theme.color.onSurface, paddingVertical: 0 },
 });

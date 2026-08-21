@@ -242,3 +242,14 @@ Aplikasi mobile (Expo/React Native) untuk penjualan air minum galon dengan hirar
 
 ## GPS Auto-Update (Verified)
 - Foreground ping tiap 120s untuk Sales role sudah aktif (`(sales)/_layout.tsx`), guard 08:00–17:00 baik di client maupun backend (`locations.py`).
+
+## Live Map — Wilayah Filter (Sept 2026)
+- `(admin)/live.tsx` (dipakai juga oleh Superadmin) tambah chip filter Wilayah (multi-select) + search bar.
+- Filter berlaku ke marker sales, marker pelanggan, dan list sales di bawah peta.
+- Empty state khusus ketika filter kosong.
+
+## Impersonation — Kembali ke Superadmin (Sept 2026)
+- `stopImpersonation` di AuthContext sekarang:
+  - Purge offlineStore (buang cache milik user impersonated)
+  - Navigate DIRECTLY ke `/(superadmin)/dashboard` (bukan lewat `/` index) — 3× retry (0/200/700 ms)
+- Banner sticky "Kembali" tetap ada di atas.

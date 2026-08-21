@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from "react";
-import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useCallback, useMemo, useState } from "react";
+import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -23,6 +23,20 @@ export default function SuperUsers() {
   const [users, setUsers] = useState<User[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [impersonatingId, setImpersonatingId] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+
+  const filteredUsers = useMemo(() => {
+    const kw = q.trim().toLowerCase();
+    if (!kw) return users;
+    return users.filter((u) => {
+      const name = (u.name || "").toLowerCase();
+      const username = (u.username || "").toLowerCase();
+      const code = (u.sales_code || "").toLowerCase();
+      const grp = (u.group_letter || "").toLowerCase();
+      const kel = (u.kelompok || "").toLowerCase();
+      return name.includes(kw) || username.includes(kw) || code.includes(kw) || grp.includes(kw) || kel.includes(kw);
+    });
+  }, [q, users]);
 
   const handleImpersonate = async (target: User) => {
     if (impersonatingId) return;
@@ -76,8 +90,26 @@ export default function SuperUsers() {
         ))}
       </ScrollView>
 
+      <View style={styles.searchWrap}>
+        <Ionicons name="search" size={16} color={theme.color.muted} />
+        <TextInput
+          value={q}
+          onChangeText={setQ}
+          placeholder="Cari nama, username, kode sales, atau kelompok..."
+          placeholderTextColor={theme.color.muted}
+          style={styles.searchInput}
+          autoCapitalize="none"
+          testID="user-search-input"
+        />
+        {q ? (
+          <TouchableOpacity onPress={() => setQ("")}>
+            <Ionicons name="close-circle" size={16} color={theme.color.muted} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
       <FlatList
-        data={users}
+        data={filteredUsers}
         keyExtractor={(u) => u.id}
         contentContainerStyle={{ padding: 16 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.color.brandPrimary} />}
@@ -150,4 +182,6 @@ const styles = StyleSheet.create({
   },
   impersonateBtnText: { color: "#fff", fontWeight: "700", fontSize: 12 },
   empty: { textAlign: "center", color: theme.color.muted, padding: 40 },
+  searchWrap: { flexDirection: "row", alignItems: "center", gap: 6, marginHorizontal: 16, marginBottom: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: theme.color.border, backgroundColor: theme.color.surfaceSecondary },
+  searchInput: { flex: 1, fontSize: 13, color: theme.color.onSurface, paddingVertical: 0 },
 });

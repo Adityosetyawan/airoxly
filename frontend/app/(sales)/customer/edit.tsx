@@ -18,6 +18,8 @@ export default function EditCustomer() {
   const [address, setAddress] = useState("");
   const [photoRumah, setPhotoRumah] = useState<string | null>(null);
   const [origPhoto, setOrigPhoto] = useState<string | null>(null);
+  const [lat, setLat] = useState("");
+  const [lng, setLng] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -30,6 +32,8 @@ export default function EditCustomer() {
         setAddress(c.address || "");
         setPhotoRumah(c.photo_rumah || null);
         setOrigPhoto(c.photo_rumah || null);
+        setLat(c.lat != null ? String(c.lat) : "");
+        setLng(c.lng != null ? String(c.lng) : "");
       } catch (e: any) {
         toast.show(e.message || "Gagal", "error");
       } finally {
@@ -46,6 +50,16 @@ export default function EditCustomer() {
       if (photoRumah !== origPhoto) {
         body.photo_rumah = photoRumah || ""; // "" utk hapus
       }
+      // Manual koordinat (opsional). Kirim hanya jika keduanya valid number.
+      const latN = parseFloat(lat);
+      const lngN = parseFloat(lng);
+      if (!isNaN(latN) && !isNaN(lngN)) {
+        body.lat = latN;
+        body.lng = lngN;
+      } else if (lat === "" && lng === "") {
+        body.lat = null;
+        body.lng = null;
+      }
       await api.updateCustomer(id!, body);
       // Patch cache offline supaya list & detail langsung refresh
       await patchCachedCustomer(id!, {
@@ -53,6 +67,7 @@ export default function EditCustomer() {
         wa_number: wa,
         address,
         ...(photoRumah !== origPhoto ? { photo_rumah: photoRumah || undefined } : {}),
+        ...(body.lat != null ? { lat: body.lat, lng: body.lng } : {}),
       });
       toast.show("Tersimpan", "success");
       router.back();
@@ -88,6 +103,32 @@ export default function EditCustomer() {
           <TextInput value={wa} onChangeText={setWa} keyboardType="phone-pad" style={styles.input} testID="wa-input" />
           <Text style={styles.label}>Alamat</Text>
           <TextInput value={address} onChangeText={setAddress} multiline style={[styles.input, { minHeight: 80, textAlignVertical: "top" }]} testID="address-input" />
+
+          <Text style={styles.label}>Koordinat GPS (opsional — bisa diisi manual)</Text>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <TextInput
+              value={lat}
+              onChangeText={setLat}
+              keyboardType="numbers-and-punctuation"
+              placeholder="Latitude (mis. -6.20)"
+              placeholderTextColor={theme.color.muted}
+              style={[styles.input, { flex: 1 }]}
+              testID="lat-input"
+            />
+            <TextInput
+              value={lng}
+              onChangeText={setLng}
+              keyboardType="numbers-and-punctuation"
+              placeholder="Longitude (mis. 106.81)"
+              placeholderTextColor={theme.color.muted}
+              style={[styles.input, { flex: 1 }]}
+              testID="lng-input"
+            />
+          </View>
+          <Text style={{ fontSize: 11, color: theme.color.muted, marginTop: 4 }}>
+            Kosongkan kedua kolom untuk hapus koordinat. Tips: bisa dapat dari Google Maps → tap tahan lokasi → koordinat muncul di atas.
+          </Text>
+
           <Text style={styles.label}>Foto Rumah</Text>
           <PhotoCapture
             value={photoRumah}

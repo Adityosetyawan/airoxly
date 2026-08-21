@@ -231,3 +231,14 @@ Aplikasi mobile (Expo/React Native) untuk penjualan air minum galon dengan hirar
 
 ## Input Harian Produksi — Placeholder 0 (Sept 2026)
 - Kolom manual_adjust / manual_adjust_before default kosong (placeholder abu-abu "0") bukan "0".
+
+## Kelola User — Pencarian (Sept 2026)
+- Tambah TextInput pencarian di atas daftar user. Mendukung filter nama, username, sales_code, group_letter, kelompok. Kompatibel dengan tab role.
+
+## Koordinat Manual Pelanggan (Sept 2026)
+- Form Edit Pelanggan (Sales) sekarang punya 2 kolom (Latitude & Longitude) opsional.
+- Berlaku juga di Superadmin/Admin edit (menggunakan form yang sama).
+- Kosongkan keduanya → hapus koordinat. Validasi angka.
+
+## GPS Auto-Update (Verified)
+- Foreground ping tiap 120s untuk Sales role sudah aktif (`(sales)/_layout.tsx`), guard 08:00–17:00 baik di client maupun backend (`locations.py`).

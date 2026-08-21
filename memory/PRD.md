@@ -65,6 +65,7 @@ Web admin companion untuk airoxly (Expo tetap untuk lapangan). v1 fokus: Login (
 - [x] `/app/DEPLOY.md`: panduan lengkap — project Vercel terpisah untuk admin, rewrite `/admin/*` di project PWA utama, cek service worker (`navigateFallbackDenylist`), checklist verifikasi
 - [x] Build produksi terverifikasi: aset ter-prefix `/admin/static/*`
 - [x] Replica backend diselaraskan (login menerima `username`, query ber-projection + limit) — deployment_agent pass
+- [x] Fix build Vercel (deploy pertama gagal di "Installing dependencies" ~6 detik): hapus pin `packageManager` yarn (memicu corepack download yang gagal), tambah `engines.node=20.x`, tambah `.npmrc` legacy-peer-deps; lockfile terverifikasi install bersih via cache folder baru
 
 ## Backlog Prioritas
 - P1: Eksekusi deploy Vercel mengikuti /app/DEPLOY.md (butuh akses akun Vercel user)

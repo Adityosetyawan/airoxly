@@ -7,12 +7,12 @@ import { useAuth } from "@/context/AuthContext";
 import { ROLE_LABELS } from "@/lib/format";
 
 const UPCOMING = [
-  { label: "Pelanggan", icon: Users, fase: "Fase 2", roles: ["superadmin", "admin", "sales"] },
-  { label: "Produk", icon: Package, fase: "Fase 2", roles: ["superadmin", "admin"] },
-  { label: "Transaksi", icon: ShoppingCart, fase: "Fase 2", roles: ["superadmin", "admin", "sales"] },
-  { label: "Pengeluaran", icon: Wallet, fase: "Fase 2", roles: ["superadmin", "admin"] },
-  { label: "Peta Live", icon: Map, fase: "Fase 3", roles: ["superadmin", "admin"] },
-  { label: "Pengguna & Peran", icon: UserCog, fase: "Fase 3", roles: ["superadmin"] },
+  { label: "Pelanggan", icon: Users, fase: "Fase 2", roles: ["super_admin", "admin", "sales"] },
+  { label: "Produk", icon: Package, fase: "Fase 2", roles: ["super_admin", "admin"] },
+  { label: "Transaksi", icon: ShoppingCart, fase: "Fase 2", roles: ["super_admin", "admin", "sales"] },
+  { label: "Pengeluaran", icon: Wallet, fase: "Fase 2", roles: ["super_admin", "admin"] },
+  { label: "Peta Live", icon: Map, fase: "Fase 3", roles: ["super_admin", "admin"] },
+  { label: "Pengguna & Peran", icon: UserCog, fase: "Fase 3", roles: ["super_admin"] },
 ];
 
 const initials = (name = "") =>

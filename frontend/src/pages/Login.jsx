@@ -10,7 +10,7 @@ const LOGIN_BG =
 export default function Login() {
   const { user, login } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -22,7 +22,7 @@ export default function Login() {
     setError("");
     setSubmitting(true);
     try {
-      const u = await login(email.trim(), password);
+      const u = await login(username.trim(), password);
       toast.success(`Selamat datang, ${u.name}`);
       navigate("/", { replace: true });
     } catch (err) {
@@ -72,18 +72,18 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">
             <div>
-              <label htmlFor="login-email" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-600">
-                Email
+              <label htmlFor="login-username" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-600">
+                Username
               </label>
               <input
-                id="login-email"
-                data-testid="login-email-input"
-                type="email"
+                id="login-username"
+                data-testid="login-username-input"
+                type="text"
                 required
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="nama@airoxly.id"
+                autoComplete="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="mis. superadmin"
                 className="w-full rounded-md border border-[#DEE2E6] bg-white px-3 py-2.5 text-sm text-[#0A0A0A] outline-none transition-colors placeholder:text-gray-400 focus:border-[#0A0A0A]"
               />
             </div>

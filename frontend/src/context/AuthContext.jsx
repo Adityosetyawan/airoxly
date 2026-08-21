@@ -13,11 +13,10 @@ export const formatApiErrorDetail = (detail) => {
   return String(detail);
 };
 
-const decodeToken = (token) => {
+const getCachedUser = () => {
   try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    if (!payload.exp || payload.exp * 1000 < Date.now()) return null;
-    return { id: payload.sub, email: payload.email, name: payload.name || payload.email, role: payload.role };
+    const raw = localStorage.getItem("oxly_user");
+    return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
@@ -34,20 +33,25 @@ export const AuthProvider = ({ children }) => {
     }
     api
       .get("/auth/me")
-      .then((res) => setUser(res.data))
+      .then((res) => {
+        localStorage.setItem("oxly_user", JSON.stringify(res.data));
+        setUser(res.data);
+      })
       .catch((err) => {
         if (err.response?.status === 401) {
           localStorage.removeItem("oxly_token");
+          localStorage.removeItem("oxly_user");
           setUser(null);
         } else {
-          setUser(decodeToken(token));
+          setUser(getCachedUser());
         }
       });
   }, []);
 
-  const login = useCallback(async (email, password) => {
-    const res = await api.post("/auth/login", { email, password });
+  const login = useCallback(async (username, password) => {
+    const res = await api.post("/auth/login", { username, password });
     localStorage.setItem("oxly_token", res.data.access_token);
+    localStorage.setItem("oxly_user", JSON.stringify(res.data.user));
     setUser(res.data.user);
     return res.data.user;
   }, []);
@@ -59,6 +63,7 @@ export const AuthProvider = ({ children }) => {
       /* sesi lokal tetap dibersihkan */
     }
     localStorage.removeItem("oxly_token");
+    localStorage.removeItem("oxly_user");
     setUser(null);
   }, []);
 

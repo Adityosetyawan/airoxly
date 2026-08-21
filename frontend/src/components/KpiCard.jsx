@@ -34,6 +34,8 @@ export const KpiCard = ({ metric }) => {
             </span>
             <span className="text-gray-400">vs periode lalu</span>
           </>
+        ) : metric.hint ? (
+          <span className="text-gray-400">{metric.hint}</span>
         ) : (
           <span className="flex items-center gap-1 text-gray-400">
             <Minus className="h-3 w-3" />

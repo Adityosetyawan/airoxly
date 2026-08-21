@@ -1,7 +1,9 @@
 import axios from "axios";
 
+const base = process.env.REACT_APP_AIROXLY_API_URL || process.env.REACT_APP_BACKEND_URL;
+
 const api = axios.create({
-  baseURL: `${process.env.REACT_APP_BACKEND_URL}/api`,
+  baseURL: `${base}/api`,
 });
 
 api.interceptors.request.use((config) => {
@@ -16,6 +18,7 @@ api.interceptors.response.use(
     const isLoginCall = error.config?.url?.includes("/auth/login");
     if (error.response?.status === 401 && !isLoginCall && !window.location.pathname.startsWith("/login")) {
       localStorage.removeItem("oxly_token");
+      localStorage.removeItem("oxly_user");
       window.location.assign("/login");
     }
     return Promise.reject(error);

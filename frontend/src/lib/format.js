@@ -25,7 +25,9 @@ export const formatDateTime = (iso) =>
   }).format(new Date(iso));
 
 export const ROLE_LABELS = {
-  superadmin: "SuperAdmin",
+  super_admin: "SuperAdmin",
   admin: "Admin",
   sales: "Sales",
+  produksi: "Produksi",
+  gudang: "Gudang",
 };

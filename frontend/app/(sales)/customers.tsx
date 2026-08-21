@@ -257,6 +257,13 @@ export default function Customers() {
             )}
           </View>
           <TouchableOpacity
+            onPress={() => router.push("/(sales)/route")}
+            style={[styles.routeReload, { backgroundColor: "#1E40AF" }]}
+            testID="route-map-btn"
+          >
+            <Ionicons name="map" size={14} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={async () => { const p = await captureOrigin(); if (p) load(); }}
             style={styles.routeReload}
             testID="route-reload-btn"

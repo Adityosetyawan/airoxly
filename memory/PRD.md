@@ -266,3 +266,13 @@ Aplikasi mobile (Expo/React Native) untuk penjualan air minum galon dengan hirar
 - Page: `(superadmin)/wilayah-summary` (link dari Dashboard Superadmin) & mirror `(admin)/wilayah-summary` (link dari Dashboard Admin).
 - UI: month navigator, total card, per-wilayah cards dengan bar-chart % share + statistik detail.
 - Admin dibatasi ke `group_letter`-nya sendiri; Superadmin lihat semua.
+
+## Peta Rute Sales (Leaflet, Sept 2026)
+- Halaman baru: `(sales)/route.tsx` — dibuka dari tombol peta biru di route-bar `customers.tsx`
+- Menampilkan peta Leaflet full-screen dengan:
+  - Marker "GO" untuk lokasi Sales
+  - Marker bernomor 1..N untuk urutan kunjungan (nearest neighbor)
+  - Garis polyline biru menghubungkan seluruh titik
+- List pemberhentian di bawah peta: nomor, nama pelanggan, jarak dari prev, jarak kumulatif
+- Tap baris → buka detail pelanggan
+- Tombol refresh GPS di header

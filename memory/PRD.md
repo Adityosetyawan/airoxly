@@ -66,6 +66,7 @@ Web admin companion untuk airoxly (Expo tetap untuk lapangan). v1 fokus: Login (
 - [x] Build produksi terverifikasi: aset ter-prefix `/admin/static/*`
 - [x] Replica backend diselaraskan (login menerima `username`, query ber-projection + limit) — deployment_agent pass
 - [x] Fix build Vercel (deploy pertama gagal di "Installing dependencies" ~6 detik): hapus pin `packageManager` yarn (memicu corepack download yang gagal), tambah `engines.node=20.x`, tambah `.npmrc` legacy-peer-deps; lockfile terverifikasi install bersih via cache folder baru
+- [x] Fix build Vercel kedua (gagal 1m3s di tahap build): Vercel menset CI=true sehingga warning ESLint jadi error — warning useMemo di LiveMap.jsx diperbaiki (sales & customers dibungkus useMemo); `CI=true yarn build` lokal lolos 0 warning
 
 ## Backlog Prioritas
 - P1: Eksekusi deploy Vercel mengikuti /app/DEPLOY.md (butuh akses akun Vercel user)

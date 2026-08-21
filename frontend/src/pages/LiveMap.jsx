@@ -49,8 +49,14 @@ export default function LiveMap() {
     enabled: showCustomers,
   });
 
-  const sales = (liveQuery.data || []).filter((s) => s.last_location && (!group || s.group_letter === group));
-  const customers = showCustomers ? (customersQuery.data || []).filter((c) => c.lat && c.lng) : [];
+  const sales = useMemo(
+    () => (liveQuery.data || []).filter((s) => s.last_location && (!group || s.group_letter === group)),
+    [liveQuery.data, group]
+  );
+  const customers = useMemo(
+    () => (showCustomers ? (customersQuery.data || []).filter((c) => c.lat && c.lng) : []),
+    [showCustomers, customersQuery.data]
+  );
   const groups = [...new Set((liveQuery.data || []).map((s) => s.group_letter).filter(Boolean))].sort();
 
   const fitPoints = useMemo(() => {

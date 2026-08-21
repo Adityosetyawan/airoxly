@@ -496,9 +496,9 @@ export const api = {
     req<{ id: string; name: string; category: string; unit: string; order: number }[]>(
       `/inventory/items${category ? `?category=${category}` : ""}`,
     ),
-  createInventoryItem: (body: { name: string; category: "bahan" | "barang_jadi"; unit?: string; order?: number }) =>
+  createInventoryItem: (body: { name: string; category: "bahan" | "barang_jadi"; unit?: string; order?: number; bom?: Record<string, number>; bom_repair?: Record<string, number> }) =>
     req<any>("/inventory/items", { method: "POST", body: JSON.stringify(body) }),
-  updateInventoryItem: (id: string, body: { name: string; category: "bahan" | "barang_jadi"; unit?: string; order?: number }) =>
+  updateInventoryItem: (id: string, body: { name: string; category: "bahan" | "barang_jadi"; unit?: string; order?: number; bom?: Record<string, number>; bom_repair?: Record<string, number> }) =>
     req<any>(`/inventory/items/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteInventoryItem: (id: string) =>
     req(`/inventory/items/${id}`, { method: "DELETE" }),

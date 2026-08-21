@@ -22,7 +22,7 @@ Alur:
 from __future__ import annotations
 
 import uuid
-from typing import Optional
+from typing import Optional, Dict
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -43,6 +43,10 @@ class InventoryItemBody(BaseModel):
     category: str  # "bahan" | "barang_jadi"
     unit: str = "pcs"
     order: int = 0
+    # BOM (Bill of Materials) - only for category=barang_jadi.
+    # dict of { bahan_name: qty_per_unit }
+    bom: Optional[Dict[str, float]] = None       # for Catat Produksi & Rusak Permanen
+    bom_repair: Optional[Dict[str, float]] = None  # for Selesai Repair (biasanya kardus+lid saja)
 
 
 @router.get("/items")
@@ -74,6 +78,8 @@ async def create_item(body: InventoryItemBody, user=Depends(require_roles("super
         "category": body.category,
         "unit": body.unit or "pcs",
         "order": int(body.order or 0),
+        "bom": body.bom or {},
+        "bom_repair": body.bom_repair or {},
         "created_at": now_utc().isoformat(),
     }
     await db.inventory_items.insert_one(doc)
@@ -83,7 +89,14 @@ async def create_item(body: InventoryItemBody, user=Depends(require_roles("super
 
 @router.put("/items/{item_id}")
 async def update_item(item_id: str, body: InventoryItemBody, user=Depends(require_roles("super_admin"))):
-    update = {"name": body.name.strip(), "category": body.category, "unit": body.unit or "pcs", "order": int(body.order or 0)}
+    update = {
+        "name": body.name.strip(),
+        "category": body.category,
+        "unit": body.unit or "pcs",
+        "order": int(body.order or 0),
+        "bom": body.bom or {},
+        "bom_repair": body.bom_repair or {},
+    }
     res = await db.inventory_items.update_one({"id": item_id}, {"$set": update})
     if not res.matched_count:
         raise HTTPException(404, "Item tidak ada")
@@ -223,6 +236,14 @@ async def _bahan_stock_gudang(item_name: str) -> int:
     return incoming - out
 
 
+async def _bahan_consumed_produksi(item_name: str) -> float:
+    """Total bahan yang telah dikonsumsi Produksi via BOM (produce/repair/write-off)."""
+    total = 0.0
+    async for r in db.bahan_consumptions.find({"item_name": item_name}, {"_id": 0, "qty": 1}):
+        total += float(r.get("qty", 0) or 0)
+    return total
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # BARANG JADI (Finished Goods)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -239,6 +260,64 @@ class FinishedTransferBody(BaseModel):
     item_name: str
     qty: int
     notes: Optional[str] = None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# BOM consumption helper (applies BOM to bahan stock via bahan_consumptions log)
+# ═══════════════════════════════════════════════════════════════════════════
+
+async def _apply_bom_consumption(
+    *, item_name: str, qty: int, use_repair_bom: bool, source_kind: str,
+    source_doc_id: str, date: str, user: dict,
+) -> list[dict]:
+    """Deduct bahan stock at Produksi based on the barang_jadi's BOM.
+    Logs each consumed bahan to `bahan_consumptions`. Returns warnings (list of strings)
+    for bahan yang stok Produksinya minus setelah dikurangi.
+
+    NOTE: `qty` di sini adalah jumlah unit barang jadi yang diproduksi/repair/rusak.
+    Bahan yang dikurangi = qty × bom_qty.
+    """
+    prod = await db.inventory_items.find_one({"name": item_name, "category": "barang_jadi"}, {"_id": 0})
+    if not prod:
+        return []
+    bom_dict: dict = (prod.get("bom_repair") or {}) if use_repair_bom else (prod.get("bom") or {})
+    if not bom_dict:
+        return []
+    warnings: list[str] = []
+    for bahan_name, per_unit in bom_dict.items():
+        try:
+            per = float(per_unit or 0)
+        except Exception:
+            per = 0
+        total = per * int(qty)
+        if total <= 0:
+            continue
+        # Log consumption
+        await db.bahan_consumptions.insert_one({
+            "id": str(uuid.uuid4()),
+            "date": date,
+            "item_name": bahan_name,
+            "qty": total,
+            "source_kind": source_kind,   # "produce" | "repair_done" | "write_off"
+            "source_doc_id": source_doc_id,
+            "barang_jadi": item_name,
+            "created_by": user["id"],
+            "created_by_name": user.get("name") or user["username"],
+            "created_at": now_utc().isoformat(),
+        })
+    return warnings
+
+
+@router.get("/bahan/consumptions")
+async def list_bahan_consumptions(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    user=Depends(require_roles("produksi", "super_admin", "admin", "gudang")),
+):
+    q: dict = {}
+    if date_from and date_to:
+        q["date"] = {"$gte": date_from, "$lte": date_to}
+    return await db.bahan_consumptions.find(q, {"_id": 0}).sort("date", -1).to_list(3000)
 
 
 @router.post("/finished/produce")
@@ -260,6 +339,11 @@ async def finished_produce(
         "created_at": now_utc().isoformat(),
     }
     await db.finished_production.insert_one(doc)
+    # Auto-deduct bahan Produksi based on BOM utama.
+    await _apply_bom_consumption(
+        item_name=body.item_name, qty=int(body.qty), use_repair_bom=False,
+        source_kind="produce", source_doc_id=doc["id"], date=body.date, user=user,
+    )
     doc.pop("_id", None)
     return doc
 
@@ -481,6 +565,11 @@ async def damage_repair_done(
         "created_at": now_utc().isoformat(),
     }
     await db.damage_movements.insert_one(doc)
+    # Auto-deduct bahan Produksi based on BOM REPAIR (khusus repair, biasanya hanya kardus+lid).
+    await _apply_bom_consumption(
+        item_name=body.item_name, qty=int(body.qty), use_repair_bom=True,
+        source_kind="repair_done", source_doc_id=doc["id"], date=body.date, user=user,
+    )
     doc.pop("_id", None)
     return doc
 
@@ -520,6 +609,11 @@ async def damage_write_off(
         "created_at": now_utc().isoformat(),
     }
     await db.damage_movements.insert_one(doc)
+    # Auto-deduct bahan Produksi based on BOM utama (barang harus dibuat ulang).
+    await _apply_bom_consumption(
+        item_name=body.item_name, qty=int(body.qty), use_repair_bom=False,
+        source_kind="write_off", source_doc_id=doc["id"], date=body.date, user=user,
+    )
     doc.pop("_id", None)
     return doc
 
@@ -583,11 +677,14 @@ async def inventory_stock(
             transferred = 0
             async for r in db.bahan_transfers.find({"item_name": name}, {"_id": 0, "qty": 1}):
                 transferred += int(r.get("qty", 0) or 0)
+            consumed = await _bahan_consumed_produksi(name)
+            # Round to int for display; consumption stored as float supports partial rolls (mis. 0.1 lakban).
             out["bahan"].append({
                 "name": name,
                 "unit": item.get("unit", "pcs"),
                 "gudang": gudang,
-                "produksi": transferred,
+                "produksi": transferred - consumed,
+                "consumed": consumed,
             })
 
     # Barang Jadi

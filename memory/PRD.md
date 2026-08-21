@@ -276,3 +276,14 @@ Aplikasi mobile (Expo/React Native) untuk penjualan air minum galon dengan hirar
 - List pemberhentian di bawah peta: nomor, nama pelanggan, jarak dari prev, jarak kumulatif
 - Tap baris → buka detail pelanggan
 - Tombol refresh GPS di header
+
+## BOM Auto-Deduct (Sept 2026)
+- Backend field `bom` & `bom_repair` di InventoryItem barang_jadi.
+- Endpoint POST `/api/inventory/finished/produce`, `/damage/repair-done`, `/damage/write-off` sekarang otomatis konsumsi bahan sesuai BOM:
+  - `produce` → pakai `bom` (BOM utama)
+  - `repair_done` → pakai `bom_repair` (khusus repair, biasanya hanya kardus+lid)
+  - `write_off` → pakai `bom` (barang harus dibuat ulang)
+- Konsumsi dicatat di collection `bahan_consumptions` (untuk audit).
+- Stok endpoint `/api/inventory/stock?category=bahan` sekarang return `consumed` per bahan + kurangi kolom `produksi`.
+- Frontend Superadmin Inventory: tombol "BOM" di tiap barang jadi → modal editor dengan 2 kolom (Utama & Repair) per bahan.
+- Perilaku: warning-only (tidak block) — stok bahan bisa jadi minus saat kurang; Superadmin bertugas kirim bahan dari Gudang.

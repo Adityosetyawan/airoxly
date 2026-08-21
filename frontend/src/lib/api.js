@@ -2,6 +2,13 @@ import axios from "axios";
 
 const base = process.env.REACT_APP_AIROXLY_API_URL || process.env.REACT_APP_BACKEND_URL;
 
+if (!base) {
+  throw new Error(
+    "Konfigurasi API hilang: REACT_APP_AIROXLY_API_URL / REACT_APP_BACKEND_URL belum diset saat build. " +
+    "Isi di Vercel → Settings → Environment Variables, lalu redeploy."
+  );
+}
+
 const api = axios.create({
   baseURL: `${base}/api`,
 });

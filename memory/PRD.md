@@ -70,6 +70,7 @@ Web admin companion untuk airoxly (Expo tetap untuk lapangan). v1 fokus: Login (
 - [x] Fix build Vercel ketiga: hapus `"version": 2` dari frontend/vercel.json (memicu perilaku platform legacy); simulasi penuh ala Vercel (install dari nol di folder bersih + CI=true build + serve via /admin dengan symlink) lolos end-to-end
 - [x] Fix build Vercel keempat: error sebenarnya terlihat — Vercel memakai **npm** (bukan yarn) sehingga pohon dependensi kena konflik klasik `ajv@8` vs `ajv-keywords@3` (stack: schema-utils → terser-webpack-plugin). Fix: `vercel.json` kini memaksa `installCommand: yarn install` + `buildCommand: yarn build`
 - [x] Fix runtime Vercel kelima: deploy Ready tapi blank di URL standalone — aset dicari di `/admin/static/*` (PUBLIC_URL) sementara file ada di `/static/*`. Fix: rewrite `/admin/static/:path* → /static/:path*` (+ manifest/favicon) di vercel.json — URL standalone langsung berfungsi, dan di belakang rewrite PWA utama tetap aman (filesystem Vercel didahulukan)
+- [x] Fix runtime Vercel keenam: bundle berisi `undefined/api` — file `.env*` difilter Save to GitHub sehingga REACT_APP_AIROXLY_API_URL hilang saat build. Fix: api.js fail-fast dengan pesan jelas + dokumentasi WAJIB set env var di dashboard Vercel (DEPLOY.md)
 
 ## Backlog Prioritas
 - P1: Eksekusi deploy Vercel mengikuti /app/DEPLOY.md (butuh akses akun Vercel user)

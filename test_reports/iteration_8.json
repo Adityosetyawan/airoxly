@@ -1,0 +1,45 @@
+{
+  "summary": "Retest iterasi 7 di https://airoxly-admin.vercel.app/admin. Bug rewrite SPA (blank page karena aset ditelan) SUDAH TERPERBAIKI — /admin/static/js/main.67a744e3.js dan main.9e84cdff.css kembali dengan Content-Type yang benar (application/javascript, text/css), login form render sempurna, deep link /admin/customers tidak 404. Namun ditemukan bug baru yang memblokir SEMUA login: env var REACT_APP_AIROXLY_API_URL tidak ter-inject saat Vercel build → bundle memuat literal string \"undefined/api\" sebagai baseURL. Semua POST /api/auth/login jadi POST relatif ke /admin/undefined/api/auth/login (405). Akibatnya 0/4 flow yang butuh backend (login super, deep-link setelah login, login sales, logout) bisa diverifikasi.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Semua login (superadmin & sales) di Vercel deployment",
+        "issue": "axios.create({ baseURL: `${base}/api` }) di /app/frontend/src/lib/api.js meng-inline string 'undefined' karena REACT_APP_AIROXLY_API_URL tidak tersedia pada Vercel build. Bukti: bundle main.67a744e3.js mengandung literal baseURL:\"undefined/api\", request runtime = POST https://airoxly-admin.vercel.app/admin/undefined/api/auth/login → 405. UI menampilkan 'Server sedang tidak dapat dihubungi. Coba lagi beberapa saat.'",
+        "affected_selectors": ["[data-testid=\"login-submit-button\"]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "TAMBAHKAN environment variable di Vercel Project Settings → Environment Variables (Production + Preview): REACT_APP_AIROXLY_API_URL = https://oxly-crm.emergent.host. File /app/frontend/.env.production sudah berisi nilai tsb tapi tampaknya Vercel mengabaikan .env.production dari repo (kemungkinan Root Directory / build context tidak menempatkan frontend/ sebagai root, ATAU dashboard override kosong). Setelah set env var, trigger redeploy. Verifikasi via: curl -s https://airoxly-admin.vercel.app/admin/static/js/main.*.js | grep -oE 'baseURL:\"[^\"]*\"' — harus menampilkan baseURL:\"https://oxly-crm.emergent.host/api\", BUKAN undefined/api.",
+    "Sekaligus set REACT_APP_BACKEND_URL sebagai fallback (kode: `AIROXLY_API_URL || BACKEND_URL`).",
+    "Tambahkan guard di /app/frontend/src/lib/api.js: jika `base` falsy/undefined, throw Error yang jelas saat modul dimuat, sehingga bug env var ke depannya gagal-cepat dengan pesan meaningful, bukan diam-diam kirim ke '/admin/undefined/api/...'.",
+    "Setelah env var Vercel diset, RETEST 6 flow: superadmin login → 8 KPI; deep link /admin/customers → tabel; API cross-domain (CORS) ke oxly-crm.emergent.host; sales login → 6 KPI tanpa Pengeluaran/Setoran; logout kembali ke /admin/login."
+  ],
+  "critical_code_review_comments": [
+    "src/lib/api.js meng-encode env var langsung ke template string tanpa runtime validation; ini sudah menyebabkan bug diam (silent) 2x (iter 7 dan sekarang). Tambahkan `if(!base) throw new Error('REACT_APP_AIROXLY_API_URL/REACT_APP_BACKEND_URL missing');` di modul init.",
+    "vercel.json sekarang sudah benar (rewrite /admin/static/* di atas fallback SPA) — dikonfirmasi berfungsi via curl HEAD (content-type application/javascript & text/css untuk aset)."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (skipped per instruksi)",
+    "frontend": "3/7 flows PASS (root loads not-blank, JS/CSS assets served correct MIME, deep-link tidak 404). 4/7 BLOCKED oleh env var Vercel (login super, dashboard KPI, sales login, logout)."
+  },
+  "test_credentials": "Digunakan dari /app/memory/test_credentials.md — superadmin/Adityo67890, adminz/admin123. Kredensial valid (POST /api/auth/login langsung ke https://oxly-crm.emergent.host bekerja pada iterasi sebelumnya).",
+  "seed_data_creation": "Tidak ada. Read-only sesuai instruksi.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iterasi 7 blank-page bug SUDAH FIX (vercel rewrite benar, aset /admin/static/* → /static/* mengembalikan JS/CSS asli). Bug tersisa: env var REACT_APP_AIROXLY_API_URL kosong pada Vercel build. Setelah main agent set env var di Vercel dashboard + redeploy, cukup ulangi Playwright: (1) login superadmin, (2) hitung [data-testid^='kpi-card-'] harus 8, (3) navigate /admin/customers cek tabel, (4) sidebar-logout-button klik → /admin/login, (5) login sales adminz, (6) KPI count 6, no 'Pengeluaran'/'Setoran' text. Quick sanity: curl bundle grep baseURL harus TIDAK 'undefined'.",
+  "rca of the issue": {
+    "bug": "Login gagal total di production Vercel (superadmin + sales)",
+    "root_cause": "Bundle production airoxly-admin.vercel.app mengandung baseURL literal 'undefined/api'. Env var REACT_APP_AIROXLY_API_URL tidak ada saat webpack/CRA melakukan DefinePlugin substitusi pada `process.env.REACT_APP_AIROXLY_API_URL`. Meskipun /app/frontend/.env.production ada di repo dengan nilai benar, Vercel deployment tidak memanfaatkannya — kemungkinan besar Root Directory di Vercel bukan `/app/frontend`, atau ada env var dashboard yang mengoverride menjadi kosong.",
+    "reproduction": "1) curl -s https://airoxly-admin.vercel.app/admin/static/js/main.67a744e3.js | grep -oE 'baseURL:\"[^\"]*\"' → menampilkan baseURL:\"undefined/api\". 2) Di browser, buka /admin/login, isi kredensial valid, klik Masuk → Network tab menunjukkan POST https://airoxly-admin.vercel.app/admin/undefined/api/auth/login 405, UI menampilkan 'Server sedang tidak dapat dihubungi'.",
+    "mitigation": "Set REACT_APP_AIROXLY_API_URL=https://oxly-crm.emergent.host (dan REACT_APP_BACKEND_URL sebagai fallback) di Vercel Project → Settings → Environment Variables untuk semua environment. Redeploy. Sebagai defense-in-depth: tambahkan runtime assertion di src/lib/api.js agar bug env-var-kosong throw jelas alih-alih hasilkan URL 'undefined/api'."
+  }
+}

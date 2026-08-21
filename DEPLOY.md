@@ -13,8 +13,10 @@ Tujuan: web admin tampil di `https://<domain-utama>/admin` tanpa menabrak PWA Ex
 
 1. Import repo ke Vercel → pilih root directory `frontend`
 2. Framework preset: **Create React App** (build `yarn build`, output `build`)
-3. Environment variable (atau sudah tercakup via `.env.production`):
+3. **WAJIB** isi Environment Variables di dashboard Vercel (Project → Settings → Environment Variables → berlaku untuk Production):
    - `REACT_APP_AIROXLY_API_URL=https://oxly-crm.emergent.host`
+   
+   ⚠️ File `.env*` (termasuk `.env.production`) **tidak ikut ter-push** oleh Save to GitHub (filter keamanan Emergent) — tanpa langkah ini, bundle berisi `undefined/api` dan semua login gagal.
 4. Deploy → dapat URL, mis. `https://oxly-admin.vercel.app`
 5. `vercel.json` di repo ini sudah berisi: paksa yarn (`installCommand`/`buildCommand`), rewrite `/admin/static/* → /static/*` (agar URL standalone `*.vercel.app/admin` langsung berfungsi), dan SPA fallback ke `index.html`
 

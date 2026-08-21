@@ -53,6 +53,12 @@ Uji: buka `https://<domain>/admin` dalam mode penyamaran (tanpa cache) dan pasti
 | API mengarah ke `oxly-crm.emergent.host` | DevTools → Network |
 | PWA root `/` tidak terganggu | browser |
 
+## Troubleshooting build Vercel (semua sudah teratasi di repo)
+
+1. **Gagal ~6 detik setelah "Installing dependencies" tanpa pesan** → pin `packageManager: yarn@...` memicu corepack download yang gagal. Sudah dihapus dari package.json.
+2. **Gagal build ±1 menit, log berhenti di tengah** → Vercel menset `CI=true`; CRA mengubah warning ESLint jadi error. Semua warning sudah dibersihkan (terverifikasi `CI=true yarn build` lolos 0 warning).
+3. **`Error: Command "npm run build" exited with 1` + stack `ajv-keywords`/`schema-utils`/`terser-webpack-plugin`** → Vercel memakai npm (yarn.lock tidak ikut ter-push) dan pohon npm kena konflik ajv@8 vs ajv-keywords@3. Sudah dipaksa yarn via `installCommand: "yarn install"` + `buildCommand: "yarn build"` di `frontend/vercel.json`.
+
 ## Catatan
 
 - CORS backend airoxly sudah `allow-origin: *` — tidak perlu perubahan.

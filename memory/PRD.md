@@ -68,6 +68,7 @@ Web admin companion untuk airoxly (Expo tetap untuk lapangan). v1 fokus: Login (
 - [x] Fix build Vercel (deploy pertama gagal di "Installing dependencies" ~6 detik): hapus pin `packageManager` yarn (memicu corepack download yang gagal), tambah `engines.node=20.x`, tambah `.npmrc` legacy-peer-deps; lockfile terverifikasi install bersih via cache folder baru
 - [x] Fix build Vercel kedua (gagal 1m3s di tahap build): Vercel menset CI=true sehingga warning ESLint jadi error — warning useMemo di LiveMap.jsx diperbaiki (sales & customers dibungkus useMemo); `CI=true yarn build` lokal lolos 0 warning
 - [x] Fix build Vercel ketiga: hapus `"version": 2` dari frontend/vercel.json (memicu perilaku platform legacy); simulasi penuh ala Vercel (install dari nol di folder bersih + CI=true build + serve via /admin dengan symlink) lolos end-to-end
+- [x] Fix build Vercel keempat: error sebenarnya terlihat — Vercel memakai **npm** (bukan yarn) sehingga pohon dependensi kena konflik klasik `ajv@8` vs `ajv-keywords@3` (stack: schema-utils → terser-webpack-plugin). Fix: `vercel.json` kini memaksa `installCommand: yarn install` + `buildCommand: yarn build`
 
 ## Backlog Prioritas
 - P1: Eksekusi deploy Vercel mengikuti /app/DEPLOY.md (butuh akses akun Vercel user)

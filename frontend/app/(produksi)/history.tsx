@@ -75,14 +75,23 @@ export default function ProduksiHistory() {
               </View>
             </View>
             <View style={styles.pills}>
-              {item.galon_ganti ? <Pill k="Gln Gt" v={item.galon_ganti} /> : null}
-              {item.sil_ganti ? <Pill k="Sil" v={item.sil_ganti} /> : null}
-              {item.mur_ganti ? <Pill k="Mur" v={item.mur_ganti} /> : null}
-              {item.kran_ganti ? <Pill k="Kran" v={item.kran_ganti} /> : null}
-              {item.stiker_ganti ? <Pill k="Stiker" v={item.stiker_ganti} /> : null}
-              {item.stoper_ganti ? <Pill k="Stoper" v={item.stoper_ganti} /> : null}
-              {item.karet_kran_ganti ? <Pill k="Karet Kran" v={item.karet_kran_ganti} /> : null}
               {item.produksi_galon ? <Pill k="Prod Gln" v={item.produksi_galon} color="#1E3A8A" /> : null}
+              {item.manual_adjust ? <Pill k="Adjust" v={item.manual_adjust} color="#059669" /> : null}
+              {(item.sisa_pagi || item.sisa_siang) ? <Pill k="Sisa" v={(item.sisa_pagi || 0) + (item.sisa_siang || 0)} color="#F59E0B" /> : null}
+              {/* Dynamic part_qtys */}
+              {item.part_qtys && typeof item.part_qtys === "object"
+                ? Object.entries(item.part_qtys)
+                  .filter(([, v]) => (v as number) > 0)
+                  .map(([k, v]) => <Pill key={`pq-${k}`} k={k} v={v as number} color="#EC4899" />)
+                : null}
+              {/* Legacy top-level part fields (kept for old data compatibility) */}
+              {item.galon_ganti ? <Pill k="Gln Gt" v={item.galon_ganti} /> : null}
+              {item.sil_ganti && !(item.part_qtys?.["Sil Ganti"]) && !(item.part_qtys?.["Seal Ganti"]) ? <Pill k="Sil" v={item.sil_ganti} /> : null}
+              {item.mur_ganti && !(item.part_qtys?.["Mur Ganti"]) ? <Pill k="Mur" v={item.mur_ganti} /> : null}
+              {item.kran_ganti && !(item.part_qtys?.["Kran Ganti"]) ? <Pill k="Kran" v={item.kran_ganti} /> : null}
+              {item.stiker_ganti && !(item.part_qtys?.["Stiker Ganti"]) ? <Pill k="Stiker" v={item.stiker_ganti} /> : null}
+              {item.stoper_ganti && !(item.part_qtys?.["Stoper Ganti"]) ? <Pill k="Stoper" v={item.stoper_ganti} /> : null}
+              {item.karet_kran_ganti && !(item.part_qtys?.["Karet Kran Ganti"]) ? <Pill k="Karet Kran" v={item.karet_kran_ganti} /> : null}
             </View>
             {item.note ? <Text style={styles.note}>{item.note}</Text> : null}
             <EntryPhotos slots={makeProductionSlots(item)} hint="📷 Foto Galon (ketuk untuk perbesar)" compact />

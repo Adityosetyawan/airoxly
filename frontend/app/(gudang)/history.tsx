@@ -74,15 +74,25 @@ export default function GudangHistory() {
                 {(item.bawa_pagi || item.bawa_siang) ? <Pill k="Bawa" v={(item.bawa_pagi || 0) + (item.bawa_siang || 0)} color="#059669" /> : null}
                 {(item.sisa_pagi || item.sisa_siang) ? <Pill k="Sisa" v={(item.sisa_pagi || 0) + (item.sisa_siang || 0)} color="#F59E0B" /> : null}
                 {terjual ? <Pill k="Terjual" v={terjual} color="#0EA5E9" /> : null}
+                {((item.kosong_kembali_siang || 0) + (item.kosong_kembali_sore || 0)) ? (
+                  <Pill k="Kembali" v={(item.kosong_kembali_siang || 0) + (item.kosong_kembali_sore || 0)} color="#6B7280" />
+                ) : null}
+                {/* Dynamic part_qtys */}
+                {item.part_qtys && typeof item.part_qtys === "object"
+                  ? Object.entries(item.part_qtys)
+                    .filter(([, v]) => (v as number) > 0)
+                    .map(([k, v]) => <Pill key={`pq-${k}`} k={k} v={v as number} color="#EC4899" />)
+                  : null}
+                {/* Legacy top-level part fields (kept for old data compatibility) */}
                 {item.galon_ganti ? <Pill k="Gln" v={item.galon_ganti} /> : null}
                 {item.galon_kran ? <Pill k="Gln Krn" v={item.galon_kran} /> : null}
                 {item.galon_polos ? <Pill k="Gln Pls" v={item.galon_polos} /> : null}
-                {item.kran_ganti ? <Pill k="Krn" v={item.kran_ganti} /> : null}
-                {item.seal_ganti ? <Pill k="Seal" v={item.seal_ganti} /> : null}
-                {item.mur_ganti ? <Pill k="Mur" v={item.mur_ganti} /> : null}
-                {item.stiker_ganti ? <Pill k="Stiker" v={item.stiker_ganti} /> : null}
-                {item.karet_kran_ganti ? <Pill k="Karet" v={item.karet_kran_ganti} /> : null}
-                {item.stoper_ganti ? <Pill k="Stoper" v={item.stoper_ganti} /> : null}
+                {item.kran_ganti && !(item.part_qtys?.["Kran Ganti"]) ? <Pill k="Krn" v={item.kran_ganti} /> : null}
+                {item.seal_ganti && !(item.part_qtys?.["Seal Ganti"]) ? <Pill k="Seal" v={item.seal_ganti} /> : null}
+                {item.mur_ganti && !(item.part_qtys?.["Mur Ganti"]) ? <Pill k="Mur" v={item.mur_ganti} /> : null}
+                {item.stiker_ganti && !(item.part_qtys?.["Stiker Ganti"]) ? <Pill k="Stiker" v={item.stiker_ganti} /> : null}
+                {item.karet_kran_ganti && !(item.part_qtys?.["Karet Kran Ganti"]) ? <Pill k="Karet" v={item.karet_kran_ganti} /> : null}
+                {item.stoper_ganti && !(item.part_qtys?.["Stoper Ganti"]) ? <Pill k="Stoper" v={item.stoper_ganti} /> : null}
               </View>
               {item.note ? <Text style={styles.note}>{item.note}</Text> : null}
               <EntryPhotos slots={makeWarehouseSlots(item)} hint="📷 Foto Galon (ketuk untuk perbesar)" compact />

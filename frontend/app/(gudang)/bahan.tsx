@@ -15,7 +15,6 @@ import { AppHeader } from "@/src/components/AppHeader";
 import { theme } from "@/src/theme";
 import { api } from "@/src/api";
 import { useToast } from "@/src/components/Toast";
-import { useCalcBar } from "@/src/components/KeyboardCalcBar";
 
 type Item = { id: string; name: string; category: string; unit: string; order: number };
 type StockRow = { name: string; unit: string; gudang: number; produksi: number };
@@ -43,15 +42,10 @@ export default function GudangBahan() {
   const [transfers, setTransfers] = useState<Movement[]>([]);
   const [refresh, setRefresh] = useState(false);
   const [modal, setModal] = useState<"incoming" | "transfer" | null>(null);
-  const [selectedItem, setSelectedItem] = useState<string>("");
-  const [qty, setQty] = useState("");
+  // Map bahan name → qty string (multi-input mode)
+  const [qtys, setQtys] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState("");
   const [sending, setSending] = useState(false);
-
-  const qtyBar = useCalcBar(qty, {
-    hint: modal === "incoming" ? `Terima ${selectedItem || "bahan"}` : `Kirim ${selectedItem || "bahan"}`,
-    format: (r) => `${parseInt(r, 10) || 0} ${items.find((i) => i.name === selectedItem)?.unit || "pcs"}`,
-  });
 
   const load = useCallback(async () => {
     try {
@@ -80,29 +74,48 @@ export default function GudangBahan() {
 
   const openModal = (mode: "incoming" | "transfer") => {
     setModal(mode);
-    setSelectedItem(items[0]?.name || "");
-    setQty("");
+    setQtys({});
     setNotes("");
   };
 
+  const setQty = (name: string, v: string) => setQtys((s) => ({ ...s, [name]: v.replace(/[^\d]/g, "") }));
+
+  const filledCount = Object.values(qtys).filter((v) => (parseInt(v, 10) || 0) > 0).length;
+  const filledTotal = Object.entries(qtys).reduce((sum, [, v]) => sum + (parseInt(v, 10) || 0), 0);
+
   const doAction = async () => {
-    const q = parseInt(qty, 10);
-    if (!selectedItem) return toast.show("Pilih bahan", "error");
-    if (!q || q <= 0) return toast.show("Qty harus > 0", "error");
-    if (modal === "transfer" && q > (stokFor[selectedItem] || 0)) {
-      return toast.show(`Stok Gudang untuk ${selectedItem} cuma ${stokFor[selectedItem] || 0}`, "error");
+    // Collect all rows with qty > 0
+    const entries = Object.entries(qtys)
+      .map(([name, v]) => ({ name, qty: parseInt(v, 10) || 0 }))
+      .filter((r) => r.qty > 0);
+    if (entries.length === 0) return toast.show("Isi qty minimal 1 bahan", "error");
+    // Validate stok for transfer
+    if (modal === "transfer") {
+      const over = entries.find((e) => e.qty > (stokFor[e.name] || 0));
+      if (over) return toast.show(`Stok ${over.name} hanya ${stokFor[over.name] || 0}`, "error");
     }
     setSending(true);
     try {
       const today = new Date().toISOString().slice(0, 10);
-      if (modal === "incoming") {
-        await api.bahanIncoming({ date: today, item_name: selectedItem, qty: q, notes: notes.trim() || undefined });
-        toast.show(`+${q} ${selectedItem} masuk Gudang ✅`, "success");
+      const notesTrim = notes.trim() || undefined;
+      const results = await Promise.allSettled(entries.map((e) => (
+        modal === "incoming"
+          ? api.bahanIncoming({ date: today, item_name: e.name, qty: e.qty, notes: notesTrim })
+          : api.bahanTransfer({ date: today, item_name: e.name, qty: e.qty, notes: notesTrim })
+      )));
+      const ok = results.filter((r) => r.status === "fulfilled").length;
+      const fail = results.length - ok;
+      if (fail === 0) {
+        toast.show(
+          modal === "incoming"
+            ? `✅ ${ok} bahan masuk Gudang (total ${filledTotal})`
+            : `✅ ${ok} bahan dikirim ke Produksi (total ${filledTotal})`,
+          "success",
+        );
+        setModal(null);
       } else {
-        await api.bahanTransfer({ date: today, item_name: selectedItem, qty: q, notes: notes.trim() || undefined });
-        toast.show(`Kirim ${q} ${selectedItem} ke Produksi ✅`, "success");
+        toast.show(`${ok} berhasil, ${fail} gagal — coba lagi item yang gagal`, "error");
       }
-      setModal(null);
       await load();
     } catch (e: any) {
       toast.show(e?.message || "Gagal simpan", "error");
@@ -211,64 +224,68 @@ export default function GudangBahan() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ padding: 14 }}>
-              <Text style={styles.label}>Pilih Bahan</Text>
-              <View style={styles.chipsWrap}>
-                {items.map((it) => {
-                  const stok = stokFor[it.name] || 0;
-                  const disabled = modal === "transfer" && stok <= 0;
-                  const active = selectedItem === it.name;
-                  return (
-                    <TouchableOpacity
-                      key={it.id}
-                      onPress={() => !disabled && setSelectedItem(it.name)}
-                      disabled={disabled}
-                      style={[styles.chip, active && styles.chipActive, disabled && styles.chipDisabled]}
-                      testID={`bahan-chip-${it.name}`}
-                    >
-                      <Text style={[styles.chipText, active && { color: "#fff" }, disabled && { color: theme.color.muted }]}>
-                        {it.name}
-                      </Text>
-                      <Text style={[styles.chipUnit, active && { color: "#D1FAE5" }]}>{it.unit}</Text>
-                      {modal === "transfer" && (
-                        <Text style={[styles.chipStok, active && { color: "#D1FAE5" }, disabled && { color: theme.color.muted }]}>
-                          stok {stok}
-                        </Text>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
+            <ScrollView style={{ maxHeight: 500 }} contentContainerStyle={{ padding: 14 }} keyboardShouldPersistTaps="handled">
+              <View style={styles.hintBox}>
+                <Ionicons name="information-circle" size={16} color={theme.color.brand} />
+                <Text style={styles.hintText}>
+                  Isi qty untuk bahan yang mau {modal === "incoming" ? "dimasukkan" : "dikirim"}. Baris qty 0/kosong akan diabaikan.
+                </Text>
               </View>
 
-              <Text style={styles.label}>Qty</Text>
-              <View style={styles.stepRow}>
-                <TouchableOpacity onPress={() => setQty((v) => String(Math.max(0, (parseInt(v, 10) || 0) - 1)))} style={styles.stepBtn}>
-                  <Ionicons name="remove" size={18} color={theme.color.brand} />
-                </TouchableOpacity>
-                <TextInput
-                  value={qty}
-                  onChangeText={(v) => setQty(v.replace(/[^\d]/g, ""))}
-                  onFocus={qtyBar.onFocus}
-                  onBlur={qtyBar.onBlur}
-                  keyboardType="number-pad"
-                  placeholder="0"
-                  placeholderTextColor={theme.color.muted}
-                  style={styles.qtyInput}
-                  testID="bahan-qty-input"
-                />
-                <TouchableOpacity onPress={() => setQty((v) => String((parseInt(v, 10) || 0) + 1))} style={styles.stepBtn}>
-                  <Ionicons name="add" size={18} color={theme.color.brand} />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.presetsRow}>
-                {[10, 25, 50, 100, 250, 500].map((v) => (
-                  <TouchableOpacity key={v} onPress={() => setQty(String(v))} style={styles.presetBtn}>
-                    <Text style={styles.presetText}>+{v}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              {items.length === 0 ? (
+                <Text style={styles.emptyText}>Belum ada Bahan terdaftar</Text>
+              ) : (
+                <View style={{ gap: 6, marginTop: 8 }}>
+                  {items.map((it) => {
+                    const stok = stokFor[it.name] || 0;
+                    const val = qtys[it.name] || "";
+                    const q = parseInt(val, 10) || 0;
+                    const overStock = modal === "transfer" && q > stok;
+                    const disabled = modal === "transfer" && stok <= 0;
+                    return (
+                      <View key={it.id} style={[styles.bahanRow, q > 0 && styles.bahanRowActive, overStock && styles.bahanRowError, disabled && styles.bahanRowDisabled]}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.bahanName, disabled && { color: theme.color.muted }]} numberOfLines={2}>{it.name}</Text>
+                          <Text style={styles.bahanMeta}>
+                            <Text style={{ fontWeight: "700" }}>{it.unit}</Text>
+                            {modal === "transfer" ? ` · stok ${stok}` : ""}
+                          </Text>
+                        </View>
+                        <View style={styles.qtyGroup}>
+                          <TouchableOpacity
+                            onPress={() => setQty(it.name, String(Math.max(0, q - 1)))}
+                            style={styles.qtyStep}
+                            disabled={disabled}
+                            testID={`bahan-minus-${it.name}`}
+                          >
+                            <Ionicons name="remove" size={16} color={disabled ? theme.color.muted : theme.color.brand} />
+                          </TouchableOpacity>
+                          <TextInput
+                            value={val}
+                            onChangeText={(v) => setQty(it.name, v)}
+                            keyboardType="number-pad"
+                            placeholder="0"
+                            placeholderTextColor={theme.color.muted}
+                            style={[styles.bahanQtyInput, overStock && { color: theme.color.error }]}
+                            editable={!disabled}
+                            testID={`bahan-qty-${it.name}`}
+                          />
+                          <TouchableOpacity
+                            onPress={() => setQty(it.name, String(q + 1))}
+                            style={styles.qtyStep}
+                            disabled={disabled}
+                            testID={`bahan-plus-${it.name}`}
+                          >
+                            <Ionicons name="add" size={16} color={disabled ? theme.color.muted : theme.color.brand} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
 
-              <Text style={styles.label}>Catatan (opsional)</Text>
+              <Text style={styles.label}>Catatan (opsional, berlaku untuk semua baris)</Text>
               <TextInput
                 value={notes}
                 onChangeText={setNotes}
@@ -284,14 +301,17 @@ export default function GudangBahan() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={doAction}
-                disabled={sending || !qty || !selectedItem}
-                style={[styles.doBtn, (sending || !qty || !selectedItem) && { opacity: 0.55 }]}
+                disabled={sending || filledCount === 0}
+                style={[styles.doBtn, (sending || filledCount === 0) && { opacity: 0.55 }]}
                 testID="do-bahan-btn"
               >
                 {sending ? <ActivityIndicator size="small" color="#fff" /> : (
                   <>
                     <Ionicons name={modal === "incoming" ? "download" : "paper-plane"} size={14} color="#fff" />
-                    <Text style={styles.doBtnText}>{modal === "incoming" ? "Simpan" : "Kirim"}</Text>
+                    <Text style={styles.doBtnText}>
+                      {modal === "incoming" ? "Simpan" : "Kirim"}
+                      {filledCount > 0 ? ` (${filledCount} bahan · ${filledTotal})` : ""}
+                    </Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -359,4 +379,15 @@ const styles = StyleSheet.create({
   cancelBtnText: { color: theme.color.onSurface, fontWeight: "600" },
   doBtn: { flex: 2, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, padding: 12, borderRadius: 12, backgroundColor: theme.color.brandPrimary },
   doBtnText: { color: "#fff", fontWeight: "800", fontSize: 14 },
+  hintBox: { flexDirection: "row", alignItems: "center", gap: 6, padding: 10, borderRadius: 10, backgroundColor: theme.color.brandTertiary, marginBottom: 4 },
+  hintText: { flex: 1, fontSize: 11, color: theme.color.onBrandTertiary, lineHeight: 15 },
+  bahanRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 10, borderRadius: 10, borderWidth: 1, borderColor: theme.color.border, backgroundColor: "#fff" },
+  bahanRowActive: { borderColor: theme.color.brandPrimary, backgroundColor: theme.color.brandTertiary },
+  bahanRowError: { borderColor: theme.color.error, backgroundColor: "#FEE2E2" },
+  bahanRowDisabled: { opacity: 0.5, backgroundColor: theme.color.surfaceSecondary },
+  bahanName: { fontSize: 13, fontWeight: "700", color: theme.color.onSurface },
+  bahanMeta: { fontSize: 10, color: theme.color.muted, marginTop: 2 },
+  qtyGroup: { flexDirection: "row", alignItems: "center", gap: 4 },
+  qtyStep: { width: 30, height: 34, borderRadius: 8, borderWidth: 1, borderColor: theme.color.border, backgroundColor: theme.color.surfaceSecondary, alignItems: "center", justifyContent: "center" },
+  bahanQtyInput: { width: 62, height: 34, borderWidth: 1, borderColor: theme.color.border, borderRadius: 8, textAlign: "center", fontSize: 15, fontWeight: "700", color: theme.color.onSurface, backgroundColor: "#fff", fontVariant: ["tabular-nums"], paddingVertical: 0 },
 });

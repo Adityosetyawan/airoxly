@@ -337,7 +337,36 @@ async def _finished_stock_produksi(item_name: str) -> int:
     transferred = 0
     async for r in db.finished_transfers.find({"item_name": item_name}, {"_id": 0, "qty": 1}):
         transferred += int(r.get("qty", 0) or 0)
-    return produced - transferred
+    # Add: repair_done pushes stock back to produksi; write_off from produksi removes it.
+    repair_done_qty = 0
+    async for r in db.damage_movements.find({"item_name": item_name, "kind": "repair_done"}, {"_id": 0, "qty": 1}):
+        repair_done_qty += int(r.get("qty", 0) or 0)
+    write_off_from_stock = 0
+    async for r in db.damage_movements.find({"item_name": item_name, "kind": "write_off", "source": "produksi"}, {"_id": 0, "qty": 1}):
+        write_off_from_stock += int(r.get("qty", 0) or 0)
+    return produced - transferred + repair_done_qty - write_off_from_stock
+
+
+async def _repair_stock(item_name: str) -> int:
+    """Barang yang sedang di-repair di Produksi (dari return Gudang, belum selesai / belum write off)."""
+    returned = 0
+    async for r in db.damage_movements.find({"item_name": item_name, "kind": "return"}, {"_id": 0, "qty": 1}):
+        returned += int(r.get("qty", 0) or 0)
+    done = 0
+    async for r in db.damage_movements.find({"item_name": item_name, "kind": "repair_done"}, {"_id": 0, "qty": 1}):
+        done += int(r.get("qty", 0) or 0)
+    off = 0
+    async for r in db.damage_movements.find({"item_name": item_name, "kind": "write_off", "source": "repair"}, {"_id": 0, "qty": 1}):
+        off += int(r.get("qty", 0) or 0)
+    return returned - done - off
+
+
+async def _rusak_total(item_name: str) -> int:
+    """Total barang yang di-write-off permanen (rusak)."""
+    total = 0
+    async for r in db.damage_movements.find({"item_name": item_name, "kind": "write_off"}, {"_id": 0, "qty": 1}):
+        total += int(r.get("qty", 0) or 0)
+    return total
 
 
 async def _finished_sold_gudang(item_names: list[str], sales_code: Optional[str] = None) -> dict[str, int]:
@@ -375,6 +404,147 @@ async def _finished_sold_gudang(item_names: list[str], sales_code: Optional[str]
                         totals[n] = totals.get(n, 0) + int(it.get("qty", 0) or 0)
                         break
     return totals
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DAMAGE / REPAIR / WRITE-OFF (Barang Jadi lifecycle)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class DamageBody(BaseModel):
+    date: str
+    item_name: str
+    qty: int
+    notes: Optional[str] = None
+    source: Optional[str] = None  # only for write_off: "repair" | "produksi"
+
+
+@router.post("/damage/return")
+async def damage_return(
+    body: DamageBody,
+    user=Depends(require_roles("gudang", "super_admin")),
+):
+    """Gudang mengembalikan barang rusak ke Produksi (untuk direpair).
+    Kurangi stok Gudang, tambah counter Repair di Produksi."""
+    if body.qty <= 0:
+        raise HTTPException(400, "Qty harus > 0")
+    await _find_item_or_404(body.item_name, "barang_jadi")
+    # Cek stok Gudang cukup.
+    transferred_in = 0
+    async for r in db.finished_transfers.find({"item_name": body.item_name}, {"_id": 0, "qty": 1}):
+        transferred_in += int(r.get("qty", 0) or 0)
+    sold_map = await _finished_sold_gudang([body.item_name])
+    gudang_stock = transferred_in - sold_map.get(body.item_name, 0)
+    # Kurangi juga return yg sudah pernah dilakukan.
+    already_returned = 0
+    async for r in db.damage_movements.find({"item_name": body.item_name, "kind": "return"}, {"_id": 0, "qty": 1}):
+        already_returned += int(r.get("qty", 0) or 0)
+    available = gudang_stock - already_returned
+    if body.qty > available:
+        raise HTTPException(400, f"Stok Gudang untuk '{body.item_name}' hanya {available}")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "date": body.date,
+        "item_name": body.item_name,
+        "qty": int(body.qty),
+        "kind": "return",
+        "notes": body.notes or "",
+        "created_by": user["id"],
+        "created_by_name": user.get("name") or user["username"],
+        "created_at": now_utc().isoformat(),
+    }
+    await db.damage_movements.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@router.post("/damage/repair-done")
+async def damage_repair_done(
+    body: DamageBody,
+    user=Depends(require_roles("produksi", "super_admin")),
+):
+    """Produksi menyelesaikan repair — barang kembali menjadi stok Produksi."""
+    if body.qty <= 0:
+        raise HTTPException(400, "Qty harus > 0")
+    await _find_item_or_404(body.item_name, "barang_jadi")
+    repair_available = await _repair_stock(body.item_name)
+    if body.qty > repair_available:
+        raise HTTPException(400, f"Antrian repair untuk '{body.item_name}' hanya {repair_available}")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "date": body.date,
+        "item_name": body.item_name,
+        "qty": int(body.qty),
+        "kind": "repair_done",
+        "notes": body.notes or "",
+        "created_by": user["id"],
+        "created_by_name": user.get("name") or user["username"],
+        "created_at": now_utc().isoformat(),
+    }
+    await db.damage_movements.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@router.post("/damage/write-off")
+async def damage_write_off(
+    body: DamageBody,
+    user=Depends(require_roles("produksi", "super_admin")),
+):
+    """Barang di-write-off permanen (rusak parah, tidak bisa diperbaiki).
+    Source: 'repair' (dari antrian repair) atau 'produksi' (dari stok produksi).
+    """
+    if body.qty <= 0:
+        raise HTTPException(400, "Qty harus > 0")
+    src = (body.source or "repair").lower()
+    if src not in ("repair", "produksi"):
+        raise HTTPException(400, "source harus 'repair' atau 'produksi'")
+    await _find_item_or_404(body.item_name, "barang_jadi")
+    if src == "repair":
+        available = await _repair_stock(body.item_name)
+        if body.qty > available:
+            raise HTTPException(400, f"Antrian repair untuk '{body.item_name}' hanya {available}")
+    else:
+        available = await _finished_stock_produksi(body.item_name)
+        if body.qty > available:
+            raise HTTPException(400, f"Stok Produksi untuk '{body.item_name}' hanya {available}")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "date": body.date,
+        "item_name": body.item_name,
+        "qty": int(body.qty),
+        "kind": "write_off",
+        "source": src,
+        "notes": body.notes or "",
+        "created_by": user["id"],
+        "created_by_name": user.get("name") or user["username"],
+        "created_at": now_utc().isoformat(),
+    }
+    await db.damage_movements.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@router.get("/damage/list")
+async def list_damage_movements(
+    kind: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    user=Depends(require_roles("gudang", "produksi", "super_admin", "admin")),
+):
+    q: dict = {}
+    if kind:
+        q["kind"] = kind
+    if date_from and date_to:
+        q["date"] = {"$gte": date_from, "$lte": date_to}
+    return await db.damage_movements.find(q, {"_id": 0}).sort("date", -1).to_list(2000)
+
+
+@router.delete("/damage/{doc_id}")
+async def delete_damage(doc_id: str, user=Depends(require_roles("super_admin"))):
+    res = await db.damage_movements.delete_one({"id": doc_id})
+    if not res.deleted_count:
+        raise HTTPException(404, "Not found")
+    return {"ok": True}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -433,13 +603,21 @@ async def inventory_stock(
             async for r in db.finished_transfers.find({"item_name": name}, {"_id": 0, "qty": 1}):
                 transferred_to_gudang += int(r.get("qty", 0) or 0)
             sold = sold_map.get(name, 0)
-            gudang = transferred_to_gudang - sold
+            # Return dari gudang mengurangi stok gudang.
+            returned = 0
+            async for r in db.damage_movements.find({"item_name": name, "kind": "return"}, {"_id": 0, "qty": 1}):
+                returned += int(r.get("qty", 0) or 0)
+            gudang = transferred_to_gudang - sold - returned
+            repair = await _repair_stock(name)
+            rusak = await _rusak_total(name)
             out["barang_jadi"].append({
                 "name": name,
                 "unit": item.get("unit", "pcs"),
                 "produksi": produksi,
                 "gudang": gudang,
                 "sold": sold,
+                "repair": repair,
+                "rusak": rusak,
                 "transferred_in": transferred_to_gudang,
             })
 

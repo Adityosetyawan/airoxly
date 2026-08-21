@@ -519,6 +519,22 @@ export const api = {
     return req<any[]>(`/inventory/finished/transfers${s ? "?" + s : ""}`);
   },
 
+  // Damage / Repair / Write-off (barang jadi lifecycle)
+  damageReturn: (body: { date: string; item_name: string; qty: number; notes?: string }) =>
+    req<any>("/inventory/damage/return", { method: "POST", body: JSON.stringify(body) }),
+  damageRepairDone: (body: { date: string; item_name: string; qty: number; notes?: string }) =>
+    req<any>("/inventory/damage/repair-done", { method: "POST", body: JSON.stringify(body) }),
+  damageWriteOff: (body: { date: string; item_name: string; qty: number; source?: "repair" | "produksi"; notes?: string }) =>
+    req<any>("/inventory/damage/write-off", { method: "POST", body: JSON.stringify(body) }),
+  listDamage: (params: { kind?: string; date_from?: string; date_to?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.kind) q.set("kind", params.kind);
+    if (params.date_from) q.set("date_from", params.date_from);
+    if (params.date_to) q.set("date_to", params.date_to);
+    const s = q.toString();
+    return req<any[]>(`/inventory/damage/list${s ? "?" + s : ""}`);
+  },
+
   // Validate bawa-sisa vs transactions
   validateSalesBawaSisa: (sales_id: string, date: string) =>
     req<{ bawa_total: number; sisa_total: number; terjual_by_gudang: number; terjual_by_transaksi: number; match: boolean; diff: number }>(

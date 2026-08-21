@@ -45,8 +45,8 @@ export default function ProduksiInput() {
     shift: "pagi",
     sales_id: "",
     destination: "gudang" as "gudang" | "sales",
-    manual_adjust: "0",
-    manual_adjust_before: "0",
+    manual_adjust: "",
+    manual_adjust_before: "",
     sisa_pagi: "",
     sisa_siang: "",
     note: "",
@@ -94,8 +94,8 @@ export default function ProduksiInput() {
           setForm((f) => ({
             ...f,
             destination: d.destination || f.destination,
-            manual_adjust: String(d.manual_adjust || 0),
-            manual_adjust_before: String(d.manual_adjust_before || 0),
+            manual_adjust: d.manual_adjust ? String(d.manual_adjust) : "",
+            manual_adjust_before: d.manual_adjust_before ? String(d.manual_adjust_before) : "",
             note: d.note || "",
           }));
           if (d.part_qtys && typeof d.part_qtys === "object") {
@@ -112,7 +112,7 @@ export default function ProduksiInput() {
         } else {
           // Reset ke kosong
           setPartQtys({});
-          setForm((f) => ({ ...f, manual_adjust: "0", manual_adjust_before: "0", note: "" }));
+          setForm((f) => ({ ...f, manual_adjust: "", manual_adjust_before: "", note: "" }));
         }
       } catch {}
     })();
@@ -160,7 +160,7 @@ export default function ProduksiInput() {
 
   const resetForm = () => {
     setPartQtys({});
-    setForm((f) => ({ ...f, manual_adjust: "0", manual_adjust_before: "0", sisa_pagi: "", sisa_siang: "", note: "" }));
+    setForm((f) => ({ ...f, manual_adjust: "", manual_adjust_before: "", sisa_pagi: "", sisa_siang: "", note: "" }));
   };
 
   const onSaveDraft = async () => {

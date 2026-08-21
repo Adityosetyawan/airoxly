@@ -18,6 +18,7 @@ import { useToast } from "@/src/components/Toast";
 
 type Item = { id: string; name: string; category: string; unit: string; order: number };
 type StockRow = { name: string; unit: string; gudang: number; produksi: number };
+type FinishedRow = { name: string; unit: string; gudang: number; repair?: number };
 type Movement = {
   id: string;
   date: string;
@@ -32,33 +33,43 @@ type Movement = {
  *   • Card pantau stok Bahan (Gudang & Produksi)
  *   • Tombol "+ Barang Masuk" → tambah stok Bahan di Gudang
  *   • Tombol "Kirim ke Produksi" → transfer Bahan Gudang → Produksi
+ *   • Card pantau stok Barang Jadi + Return Rusak ke Produksi
  *   • List riwayat barang masuk & transfer
  */
 export default function GudangBahan() {
   const toast = useToast();
   const [items, setItems] = useState<Item[]>([]);
   const [rows, setRows] = useState<StockRow[]>([]);
+  const [finishedRows, setFinishedRows] = useState<FinishedRow[]>([]);
   const [incomings, setIncomings] = useState<Movement[]>([]);
   const [transfers, setTransfers] = useState<Movement[]>([]);
+  const [returnDamages, setReturnDamages] = useState<Movement[]>([]);
   const [refresh, setRefresh] = useState(false);
-  const [modal, setModal] = useState<"incoming" | "transfer" | null>(null);
+  const [modal, setModal] = useState<"incoming" | "transfer" | "return_rusak" | null>(null);
   // Map bahan name → qty string (multi-input mode)
   const [qtys, setQtys] = useState<Record<string, string>>({});
+  // Single-select for Return Rusak
+  const [rrItem, setRrItem] = useState<string>("");
+  const [rrQty, setRrQty] = useState("");
   const [notes, setNotes] = useState("");
   const [sending, setSending] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [its, stk, inc, trf] = await Promise.all([
+      const [its, stk, inc, trf, dmg, stkFinished] = await Promise.all([
         api.listInventoryItems("bahan"),
         api.getInventoryStock("bahan"),
         api.listBahanIncoming({}).catch(() => []),
         api.listBahanTransfers({}).catch(() => []),
+        api.listDamage({ kind: "return" }).catch(() => []),
+        api.getInventoryStock("barang_jadi").catch(() => ({ barang_jadi: [] })),
       ]);
       setItems(its || []);
       setRows(stk?.bahan || []);
       setIncomings(inc || []);
       setTransfers(trf || []);
+      setReturnDamages(dmg || []);
+      setFinishedRows((stkFinished?.barang_jadi || []).map((r: any) => ({ name: r.name, unit: r.unit, gudang: r.gudang, repair: r.repair })));
     } catch (e: any) {
       toast.show(e?.message || "Gagal muat data", "error");
     }
@@ -72,10 +83,12 @@ export default function GudangBahan() {
     return m;
   }, [rows]);
 
-  const openModal = (mode: "incoming" | "transfer") => {
+  const openModal = (mode: "incoming" | "transfer" | "return_rusak") => {
     setModal(mode);
     setQtys({});
     setNotes("");
+    setRrItem(finishedRows[0]?.name || "");
+    setRrQty("");
   };
 
   const setQty = (name: string, v: string) => setQtys((s) => ({ ...s, [name]: v.replace(/[^\d]/g, "") }));
@@ -84,6 +97,26 @@ export default function GudangBahan() {
   const filledTotal = Object.entries(qtys).reduce((sum, [, v]) => sum + (parseInt(v, 10) || 0), 0);
 
   const doAction = async () => {
+    if (modal === "return_rusak") {
+      const q = parseInt(rrQty, 10) || 0;
+      if (!rrItem) return toast.show("Pilih barang", "error");
+      if (q <= 0) return toast.show("Qty harus > 0", "error");
+      const gudang = finishedRows.find((r) => r.name === rrItem)?.gudang ?? 0;
+      if (q > gudang) return toast.show(`Stok Gudang untuk ${rrItem} hanya ${gudang}`, "error");
+      setSending(true);
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        await api.damageReturn({ date: today, item_name: rrItem, qty: q, notes: notes.trim() || undefined });
+        toast.show(`✅ Return ${q} ${rrItem} ke Produksi untuk repair`, "success");
+        setModal(null);
+        await load();
+      } catch (e: any) {
+        toast.show(e?.message || "Gagal simpan", "error");
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
     // Collect all rows with qty > 0
     const entries = Object.entries(qtys)
       .map(([name, v]) => ({ name, qty: parseInt(v, 10) || 0 }))
@@ -187,6 +220,36 @@ export default function GudangBahan() {
           )}
         </View>
 
+        {/* Barang Jadi (di Gudang) — dapat di-return jika rusak */}
+        <View style={styles.section2Row}>
+          <Text style={styles.section}>Barang Jadi di Gudang</Text>
+          <TouchableOpacity onPress={() => openModal("return_rusak")} style={styles.rrBtn} testID="open-return-rusak-btn">
+            <Ionicons name="return-up-back" size={14} color="#fff" />
+            <Text style={styles.rrBtnText}>Return Rusak</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.stockCard}>
+          <View style={styles.stockHeader}>
+            <Text style={[styles.stockHeaderText, { flex: 1 }]}>Barang Jadi</Text>
+            <Text style={[styles.stockHeaderText, styles.stockCol, { color: "#fff", backgroundColor: theme.color.brand }]}>Gudang</Text>
+            <Text style={[styles.stockHeaderText, styles.stockCol, { color: "#fff", backgroundColor: "#F59E0B" }]}>Repair</Text>
+          </View>
+          {finishedRows.length === 0 ? (
+            <Text style={styles.emptyText}>Belum ada barang jadi</Text>
+          ) : (
+            finishedRows.map((r) => (
+              <View key={r.name} style={styles.stockRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.stockName}>{r.name}</Text>
+                  <Text style={styles.stockUnit}>{r.unit}</Text>
+                </View>
+                <Text style={[styles.stockVal, r.gudang < 0 && { color: theme.color.error }]}>{r.gudang}</Text>
+                <Text style={[styles.stockVal, (r.repair || 0) > 0 && { color: "#F59E0B", fontWeight: "800" }]}>{r.repair || 0}</Text>
+              </View>
+            ))
+          )}
+        </View>
+
         <Text style={styles.section}>Riwayat Kirim ke Produksi</Text>
         <View style={styles.historyCard}>
           {transfers.length === 0 ? (
@@ -205,6 +268,25 @@ export default function GudangBahan() {
             ))
           )}
         </View>
+
+        {returnDamages.length > 0 && (
+          <>
+            <Text style={styles.section}>Riwayat Return Rusak</Text>
+            <View style={styles.historyCard}>
+              {returnDamages.slice(0, 20).map((m) => (
+                <View key={m.id} style={styles.hRow}>
+                  <View style={[styles.hIcon, { backgroundColor: "rgba(245,158,11,0.15)" }]}>
+                    <Ionicons name="return-up-back" size={14} color="#F59E0B" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.hName}>{m.item_name} · <Text style={{ color: "#F59E0B", fontWeight: "800" }}>{m.qty}</Text></Text>
+                    <Text style={styles.hSub}>{m.date}{m.notes ? " · " + m.notes : ""} · {m.created_by_name || "-"}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
       </ScrollView>
 
       {/* Modal */}
@@ -213,18 +295,112 @@ export default function GudangBahan() {
           <View style={styles.card}>
             <View style={styles.mHeader}>
               <View style={styles.mIcon}>
-                <Ionicons name={modal === "incoming" ? "download" : "paper-plane"} size={22} color={theme.color.brand} />
+                <Ionicons
+                  name={modal === "incoming" ? "download" : modal === "transfer" ? "paper-plane" : "return-up-back"}
+                  size={22}
+                  color={modal === "return_rusak" ? "#F59E0B" : theme.color.brand}
+                />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.mTitle}>{modal === "incoming" ? "Barang Masuk" : "Kirim ke Produksi"}</Text>
-                <Text style={styles.mSub}>{modal === "incoming" ? "Tambah stok Bahan di Gudang" : "Gudang → Produksi"}</Text>
+                <Text style={styles.mTitle}>
+                  {modal === "incoming" ? "Barang Masuk" : modal === "transfer" ? "Kirim ke Produksi" : "Return Rusak ke Produksi"}
+                </Text>
+                <Text style={styles.mSub}>
+                  {modal === "incoming" ? "Tambah stok Bahan di Gudang" :
+                    modal === "transfer" ? "Gudang → Produksi" :
+                    "Barang Jadi rusak → dikirim balik untuk direpair"}
+                </Text>
               </View>
               <TouchableOpacity onPress={() => setModal(null)}>
                 <Ionicons name="close" size={22} color={theme.color.muted} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 500 }} contentContainerStyle={{ padding: 14 }} keyboardShouldPersistTaps="handled">
+            {modal === "return_rusak" ? (
+              <>
+                <ScrollView style={{ maxHeight: 500 }} contentContainerStyle={{ padding: 14 }} keyboardShouldPersistTaps="handled">
+                  <View style={styles.hintBox}>
+                    <Ionicons name="information-circle" size={16} color="#F59E0B" />
+                    <Text style={styles.hintText}>
+                      Pilih 1 barang & isi qty. Stok Gudang akan berkurang, dan barang masuk antrian Repair di Produksi.
+                    </Text>
+                  </View>
+                  {finishedRows.length === 0 ? (
+                    <Text style={styles.emptyText}>Belum ada barang jadi</Text>
+                  ) : (
+                    <View style={{ gap: 6, marginTop: 8 }}>
+                      {finishedRows.map((r) => {
+                        const disabled = r.gudang <= 0;
+                        const active = rrItem === r.name;
+                        return (
+                          <TouchableOpacity
+                            key={r.name}
+                            onPress={() => !disabled && setRrItem(r.name)}
+                            disabled={disabled}
+                            style={[styles.bahanRow, active && styles.bahanRowActive, disabled && styles.bahanRowDisabled]}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.bahanName, disabled && { color: theme.color.muted }]}>{r.name}</Text>
+                              <Text style={styles.bahanMeta}><Text style={{ fontWeight: "700" }}>{r.unit}</Text> · stok {r.gudang}</Text>
+                            </View>
+                            {active && <Ionicons name="checkmark-circle" size={22} color={theme.color.brandPrimary} />}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+
+                  <Text style={styles.label}>Qty Rusak</Text>
+                  <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                    <TouchableOpacity onPress={() => setRrQty(String(Math.max(0, (parseInt(rrQty, 10) || 0) - 1)))} style={styles.qtyStep}>
+                      <Ionicons name="remove" size={16} color={theme.color.brand} />
+                    </TouchableOpacity>
+                    <TextInput
+                      value={rrQty}
+                      onChangeText={(v) => setRrQty(v.replace(/[^\d]/g, ""))}
+                      keyboardType="number-pad"
+                      placeholder="0"
+                      placeholderTextColor={theme.color.muted}
+                      style={[styles.bahanQtyInput, { flex: 1, height: 42, fontSize: 18 }]}
+                      testID="rr-qty-input"
+                    />
+                    <TouchableOpacity onPress={() => setRrQty(String((parseInt(rrQty, 10) || 0) + 1))} style={styles.qtyStep}>
+                      <Ionicons name="add" size={16} color={theme.color.brand} />
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={styles.label}>Catatan (opsional)</Text>
+                  <TextInput
+                    value={notes}
+                    onChangeText={setNotes}
+                    placeholder="Contoh: kardus penyok, tutup pecah"
+                    placeholderTextColor={theme.color.muted}
+                    style={styles.input}
+                  />
+                </ScrollView>
+
+                <View style={styles.footer}>
+                  <TouchableOpacity onPress={() => setModal(null)} style={styles.cancelBtn} disabled={sending}>
+                    <Text style={styles.cancelBtnText}>Batal</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={doAction}
+                    disabled={sending || !rrItem || (parseInt(rrQty, 10) || 0) <= 0}
+                    style={[styles.doBtn, { backgroundColor: "#F59E0B" }, (sending || !rrItem || (parseInt(rrQty, 10) || 0) <= 0) && { opacity: 0.55 }]}
+                    testID="do-rr-btn"
+                  >
+                    {sending ? <ActivityIndicator size="small" color="#fff" /> : (
+                      <>
+                        <Ionicons name="return-up-back" size={14} color="#fff" />
+                        <Text style={styles.doBtnText}>Return Rusak</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                <ScrollView style={{ maxHeight: 500 }} contentContainerStyle={{ padding: 14 }} keyboardShouldPersistTaps="handled">
               <View style={styles.hintBox}>
                 <Ionicons name="information-circle" size={16} color={theme.color.brand} />
                 <Text style={styles.hintText}>
@@ -316,6 +492,8 @@ export default function GudangBahan() {
                 )}
               </TouchableOpacity>
             </View>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -390,4 +568,7 @@ const styles = StyleSheet.create({
   qtyGroup: { flexDirection: "row", alignItems: "center", gap: 4 },
   qtyStep: { width: 30, height: 34, borderRadius: 8, borderWidth: 1, borderColor: theme.color.border, backgroundColor: theme.color.surfaceSecondary, alignItems: "center", justifyContent: "center" },
   bahanQtyInput: { width: 62, height: 34, borderWidth: 1, borderColor: theme.color.border, borderRadius: 8, textAlign: "center", fontSize: 15, fontWeight: "700", color: theme.color.onSurface, backgroundColor: "#fff", fontVariant: ["tabular-nums"], paddingVertical: 0 },
+  section2Row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 4 },
+  rrBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#F59E0B", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  rrBtnText: { color: "#fff", fontWeight: "700", fontSize: 12 },
 });

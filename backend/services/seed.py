@@ -95,28 +95,33 @@ async def run_seed():
     if not await db.settings.find_one({"key": "rp_kulakan_per_galon"}):
         await db.settings.insert_one({"key": "rp_kulakan_per_galon", "value": 13000})
 
-    for u in DEFAULT_USERS:
-        if await db.users.find_one({"username": u["username"]}):
-            continue
-        doc = {
-            "id": str(uuid.uuid4()),
-            "username": u["username"],
-            "password_hash": hash_password(u["password"]),
-            "role": u["role"],
-            "name": u.get("name"),
-            "group_letter": u.get("group_letter"),
-            "sales_code": u.get("sales_code"),
-            "wa_number": u.get("wa_number"),
-            "address": u.get("address", ""),
-            "year_joined": u.get("year_joined", datetime.now().year),
-            "salary": u.get("salary", 0),
-            "commission": u.get("commission", 0),
-            "bonus": u.get("bonus", 0),
-            "disabled": False,
-            "kelompok": u.get("kelompok"),
-            "created_at": now_utc().isoformat(),
-        }
-        await db.users.insert_one(doc)
+    # Seed default users ONLY once (protected by "initial_user_seed_done" flag).
+    # Prevents auto-recreating a deleted user with the default password on restart.
+    seed_done = await db.settings.find_one({"key": "initial_user_seed_done"})
+    if not seed_done:
+        for u in DEFAULT_USERS:
+            if await db.users.find_one({"username": u["username"]}):
+                continue
+            doc = {
+                "id": str(uuid.uuid4()),
+                "username": u["username"],
+                "password_hash": hash_password(u["password"]),
+                "role": u["role"],
+                "name": u.get("name"),
+                "group_letter": u.get("group_letter"),
+                "sales_code": u.get("sales_code"),
+                "wa_number": u.get("wa_number"),
+                "address": u.get("address", ""),
+                "year_joined": u.get("year_joined", datetime.now().year),
+                "salary": u.get("salary", 0),
+                "commission": u.get("commission", 0),
+                "bonus": u.get("bonus", 0),
+                "disabled": False,
+                "kelompok": u.get("kelompok"),
+                "created_at": now_utc().isoformat(),
+            }
+            await db.users.insert_one(doc)
+        await db.settings.insert_one({"key": "initial_user_seed_done", "value": True, "at": now_utc().isoformat()})
 
 
 async def get_shifts() -> list[dict]:

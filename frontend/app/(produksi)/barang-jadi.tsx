@@ -18,12 +18,14 @@ import { useToast } from "@/src/components/Toast";
 import { useCalcBar } from "@/src/components/KeyboardCalcBar";
 
 type Item = { id: string; name: string; category: string; unit: string; order: number };
-type StockRow = { name: string; unit: string; produksi: number; gudang: number; sold: number; transferred_in: number };
+type StockRow = { name: string; unit: string; produksi: number; gudang: number; sold: number; repair: number; rusak: number; transferred_in: number };
 type Movement = {
   id: string;
   date: string;
   item_name: string;
   qty: number;
+  kind?: string;
+  source?: string;
   notes?: string;
   created_by_name?: string;
 };
@@ -34,11 +36,13 @@ export default function ProduksiBarangJadi() {
   const [rows, setRows] = useState<StockRow[]>([]);
   const [productions, setProductions] = useState<Movement[]>([]);
   const [transfers, setTransfers] = useState<Movement[]>([]);
+  const [damages, setDamages] = useState<Movement[]>([]);
   const [refresh, setRefresh] = useState(false);
-  const [modal, setModal] = useState<"produce" | "transfer" | null>(null);
+  const [modal, setModal] = useState<"produce" | "transfer" | "repair_done" | "write_off" | null>(null);
   const [selectedItem, setSelectedItem] = useState<string>("");
   const [qty, setQty] = useState("");
   const [notes, setNotes] = useState("");
+  const [writeOffSource, setWriteOffSource] = useState<"repair" | "produksi">("repair");
   const [sending, setSending] = useState(false);
 
   const qtyBar = useCalcBar(qty, {
@@ -48,16 +52,18 @@ export default function ProduksiBarangJadi() {
 
   const load = useCallback(async () => {
     try {
-      const [its, stk, pr, trf] = await Promise.all([
+      const [its, stk, pr, trf, dmg] = await Promise.all([
         api.listInventoryItems("barang_jadi"),
         api.getInventoryStock("barang_jadi"),
         api.listFinishedProduction({}).catch(() => []),
         api.listFinishedTransfers({}).catch(() => []),
+        api.listDamage({}).catch(() => []),
       ]);
       setItems(its || []);
       setRows(stk?.barang_jadi || []);
       setProductions(pr || []);
       setTransfers(trf || []);
+      setDamages(dmg || []);
     } catch (e: any) {
       toast.show(e?.message || "Gagal muat data", "error");
     }
@@ -70,12 +76,18 @@ export default function ProduksiBarangJadi() {
     rows.forEach((r) => { m[r.name] = r.produksi; });
     return m;
   }, [rows]);
+  const repairFor = useMemo(() => {
+    const m: Record<string, number> = {};
+    rows.forEach((r) => { m[r.name] = r.repair || 0; });
+    return m;
+  }, [rows]);
 
-  const openModal = (mode: "produce" | "transfer") => {
+  const openModal = (mode: "produce" | "transfer" | "repair_done" | "write_off") => {
     setModal(mode);
     setSelectedItem(items[0]?.name || "");
     setQty("");
     setNotes("");
+    setWriteOffSource("repair");
   };
 
   const doAction = async () => {
@@ -85,15 +97,28 @@ export default function ProduksiBarangJadi() {
     if (modal === "transfer" && q > (stokProduksiFor[selectedItem] || 0)) {
       return toast.show(`Stok Produksi utk ${selectedItem} cuma ${stokProduksiFor[selectedItem] || 0}`, "error");
     }
+    if (modal === "repair_done" && q > (repairFor[selectedItem] || 0)) {
+      return toast.show(`Antrian repair untuk ${selectedItem} cuma ${repairFor[selectedItem] || 0}`, "error");
+    }
+    if (modal === "write_off") {
+      const avail = writeOffSource === "repair" ? (repairFor[selectedItem] || 0) : (stokProduksiFor[selectedItem] || 0);
+      if (q > avail) return toast.show(`Sumber ${writeOffSource} untuk ${selectedItem} hanya ${avail}`, "error");
+    }
     setSending(true);
     try {
       const today = new Date().toISOString().slice(0, 10);
       if (modal === "produce") {
         await api.finishedProduce({ date: today, item_name: selectedItem, qty: q, notes: notes.trim() || undefined });
         toast.show(`+${q} ${selectedItem} diproduksi ✅`, "success");
-      } else {
+      } else if (modal === "transfer") {
         await api.finishedTransfer({ date: today, item_name: selectedItem, qty: q, notes: notes.trim() || undefined });
         toast.show(`Kirim ${q} ${selectedItem} ke Gudang ✅`, "success");
+      } else if (modal === "repair_done") {
+        await api.damageRepairDone({ date: today, item_name: selectedItem, qty: q, notes: notes.trim() || undefined });
+        toast.show(`Repair ${q} ${selectedItem} selesai — kembali ke stok Produksi ✅`, "success");
+      } else if (modal === "write_off") {
+        await api.damageWriteOff({ date: today, item_name: selectedItem, qty: q, source: writeOffSource, notes: notes.trim() || undefined });
+        toast.show(`${q} ${selectedItem} di-write off (Rusak permanen)`, "success");
       }
       setModal(null);
       await load();
@@ -111,7 +136,7 @@ export default function ProduksiBarangJadi() {
         contentContainerStyle={{ padding: 12, gap: 12, paddingBottom: 40 }}
         refreshControl={<RefreshControl refreshing={refresh} onRefresh={async () => { setRefresh(true); await load(); setRefresh(false); }} />}
       >
-        <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
           <TouchableOpacity onPress={() => openModal("produce")} style={[styles.cta, { backgroundColor: "#8B5CF6" }]} testID="open-produce-btn">
             <Ionicons name="hammer" size={16} color="#fff" />
             <Text style={styles.ctaText}>Catat Produksi</Text>
@@ -120,12 +145,22 @@ export default function ProduksiBarangJadi() {
             <Ionicons name="paper-plane" size={16} color="#fff" />
             <Text style={styles.ctaText}>Kirim ke Gudang</Text>
           </TouchableOpacity>
+          <TouchableOpacity onPress={() => openModal("repair_done")} style={[styles.cta, { backgroundColor: "#F59E0B" }]} testID="open-repair-done-btn">
+            <Ionicons name="build" size={16} color="#fff" />
+            <Text style={styles.ctaText}>Selesai Repair</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => openModal("write_off")} style={[styles.cta, { backgroundColor: theme.color.error }]} testID="open-write-off-btn">
+            <Ionicons name="close-circle" size={16} color="#fff" />
+            <Text style={styles.ctaText}>Rusak Permanen</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.infoBox}>
           <Ionicons name="information-circle" size={16} color={theme.color.brand} />
           <Text style={styles.infoText}>
-            Barang Jadi yg dikirim ke Gudang otomatis siap dijual oleh Sales. Setiap penjualan Sales otomatis mengurangi stok Gudang.
+            Alur: Produksi → Kirim ke Gudang → Sales jual. Jika ada rusak di Gudang, Gudang tap &quot;Return Rusak&quot; → masuk antrian
+            <Text style={{ fontWeight: "700" }}> Repair</Text>. Setelah diperbaiki tap &quot;Selesai Repair&quot; → kembali ke stok Produksi.
+            Rusak parah? Tap &quot;Rusak Permanen&quot; untuk write-off.
           </Text>
         </View>
 
@@ -136,25 +171,31 @@ export default function ProduksiBarangJadi() {
             <Text style={styles.emptyText}>Belum ada Barang Jadi. Minta Super Admin tambah lewat menu Pengaturan → Inventory.</Text>
           </View>
         ) : (
-          <View style={styles.stockCard}>
-            <View style={styles.stockHeader}>
-              <Text style={[styles.stockHeaderText, { flex: 1 }]}>Barang</Text>
-              <Text style={[styles.stockHeaderText, styles.stockCol, { color: "#fff", backgroundColor: "#8B5CF6" }]}>Produksi</Text>
-              <Text style={[styles.stockHeaderText, styles.stockCol]}>Gudang</Text>
-              <Text style={[styles.stockHeaderText, styles.stockCol]}>Terjual</Text>
-            </View>
-            {rows.map((r) => (
-              <View key={r.name} style={styles.stockRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.stockName}>{r.name}</Text>
-                  <Text style={styles.stockUnit}>{r.unit}</Text>
-                </View>
-                <Text style={[styles.stockVal, r.produksi < 10 && { color: theme.color.error }]}>{r.produksi}</Text>
-                <Text style={[styles.stockVal, r.gudang < 0 && { color: theme.color.error }]}>{r.gudang}</Text>
-                <Text style={[styles.stockVal, { color: theme.color.muted }]}>{r.sold}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.stockCard}>
+              <View style={styles.stockHeader}>
+                <Text style={[styles.stockHeaderText, { width: 110 }]}>Barang</Text>
+                <Text style={[styles.stockHeaderText, styles.stockCol, { color: "#fff", backgroundColor: "#8B5CF6" }]}>Produksi</Text>
+                <Text style={[styles.stockHeaderText, styles.stockCol]}>Gudang</Text>
+                <Text style={[styles.stockHeaderText, styles.stockCol, { color: "#fff", backgroundColor: "#F59E0B" }]}>Repair</Text>
+                <Text style={[styles.stockHeaderText, styles.stockCol, { color: "#fff", backgroundColor: theme.color.error }]}>Rusak</Text>
+                <Text style={[styles.stockHeaderText, styles.stockCol]}>Terjual</Text>
               </View>
-            ))}
-          </View>
+              {rows.map((r) => (
+                <View key={r.name} style={styles.stockRow}>
+                  <View style={{ width: 110 }}>
+                    <Text style={styles.stockName}>{r.name}</Text>
+                    <Text style={styles.stockUnit}>{r.unit}</Text>
+                  </View>
+                  <Text style={[styles.stockVal, r.produksi < 10 && { color: theme.color.error }]}>{r.produksi}</Text>
+                  <Text style={[styles.stockVal, r.gudang < 0 && { color: theme.color.error }]}>{r.gudang}</Text>
+                  <Text style={[styles.stockVal, r.repair > 0 && { color: "#F59E0B", fontWeight: "800" }]}>{r.repair || 0}</Text>
+                  <Text style={[styles.stockVal, r.rusak > 0 && { color: theme.color.error, fontWeight: "800" }]}>{r.rusak || 0}</Text>
+                  <Text style={[styles.stockVal, { color: theme.color.muted }]}>{r.sold}</Text>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
         )}
 
         <Text style={styles.section}>Riwayat Produksi</Text>
@@ -194,6 +235,41 @@ export default function ProduksiBarangJadi() {
             ))
           )}
         </View>
+
+        {damages.length > 0 && (
+          <>
+            <Text style={styles.section}>Riwayat Repair & Rusak</Text>
+            <View style={styles.historyCard}>
+              {damages.slice(0, 30).map((m) => {
+                const label =
+                  m.kind === "return" ? "Return dari Gudang" :
+                  m.kind === "repair_done" ? "Repair Selesai" :
+                  m.kind === "write_off" ? `Rusak Permanen (${m.source || "-"})` : m.kind || "-";
+                const color =
+                  m.kind === "return" ? "#F59E0B" :
+                  m.kind === "repair_done" ? "#059669" :
+                  theme.color.error;
+                const icon =
+                  m.kind === "return" ? "return-up-back" :
+                  m.kind === "repair_done" ? "build" : "close-circle";
+                return (
+                  <View key={m.id} style={styles.hRow}>
+                    <View style={[styles.hIcon, { backgroundColor: color + "22" }]}>
+                      <Ionicons name={icon as any} size={14} color={color} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.hName}>
+                        {m.item_name} · <Text style={{ color, fontWeight: "800" }}>{m.qty}</Text>{"  "}
+                        <Text style={{ fontSize: 11, color, fontWeight: "700" }}>· {label}</Text>
+                      </Text>
+                      <Text style={styles.hSub}>{m.date}{m.notes ? " · " + m.notes : ""} · {m.created_by_name || "-"}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
       </ScrollView>
 
       <Modal visible={!!modal} transparent animationType="fade" onRequestClose={() => setModal(null)}>
@@ -201,11 +277,31 @@ export default function ProduksiBarangJadi() {
           <View style={styles.card}>
             <View style={styles.mHeader}>
               <View style={styles.mIcon}>
-                <Ionicons name={modal === "produce" ? "hammer" : "paper-plane"} size={22} color={theme.color.brand} />
+                <Ionicons
+                  name={
+                    modal === "produce" ? "hammer" :
+                    modal === "transfer" ? "paper-plane" :
+                    modal === "repair_done" ? "build" : "close-circle"
+                  }
+                  size={22}
+                  color={
+                    modal === "repair_done" ? "#F59E0B" :
+                    modal === "write_off" ? theme.color.error : theme.color.brand
+                  }
+                />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.mTitle}>{modal === "produce" ? "Catat Produksi" : "Kirim ke Gudang"}</Text>
-                <Text style={styles.mSub}>{modal === "produce" ? "Barang jadi diproduksi hari ini" : "Produksi → Gudang (siap dijual)"}</Text>
+                <Text style={styles.mTitle}>
+                  {modal === "produce" ? "Catat Produksi" :
+                   modal === "transfer" ? "Kirim ke Gudang" :
+                   modal === "repair_done" ? "Selesai Repair" : "Rusak Permanen (Write-off)"}
+                </Text>
+                <Text style={styles.mSub}>
+                  {modal === "produce" ? "Barang jadi diproduksi hari ini" :
+                   modal === "transfer" ? "Produksi → Gudang (siap dijual)" :
+                   modal === "repair_done" ? "Barang repair kembali ke stok Produksi" :
+                   "Hilangkan permanen (mengurangi stok)"}
+                </Text>
               </View>
               <TouchableOpacity onPress={() => setModal(null)}>
                 <Ionicons name="close" size={22} color={theme.color.muted} />
@@ -217,7 +313,12 @@ export default function ProduksiBarangJadi() {
               <View style={styles.chipsWrap}>
                 {items.map((it) => {
                   const stok = stokProduksiFor[it.name] || 0;
-                  const disabled = modal === "transfer" && stok <= 0;
+                  const rep = repairFor[it.name] || 0;
+                  const disabled =
+                    (modal === "transfer" && stok <= 0) ||
+                    (modal === "repair_done" && rep <= 0) ||
+                    (modal === "write_off" && writeOffSource === "repair" && rep <= 0) ||
+                    (modal === "write_off" && writeOffSource === "produksi" && stok <= 0);
                   const active = selectedItem === it.name;
                   return (
                     <TouchableOpacity
@@ -232,14 +333,39 @@ export default function ProduksiBarangJadi() {
                       </Text>
                       <Text style={[styles.chipUnit, active && { color: "#D1FAE5" }]}>{it.unit}</Text>
                       {modal === "transfer" && (
-                        <Text style={[styles.chipStok, active && { color: "#D1FAE5" }, disabled && { color: theme.color.muted }]}>
-                          stok {stok}
+                        <Text style={[styles.chipStok, active && { color: "#D1FAE5" }, disabled && { color: theme.color.muted }]}>stok {stok}</Text>
+                      )}
+                      {modal === "repair_done" && (
+                        <Text style={[styles.chipStok, active && { color: "#FEF3C7" }, disabled && { color: theme.color.muted }]}>repair {rep}</Text>
+                      )}
+                      {modal === "write_off" && (
+                        <Text style={[styles.chipStok, active && { color: "#FEE2E2" }, disabled && { color: theme.color.muted }]}>
+                          {writeOffSource === "repair" ? `repair ${rep}` : `stok ${stok}`}
                         </Text>
                       )}
                     </TouchableOpacity>
                   );
                 })}
               </View>
+
+              {modal === "write_off" && (
+                <>
+                  <Text style={styles.label}>Sumber</Text>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    {(["repair", "produksi"] as const).map((s) => (
+                      <TouchableOpacity
+                        key={s}
+                        onPress={() => setWriteOffSource(s)}
+                        style={[styles.chip, writeOffSource === s && styles.chipActive]}
+                      >
+                        <Text style={[styles.chipText, writeOffSource === s && { color: "#fff" }]}>
+                          {s === "repair" ? "Dari antrian Repair" : "Dari stok Produksi"}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
 
               <Text style={styles.label}>Qty</Text>
               <View style={styles.stepRow}>
@@ -273,7 +399,7 @@ export default function ProduksiBarangJadi() {
               <TextInput
                 value={notes}
                 onChangeText={setNotes}
-                placeholder="Contoh: batch pagi"
+                placeholder={modal === "write_off" ? "Contoh: hangus terbakar, hilang, dsb" : modal === "repair_done" ? "Contoh: ganti kardus" : "Contoh: batch pagi"}
                 placeholderTextColor={theme.color.muted}
                 style={styles.input}
               />
@@ -286,13 +412,15 @@ export default function ProduksiBarangJadi() {
               <TouchableOpacity
                 onPress={doAction}
                 disabled={sending || !qty || !selectedItem}
-                style={[styles.doBtn, (sending || !qty || !selectedItem) && { opacity: 0.55 }]}
+                style={[styles.doBtn, (sending || !qty || !selectedItem) && { opacity: 0.55 }, modal === "write_off" && { backgroundColor: theme.color.error }, modal === "repair_done" && { backgroundColor: "#F59E0B" }]}
                 testID="do-jadi-btn"
               >
                 {sending ? <ActivityIndicator size="small" color="#fff" /> : (
                   <>
-                    <Ionicons name={modal === "produce" ? "hammer" : "paper-plane"} size={14} color="#fff" />
-                    <Text style={styles.doBtnText}>{modal === "produce" ? "Simpan" : "Kirim"}</Text>
+                    <Ionicons name={modal === "produce" ? "hammer" : modal === "transfer" ? "paper-plane" : modal === "repair_done" ? "build" : "close-circle"} size={14} color="#fff" />
+                    <Text style={styles.doBtnText}>
+                      {modal === "produce" ? "Simpan" : modal === "transfer" ? "Kirim" : modal === "repair_done" ? "Selesai" : "Write-off"}
+                    </Text>
                   </>
                 )}
               </TouchableOpacity>

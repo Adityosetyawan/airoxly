@@ -209,3 +209,25 @@ Aplikasi mobile (Expo/React Native) untuk penjualan air minum galon dengan hirar
 - Efek Sales:
   - `transaction/new.tsx` filter client-side: produk hanya muncul bila `allowed_groups=[]` & `allowed_sales=[]` (open) ATAU user.group_letter cocok ATAU user.sales_code cocok.
   - Filter berlaku baik saat online (network fetch) maupun offline (cached products).
+
+## Barang Jadi — Repair/Rusak Flow (Sept 2026)
+- **Backend**: Collection `damage_movements` (kind: return | repair_done | write_off, source: repair | produksi).
+- Endpoints: 
+  - POST /api/inventory/damage/return (Gudang → antrian Repair Produksi)
+  - POST /api/inventory/damage/repair-done (Repair → Stok Produksi)
+  - POST /api/inventory/damage/write-off (source: repair atau produksi → Rusak permanen)
+  - GET /api/inventory/damage/list
+- Stock endpoint sekarang return `repair` & `rusak` count per barang.
+- **Frontend Produksi (Barang Jadi tab)**: 4 tombol (Catat Produksi, Kirim, Selesai Repair, Rusak Permanen). Tabel 5 kolom + riwayat lengkap.
+- **Frontend Gudang (Bahan tab)**: Section "Barang Jadi di Gudang" dengan tombol "Return Rusak" + riwayat return.
+- Alur: Produksi cetak → Kirim Gudang → (rusak?) Gudang Return → antrian Repair Produksi → Selesai Repair → kembali ke Stok Produksi (atau Write-off jika parah).
+
+## Stok Bahan di Produksi (Sept 2026)
+- **Frontend Produksi (Stok tab)**: Ditambah "Kotak Pantau Stok Bahan" (Gudang | Produksi) di atas panel Sparepart + Riwayat Bahan Masuk dari Gudang.
+
+## Password Persistence Safeguard (Sept 2026)
+- Seed default users di `services/seed.py` sekarang di-gate dengan flag `initial_user_seed_done` di collection settings.
+- Efek: Setelah seed pertama kali sukses, seed users TIDAK akan re-inject default password ke akun yang dihapus/diedit.
+
+## Input Harian Produksi — Placeholder 0 (Sept 2026)
+- Kolom manual_adjust / manual_adjust_before default kosong (placeholder abu-abu "0") bukan "0".

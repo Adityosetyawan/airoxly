@@ -39,13 +39,20 @@ Web admin companion untuk airoxly (Expo tetap untuk lapangan). v1 fokus: Login (
 - [x] Cache user (oxly_user) sebagai fallback saat jaringan down (JWT asli tanpa claim role)
 - [x] Testing integrasi (iteration_2): 6/6 skenario lulus, 10 request terkonfirmasi ke oxly-crm.emergent.host, 0 ke replica
 
+## Fase 2 — CRUD + Export (21 Agu 2026)
+- [x] Halaman Pelanggan (cari, edit, hapus, export CSV + PDF via /api/exports/customers.pdf dengan picker sales)
+- [x] Halaman Produk (CRUD lengkap + CSV), Transaksi (filter tanggal/sales, catat transaksi multi-item, edit, hapus, CSV), Pengeluaran (filter tanggal, CRUD, CSV)
+- [x] RBAC tulis: SuperAdmin full + hapus; Admin tambah/edit; Sales read-only (terverifikasi UI)
+- [x] Penyesuaian RBAC backend asli: create pelanggan dibatasi backend ke role sales → tombol Tambah di web diganti hint "Pelanggan baru ditambahkan sales via aplikasi lapangan"; super_admin terverifikasi bisa PATCH/DELETE customer & full CRUD transaksi (probe API, cleanup 0 residu)
+- [x] Testing iterasi 3: 17/18 lulus; mismatch RBAC create-pelanggan diperbaiki; record uji TEST-QA dibersihkan penuh
+
 ## Backlog Prioritas
-- P0 (Fase 2): Tabel CRUD customers, products, transactions, expenses + export CSV/PDF (endpoint asli sudah lengkap: /api/customers, /api/products, /api/transactions, /api/expenses, /api/exports/customers.pdf)
 - P1: Deploy sub-path /admin di Vercel
 - P1 (Fase 3): Live Map (endpoint /api/location/live sudah ada) + user & role management (/api/users)
 - P2 (Fase 4): warehouse, production, shifts, AI Vision, import Excel, reminder pelanggan
 - P2: Migrasi TypeScript + Vite, refresh token flow penuh, lupa/reset password UI
 
 ## Next Tasks
-1. Mulai Fase 2: modul CRUD pertama (disarankan: Pelanggan lalu Transaksi) memakai endpoint asli.
-2. Siapkan deploy Vercel sub-path /admin (base path + rewrite + cek service worker PWA root).
+1. (Opsional) Minta pemilik backend airoxly membuka POST /api/customers untuk super_admin/admin bila ingin tambah pelanggan dari web — saat ini backend membatasi create pelanggan ke role sales (by design aplikasi lapangan: butuh foto + GPS).
+2. Fase 3: Live Map + user & role management.
+3. Siapkan deploy Vercel sub-path /admin (base path + rewrite + cek service worker PWA root).

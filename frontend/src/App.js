@@ -7,6 +7,10 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import AdminLayout from "@/layouts/AdminLayout";
 import Dashboard from "@/pages/Dashboard";
 import Login from "@/pages/Login";
+import Customers from "@/pages/Customers";
+import Products from "@/pages/Products";
+import Transactions from "@/pages/Transactions";
+import Expenses from "@/pages/Expenses";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,6 +47,10 @@ function App() {
                 }
               >
                 <Route path="/" element={<Dashboard />} />
+                <Route path="/customers" element={<Customers />} />
+                <Route path="/products" element={<Products />} />
+                <Route path="/transactions" element={<Transactions />} />
+                <Route path="/expenses" element={<Expenses />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

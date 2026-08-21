@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   LayoutDashboard, Users, Package, ShoppingCart, Wallet, Map, UserCog, LogOut, Droplets,
@@ -6,14 +6,26 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { ROLE_LABELS } from "@/lib/format";
 
+const NAV = [
+  { to: "/", label: "Dasbor", icon: LayoutDashboard, roles: ["super_admin", "admin", "sales", "produksi", "gudang"] },
+  { to: "/customers", label: "Pelanggan", icon: Users, roles: ["super_admin", "admin", "sales"] },
+  { to: "/products", label: "Produk", icon: Package, roles: ["super_admin", "admin"] },
+  { to: "/transactions", label: "Transaksi", icon: ShoppingCart, roles: ["super_admin", "admin", "sales"] },
+  { to: "/expenses", label: "Pengeluaran", icon: Wallet, roles: ["super_admin", "admin"] },
+];
+
 const UPCOMING = [
-  { label: "Pelanggan", icon: Users, fase: "Fase 2", roles: ["super_admin", "admin", "sales"] },
-  { label: "Produk", icon: Package, fase: "Fase 2", roles: ["super_admin", "admin"] },
-  { label: "Transaksi", icon: ShoppingCart, fase: "Fase 2", roles: ["super_admin", "admin", "sales"] },
-  { label: "Pengeluaran", icon: Wallet, fase: "Fase 2", roles: ["super_admin", "admin"] },
   { label: "Peta Live", icon: Map, fase: "Fase 3", roles: ["super_admin", "admin"] },
   { label: "Pengguna & Peran", icon: UserCog, fase: "Fase 3", roles: ["super_admin"] },
 ];
+
+const TITLES = {
+  "/": "Dasbor Overview",
+  "/customers": "Pelanggan",
+  "/products": "Produk",
+  "/transactions": "Transaksi",
+  "/expenses": "Pengeluaran",
+};
 
 const initials = (name = "") =>
   name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
@@ -21,6 +33,7 @@ const initials = (name = "") =>
 export default function AdminLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = async () => {
     await logout();
@@ -46,18 +59,22 @@ export default function AdminLayout() {
 
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-widest text-white/40">Menu</p>
-          <NavLink
-            to="/"
-            data-testid="sidebar-nav-dasbor"
-            className={({ isActive }) =>
-              `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                isActive ? "bg-white text-[#0A0A0A]" : "text-white/70 hover:bg-white/10 hover:text-white"
-              }`
-            }
-          >
-            <LayoutDashboard className="h-4 w-4" />
-            Dasbor
-          </NavLink>
+          {NAV.filter((m) => m.roles.includes(user.role)).map((m) => (
+            <NavLink
+              key={m.to}
+              to={m.to}
+              end={m.to === "/"}
+              data-testid={`sidebar-nav-${m.label.toLowerCase().replace(/\s+/g, "-")}`}
+              className={({ isActive }) =>
+                `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                  isActive ? "bg-white text-[#0A0A0A]" : "text-white/70 hover:bg-white/10 hover:text-white"
+                }`
+              }
+            >
+              <m.icon className="h-4 w-4" />
+              {m.label}
+            </NavLink>
+          ))}
 
           <p className="px-2 pb-2 pt-6 text-[10px] font-semibold uppercase tracking-widest text-white/40">
             Modul Berikutnya
@@ -106,7 +123,7 @@ export default function AdminLayout() {
               <Droplets className="h-4 w-4 text-white" />
             </div>
             <h2 data-testid="topbar-title" className="font-display text-base font-bold tracking-tight text-[#0A0A0A]">
-              Dasbor Overview
+              {TITLES[location.pathname] || "Air OXLY Admin"}
             </h2>
           </div>
           <div className="flex items-center gap-3">

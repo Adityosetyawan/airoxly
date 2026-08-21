@@ -1,0 +1,44 @@
+{
+  "summary": "Iterasi 3 — Fase 2 (CRUD + export). Diuji terhadap backend PRODUKSI airoxly. Semua record uji bernama 'TEST-QA-*' dibuat & dihapus via UI; verifikasi cleanup via API menunjukkan 0 residu (customers/products/expenses). Products CRUD full, Expenses CRUD full, Customers list/search/CSV/PDF, Transactions filter+CSV, sales RBAC, error state — semua PASS. Namun ditemukan MISMATCH RBAC antara frontend & backend untuk Pelanggan: super_admin/admin di UI menampilkan tombol Tambah, tapi backend produksi menolak dengan 403 'Hanya Sales yang bisa menambah pelanggan baru'. Edit/Delete pelanggan sebagai super_admin belum divalidasi (tidak dites karena backend memblokir create, dan guardrail melarang menyentuh record milik user lain).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/customers", "issue": "Backend produksi hanya mengizinkan role Sales membuat pelanggan (403 untuk super_admin/admin). Ini bertentangan dengan spek RBAC user (SuperAdmin full CRUD)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Customers.jsx", "issue": "Tombol 'Tambah' pelanggan tampil untuk super_admin & admin, tapi request selalu gagal 403 dari backend produksi. Perlu penyelarasan: sembunyikan tombol untuk role selain sales ATAU minta backend memperluas izin. Saat ini toast error tampil ('Hanya Sales yang bisa menambah pelanggan baru') tapi modal tetap terbuka setelah submit — UX kurang jelas.", "selector": "[data-testid=customer-create-button]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_3.json"],
+  "action_items": [
+    "Sinkronkan RBAC create-pelanggan antara UI dan backend produksi: baik sembunyikan tombol Tambah untuk non-sales, atau tampilkan pesan hint 'Hanya sales yang boleh menambah pelanggan' + minta perluasan izin backend. Rekomendasi: karena backend tidak bisa diubah, ubah canWrite di Customers.jsx menjadi role === 'sales' (khusus untuk create), sementara edit/delete tetap untuk super_admin/admin bila backend memang mengizinkan. Verifikasi izin PATCH/DELETE /api/customers untuk super_admin dulu.",
+    "Verifikasi via API produksi apakah super_admin bisa PATCH & DELETE /api/customers/{id} — jika tidak, sesuaikan UI juga.",
+    "Tidak ada akun admin murni untuk uji RBAC admin (skip; gap kredensial dilaporkan).",
+    "Transaction create/edit/delete belum diuji di UI karena tidak ada cara membuat pelanggan TEST-QA (backend blok super_admin) dan menghindari menyentuh record pelanggan lain. Rekomendasi main-agent: sediakan akun sales khusus test, atau ubah UI supaya sales bisa dijadikan test-sales sementara."
+  ],
+  "critical_code_review_comments": [
+    "Customers.jsx: canWrite = ['super_admin','admin'].includes(user.role) — konflik dengan backend produksi. Perbaiki pemetaan role.",
+    "Modal.jsx: tidak menangani Escape key untuk close (minor UX).",
+    "Customers.jsx submit: setelah error create, modal tetap terbuka dengan input terisi — mungkin diinginkan, tapi tidak ada indikator error di dalam modal selain toast (mudah terlewat)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "90% (17/18 sub-scenarios; 1 mismatch = Customer create RBAC)"},
+  "test_credentials": "superadmin/Adityo67890 (super_admin), adminz/admin123 (sales) — dari /app/memory/test_credentials.md",
+  "seed_data_creation": "Selama tes membuat & MENGHAPUS: 1 Produk 'TEST-QA-Produk' (via UI), 1 Pengeluaran 'TEST-QA' 9999→8888 (via UI). Verifikasi via API: 0 residu TEST-QA di customers/products/expenses.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Fokus utama pengujian ulang: (1) Setelah main agent menyelaraskan RBAC Pelanggan (kemungkinan membalik canWrite ke role==='sales' untuk create), uji create/edit/delete pelanggan sebagai sales adminz — pastikan cleanup. (2) Uji PATCH & DELETE /api/customers untuk super_admin via API produksi terlebih dulu untuk tahu apakah backend juga blok — jika blok, edit/delete tombol di UI juga perlu disembunyikan. (3) Transaction CRUD end-to-end sekali ada mekanisme membuat pelanggan TEST-QA (bisa via sales). Semua tes lain (Products, Expenses, exports CSV/PDF, sales RBAC read-only, error state) SUDAH PASS.",
+  "detailed_results": {
+    "customers": {"list_rows": 841, "search_Paknur": 2, "csv": "pelanggan.csv", "pdf": "pelanggan.pdf (via sales dropdown, endpoint /api/exports/customers.pdf)", "create_by_superadmin": "BLOCKED by backend 403 (mismatch)", "edit_by_superadmin": "not tested", "delete_by_superadmin": "not tested"},
+    "products": {"list_rows": 14, "create": true, "edit_price_15000": true, "delete": true, "csv": "produk.csv"},
+    "expenses": {"default_30d_rows": 6, "create_TEST-QA_9999": true, "edit_to_8888": true, "delete": true, "csv": "pengeluaran.csv"},
+    "transactions": {"default_30d_rows": 685, "narrow_1day": 253, "sales_filter_ok": 5, "csv": "transaksi.csv", "create_edit_delete": "not tested — no way to create TEST-QA customer for isolation"},
+    "sales_rbac": {"sidebar_hides_produk_and_pengeluaran": true, "customers_no_write_buttons": true, "transactions_no_write_buttons": true, "direct_products_url_readonly": true, "direct_expenses_url_readonly": true},
+    "error_state": {"customers_route_abort_shows_error_and_retry": true},
+    "cleanup_verified_via_api": {"customers_TEST-QA": 0, "products_TEST-QA": 0, "expenses_TEST-QA": 0}
+  }
+}

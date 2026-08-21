@@ -334,6 +334,34 @@ export const api = {
     });
     return req(`/reports/monthly?${q.toString()}`, { method: "PATCH", body: JSON.stringify(body) });
   },
+  monthlyByWilayah: (params: { year: number; month: number }) => {
+    const q = new URLSearchParams({ year: String(params.year), month: String(params.month) });
+    return req<{
+      year: number;
+      month: number;
+      rows: Array<{
+        wilayah: string;
+        omzet: number;
+        bayar: number;
+        hutang: number;
+        gln_terjual: number;
+        trx_count: number;
+        sales_count: number;
+        customer_count: number;
+        customer_active: number;
+      }>;
+      totals: {
+        omzet: number;
+        bayar: number;
+        hutang: number;
+        gln_terjual: number;
+        trx_count: number;
+        sales_count: number;
+        customer_count: number;
+        customer_active: number;
+      };
+    }>(`/reports/monthly-by-wilayah?${q.toString()}`);
+  },
 
   // Location
   pingLocation: (lat: number, lng: number) =>

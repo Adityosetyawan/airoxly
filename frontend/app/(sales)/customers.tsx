@@ -1,5 +1,6 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -12,13 +13,16 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
+import * as Location from "expo-location";
 import { theme, rp } from "@/src/theme";
 import { api, Customer } from "@/src/api";
 import ExportCustomerModal from "@/src/components/ExportCustomerModal";
 import { getCachedCustomers } from "@/src/utils/offlineStore";
+import { useToast } from "@/src/components/Toast";
 
 const SORTS = [
   { id: "no", label: "No. Urut", icon: "list-outline" },
+  { id: "route", label: "Rute Optimal", icon: "navigate-outline" },
   { id: "ranking", label: "Ranking Belanja", icon: "trophy-outline" },
   { id: "recent", label: "Terbaru Beli", icon: "sparkles-outline" },
   { id: "last", label: "Terlama Beli", icon: "time-outline" },
@@ -26,18 +30,113 @@ const SORTS = [
   { id: "debt", label: "Hutang Terbesar", icon: "cash-outline" },
 ] as const;
 
+// Haversine distance in meters between two lat/lng points.
+function distanceMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const s1 = Math.sin(dLat / 2);
+  const s2 = Math.sin(dLng / 2);
+  const x = s1 * s1 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * s2 * s2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+
+/**
+ * Greedy nearest-neighbor route from origin over customers with coords.
+ * Returns customers ordered by visit sequence + distance from PREV point (m).
+ * Customers without coords are appended at the end (distance null).
+ */
+function computeNearestRoute(
+  origin: { lat: number; lng: number },
+  customers: Customer[],
+): (Customer & { _distFromPrev?: number | null })[] {
+  const withCoords = customers.filter((c) => typeof c.lat === "number" && typeof c.lng === "number");
+  const withoutCoords = customers.filter((c) => !(typeof c.lat === "number" && typeof c.lng === "number"));
+  const remaining = [...withCoords];
+  const ordered: (Customer & { _distFromPrev?: number | null })[] = [];
+  let cur = origin;
+  while (remaining.length > 0) {
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < remaining.length; i++) {
+      const c = remaining[i];
+      const d = distanceMeters(cur, { lat: c.lat as number, lng: c.lng as number });
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+    const next = remaining.splice(bestIdx, 1)[0];
+    ordered.push({ ...next, _distFromPrev: bestDist });
+    cur = { lat: next.lat as number, lng: next.lng as number };
+  }
+  // Append no-coords items with null distance so Sales can still see them.
+  withoutCoords.forEach((c) => ordered.push({ ...c, _distFromPrev: null }));
+  return ordered;
+}
+
+function formatDistance(m: number | null | undefined): string {
+  if (m == null) return "—";
+  if (m < 1000) return `${Math.round(m)} m`;
+  return `${(m / 1000).toFixed(1)} km`;
+}
+
 export default function Customers() {
   const router = useRouter();
+  const toast = useToast();
   const [sort, setSort] = useState<string>("no");
   const [q, setQ] = useState("");
   const [items, setItems] = useState<Customer[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [routeOrigin, setRouteOrigin] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [routeDistances, setRouteDistances] = useState<Record<string, number | null>>({});
+
+  // When Sales chooses "route" mode, grab GPS once (or on refresh).
+  const captureOrigin = useCallback(async () => {
+    setLocating(true);
+    try {
+      const perm = await Location.getForegroundPermissionsAsync();
+      let ok = perm.status === "granted";
+      if (!ok) {
+        const req = await Location.requestForegroundPermissionsAsync();
+        ok = req.status === "granted";
+      }
+      if (!ok) {
+        toast.show("Izinkan lokasi untuk pakai Rute Optimal", "error");
+        return null;
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const pos = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+      setRouteOrigin(pos);
+      return pos;
+    } catch (e: any) {
+      toast.show(e?.message || "Gagal ambil lokasi", "error");
+      return null;
+    } finally {
+      setLocating(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    if (sort === "route" && !routeOrigin) captureOrigin();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sort]);
 
   const load = useCallback(async () => {
     try {
-      const r = await api.listCustomers({ sort, q: q || undefined });
-      setItems(r);
+      // For "route" mode, ignore server sort (use client-side nearest neighbor).
+      const serverSort = sort === "route" ? "no" : sort;
+      const r = await api.listCustomers({ sort: serverSort, q: q || undefined });
+      if (sort === "route" && routeOrigin) {
+        const ordered = computeNearestRoute(routeOrigin, r);
+        const distMap: Record<string, number | null> = {};
+        ordered.forEach((c: any) => { distMap[c.id] = c._distFromPrev ?? null; });
+        setRouteDistances(distMap);
+        setItems(ordered);
+      } else {
+        setRouteDistances({});
+        setItems(r);
+      }
     } catch {
       // Offline / API down — fall back to the last cached snapshot so Sales
       // can still browse pelanggan in the field.
@@ -50,18 +149,27 @@ export default function Customers() {
               (c.barcode_id || "").toLowerCase().includes(query),
           )
         : cached;
-      const sorted = [...filtered].sort((a, b) => {
-        if (sort === "no") return (a.customer_no || 0) - (b.customer_no || 0);
-        if (sort === "ranking") return (b.total_purchases || 0) - (a.total_purchases || 0);
-        if (sort === "recent") return (b.last_purchase_date || "").localeCompare(a.last_purchase_date || "");
-        if (sort === "last") return (a.last_purchase_date || "9999").localeCompare(b.last_purchase_date || "9999");
-        if (sort === "loans") return (b.gallon_loans || 0) - (a.gallon_loans || 0);
-        if (sort === "debt") return (b.total_debt || 0) - (a.total_debt || 0);
-        return 0;
-      });
-      setItems(sorted);
+      if (sort === "route" && routeOrigin) {
+        const ordered = computeNearestRoute(routeOrigin, filtered);
+        const distMap: Record<string, number | null> = {};
+        ordered.forEach((c: any) => { distMap[c.id] = c._distFromPrev ?? null; });
+        setRouteDistances(distMap);
+        setItems(ordered);
+      } else {
+        setRouteDistances({});
+        const sorted = [...filtered].sort((a, b) => {
+          if (sort === "no") return (a.customer_no || 0) - (b.customer_no || 0);
+          if (sort === "ranking") return (b.total_purchases || 0) - (a.total_purchases || 0);
+          if (sort === "recent") return (b.last_purchase_date || "").localeCompare(a.last_purchase_date || "");
+          if (sort === "last") return (a.last_purchase_date || "9999").localeCompare(b.last_purchase_date || "9999");
+          if (sort === "loans") return (b.gallon_loans || 0) - (a.gallon_loans || 0);
+          if (sort === "debt") return (b.total_debt || 0) - (a.total_debt || 0);
+          return 0;
+        });
+        setItems(sorted);
+      }
     }
-  }, [sort, q]);
+  }, [sort, q, routeOrigin]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -134,6 +242,30 @@ export default function Customers() {
         ))}
       </ScrollView>
 
+      {sort === "route" && (
+        <View style={styles.routeBar}>
+          <Ionicons name="navigate" size={14} color="#1E40AF" />
+          <View style={{ flex: 1 }}>
+            {locating ? (
+              <Text style={styles.routeBarText}>Mengambil lokasi Anda…</Text>
+            ) : routeOrigin ? (
+              <Text style={styles.routeBarText}>
+                Rute dari GPS Anda • {items.filter((c) => typeof c.lat === "number" && typeof c.lng === "number").length} pelanggan berlokasi
+              </Text>
+            ) : (
+              <Text style={styles.routeBarText}>Belum ada lokasi. Tap ↻ untuk ambil GPS.</Text>
+            )}
+          </View>
+          <TouchableOpacity
+            onPress={async () => { const p = await captureOrigin(); if (p) load(); }}
+            style={styles.routeReload}
+            testID="route-reload-btn"
+          >
+            {locating ? <ActivityIndicator size="small" color="#1E40AF" /> : <Ionicons name="refresh" size={14} color="#1E40AF" />}
+          </TouchableOpacity>
+        </View>
+      )}
+
       <View style={styles.summary}>
         <View style={styles.sumItem}>
           <Text style={styles.sumLabel}>Total Hutang Pelanggan</Text>
@@ -181,6 +313,14 @@ export default function Customers() {
                   : " · belum belanja"}
               </Text>
               <View style={styles.tagsRow}>
+                {sort === "route" && (
+                  <View style={[styles.tag, { backgroundColor: "#DBEAFE", flexDirection: "row", alignItems: "center", gap: 3 }]}>
+                    <Ionicons name="navigate" size={11} color="#1E40AF" />
+                    <Text style={[styles.tagText, { color: "#1E40AF" }]}>
+                      {formatDistance(routeDistances[item.id])}
+                    </Text>
+                  </View>
+                )}
                 {item.total_debt > 0 && (
                   <View style={[styles.tag, { backgroundColor: "#FEE2E2" }]}>
                     <Text style={[styles.tagText, { color: theme.color.error }]}>Hutang Rp {rp(item.total_debt)}</Text>
@@ -316,4 +456,7 @@ const styles = StyleSheet.create({
   tagText: { fontSize: 11, fontWeight: "500" },
   empty: { alignItems: "center", padding: 48 },
   emptyText: { color: theme.color.muted, marginTop: 12 },
+  routeBar: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 16, marginBottom: 8, padding: 10, borderRadius: 10, backgroundColor: "#DBEAFE", borderWidth: 1, borderColor: "#93C5FD" },
+  routeBarText: { fontSize: 12, color: "#1E40AF", fontWeight: "600" },
+  routeReload: { width: 28, height: 28, borderRadius: 14, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
 });

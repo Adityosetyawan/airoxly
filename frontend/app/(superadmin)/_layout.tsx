@@ -43,6 +43,7 @@ export default function SuperAdminLayout() {
       <Tabs.Screen name="selisih" options={{ href: null }} />
       <Tabs.Screen name="login-as" options={{ href: null }} />
       <Tabs.Screen name="inventory" options={{ href: null }} />
+      <Tabs.Screen name="wilayah-summary" options={{ href: null }} />
     </Tabs>
   );
 }

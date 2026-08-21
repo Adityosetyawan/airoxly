@@ -253,3 +253,16 @@ Aplikasi mobile (Expo/React Native) untuk penjualan air minum galon dengan hirar
   - Purge offlineStore (buang cache milik user impersonated)
   - Navigate DIRECTLY ke `/(superadmin)/dashboard` (bukan lewat `/` index) — 3× retry (0/200/700 ms)
 - Banner sticky "Kembali" tetap ada di atas.
+
+## Rute Kunjungan Optimal (Sales, Sept 2026)
+- Chip sort baru "Rute Optimal" di halaman Pelanggan Sales.
+- Ambil GPS foreground, greedy nearest-neighbor sort atas pelanggan yang punya lat/lng.
+- Pelanggan tanpa koordinat digeser ke akhir list (badge "—").
+- Setiap baris menampilkan jarak dari pemberhentian sebelumnya (m / km).
+- Bar biru info: Rute dari GPS Anda + tombol reload GPS.
+
+## Rangkuman Wilayah Bulanan (Sept 2026)
+- Endpoint `GET /api/reports/monthly-by-wilayah?year=X&month=Y` return per-wilayah agregat: omzet, bayar, hutang, gln_terjual, trx_count, sales_count, customer_count, customer_active + totals.
+- Page: `(superadmin)/wilayah-summary` (link dari Dashboard Superadmin) & mirror `(admin)/wilayah-summary` (link dari Dashboard Admin).
+- UI: month navigator, total card, per-wilayah cards dengan bar-chart % share + statistik detail.
+- Admin dibatasi ke `group_letter`-nya sendiri; Superadmin lihat semua.

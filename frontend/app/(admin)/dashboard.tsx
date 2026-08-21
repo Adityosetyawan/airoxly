@@ -81,6 +81,11 @@ export default function AdminDashboard() {
             <Text style={styles.linkTextAlt}>Selisih Galon (Merah/Hijau)</Text>
             <Ionicons name="chevron-forward" size={16} color={theme.color.muted} />
           </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push("/(admin)/wilayah-summary")} style={styles.linkBtn} testID="open-wilayah-summary-btn">
+            <Ionicons name="pie-chart" size={16} color={theme.color.brandPrimary} />
+            <Text style={styles.linkText}>Rangkuman Wilayah Bulanan</Text>
+            <Ionicons name="chevron-forward" size={16} color={theme.color.muted} />
+          </TouchableOpacity>
         </View>
 
         <Text style={styles.section}>Rangkuman Per Sales (Hari Ini)</Text>

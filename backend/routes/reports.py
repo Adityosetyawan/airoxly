@@ -388,3 +388,123 @@ async def update_monthly_report(
         upsert=True,
     )
     return {"ok": True}
+
+
+
+@router.get("/monthly-by-wilayah")
+async def monthly_by_wilayah(
+    year: int,
+    month: int,
+    user=Depends(get_current_user),
+):
+    """Aggregate omzet & pelanggan per wilayah (group_letter) untuk bulan tsb.
+
+    Access: super_admin & admin (admin dibatasi ke group_letter-nya sendiri).
+    """
+    if user["role"] not in ("super_admin", "admin"):
+        raise HTTPException(403, "Forbidden")
+
+    ndays = calendar.monthrange(year, month)[1]
+    start = f"{year:04d}-{month:02d}-01"
+    end = f"{year:04d}-{month:02d}-{ndays:02d}"
+
+    # Only admin's own wilayah if admin.
+    q_users: dict = {"role": "sales"}
+    if user["role"] == "admin" and user.get("group_letter"):
+        q_users["group_letter"] = user["group_letter"]
+
+    sales_users = await db.users.find(q_users, {"_id": 0}).to_list(1000)
+    sales_by_id = {s["id"]: s for s in sales_users}
+
+    # Fetch transactions in scope.
+    q_tx: dict = {"date_only": {"$gte": start, "$lte": end}}
+    if user["role"] == "admin" and user.get("group_letter"):
+        q_tx["group_letter"] = user["group_letter"]
+
+    txns = await db.transactions.find(q_tx, {"_id": 0}).to_list(20000)
+
+    # Fetch customers in scope (for count per wilayah).
+    q_cust: dict = {}
+    if user["role"] == "admin" and user.get("group_letter"):
+        q_cust["group_letter"] = user["group_letter"]
+    all_customers = await db.customers.find(q_cust, {"_id": 0, "id": 1, "group_letter": 1, "sales_code": 1, "created_by": 1}).to_list(50000)
+
+    # Init wilayah map from all sales' group_letters (so wilayah tanpa transaksi tetap muncul).
+    wilayah: dict[str, dict] = {}
+    def wkey(s):
+        gl = (s.get("group_letter") or "").upper().strip()
+        return gl or "?"
+
+    for s in sales_users:
+        k = wkey(s)
+        w = wilayah.setdefault(k, {
+            "wilayah": k,
+            "omzet": 0.0,      # total (bayar + hutang)
+            "bayar": 0.0,      # yang benar-benar dibayar (uang cash+tf+dll)
+            "hutang": 0.0,     # yang belum dibayar bulan ini
+            "gln_terjual": 0,  # galon isi terjual (bukan galon kosong)
+            "trx_count": 0,
+            "sales_count": 0,
+            "customer_count": 0,
+            "customer_active": 0,  # pelanggan yang setidaknya 1x beli bulan ini
+        })
+        w["sales_count"] += 1
+
+    for c in all_customers:
+        # Derive wilayah dari customer.group_letter, fallback ke owner sales.
+        gl = (c.get("group_letter") or "").upper().strip()
+        if not gl and c.get("created_by") and c["created_by"] in sales_by_id:
+            gl = wkey(sales_by_id[c["created_by"]])
+        if not gl:
+            gl = "?"
+        w = wilayah.setdefault(gl, {
+            "wilayah": gl, "omzet": 0.0, "bayar": 0.0, "hutang": 0.0,
+            "gln_terjual": 0, "trx_count": 0, "sales_count": 0,
+            "customer_count": 0, "customer_active": 0,
+        })
+        w["customer_count"] += 1
+
+    active_customers_by_wilayah: dict[str, set] = {}
+    for t in txns:
+        gl = (t.get("group_letter") or "").upper().strip()
+        if not gl:
+            s = sales_by_id.get(t.get("sales_id") or "", {})
+            gl = wkey(s)
+        if not gl:
+            gl = "?"
+        w = wilayah.setdefault(gl, {
+            "wilayah": gl, "omzet": 0.0, "bayar": 0.0, "hutang": 0.0,
+            "gln_terjual": 0, "trx_count": 0, "sales_count": 0,
+            "customer_count": 0, "customer_active": 0,
+        })
+        total_val = float(t.get("total", 0))
+        bayar_val = float(t.get("bayar", 0))
+        w["omzet"] += total_val
+        w["bayar"] += bayar_val
+        w["hutang"] += max(0.0, total_val - bayar_val)
+        w["trx_count"] += 1
+        gln = 0
+        for it in t.get("items", []):
+            if it.get("unit") == "gln" and "Kosong" not in (it.get("product_name") or ""):
+                gln += int(it.get("qty", 0) or 0)
+        w["gln_terjual"] += gln
+        cid = t.get("customer_id")
+        if cid:
+            active_customers_by_wilayah.setdefault(gl, set()).add(cid)
+
+    for k, s in active_customers_by_wilayah.items():
+        if k in wilayah:
+            wilayah[k]["customer_active"] = len(s)
+
+    rows = sorted(wilayah.values(), key=lambda r: (-r["omzet"], r["wilayah"]))
+    totals = {
+        "omzet": sum(r["omzet"] for r in rows),
+        "bayar": sum(r["bayar"] for r in rows),
+        "hutang": sum(r["hutang"] for r in rows),
+        "gln_terjual": sum(r["gln_terjual"] for r in rows),
+        "trx_count": sum(r["trx_count"] for r in rows),
+        "sales_count": sum(r["sales_count"] for r in rows),
+        "customer_count": sum(r["customer_count"] for r in rows),
+        "customer_active": sum(r["customer_active"] for r in rows),
+    }
+    return {"year": year, "month": month, "rows": rows, "totals": totals}

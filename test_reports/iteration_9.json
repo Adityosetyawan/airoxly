@@ -1,0 +1,33 @@
+{
+  "summary": "Retest iterasi 9 setelah env var REACT_APP_AIROXLY_API_URL diset di Vercel. Semua 6 flow yang sebelumnya BLOCKED sekarang PASS. Bundle JS bundle sudah mengandung baseURL 'https://oxly-crm.emergent.host/api' (bukan undefined/api). Superadmin login → 8 KPI cards + chart tren rendered dengan data asli (Rp 3.448.000, 841 pelanggan, 685 transaksi, dst). Deep-link /admin/customers memuat tabel 841 pelanggan (bukan 404, SPA fallback vercel.json bekerja). Logout → /admin/login. Sales login → 6 KPI cards, tanpa Pengeluaran & Setoran (RBAC benar). CORS cross-domain airoxly-admin.vercel.app → oxly-crm.emergent.host works di real app calls.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Optional/minor: server oxly-crm.emergent.host tampaknya mengembalikan Access-Control-Allow-Origin: * — kompatibel dengan mode axios (withCredentials false via bearer token), tapi tidak kompatibel dengan fetch credentials:'include'. Jika ke depan mau pakai httpOnly cookie auth cross-domain, backend harus set ACAO ke origin eksplisit + ACAC:true."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100% (6/6 flows PASS)"},
+  "test_credentials": "superadmin/Adityo67890, adminz/admin123 (both verified working)",
+  "seed_data_creation": "None (read-only prod testing)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iterasi 8 blank-page bug (env var undefined) sudah fully fixed di iterasi 9. Bundle baru 'main.718414a0.js' di Vercel deployment airoxly-admin.vercel.app berisi baseURL yang benar. Semua flow superadmin & sales working end-to-end. Jika ada retest berikutnya, fokus ke fitur baru saja.",
+  "flows_verified": [
+    "PASS: Bundle sanity - baseURL:'https://oxly-crm.emergent.host/api' present in main.718414a0.js",
+    "PASS: /admin/ → redirect /admin/login",
+    "PASS: Superadmin login (superadmin/Adityo67890) → dashboard",
+    "PASS: 8 KPI cards untuk superadmin (penjualan, penerimaan, transaksi, galon, pelanggan, total_transaksi, pengeluaran, setoran)",
+    "PASS: Chart tren 12 minggu rendered dengan data",
+    "PASS: Deep-link /admin/customers → 841 pelanggan loaded (bukan 404, SPA fallback works)",
+    "PASS: Logout → /admin/login",
+    "PASS: Sales login (adminz/admin123) → dashboard versi sales",
+    "PASS: 6 KPI cards untuk sales, TANPA Pengeluaran & Setoran (RBAC correct)",
+    "PASS: CORS cross-domain real API calls work (dashboard & customers data loaded successfully)"
+  ]
+}

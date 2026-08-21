@@ -71,6 +71,7 @@ Web admin companion untuk airoxly (Expo tetap untuk lapangan). v1 fokus: Login (
 - [x] Fix build Vercel keempat: error sebenarnya terlihat — Vercel memakai **npm** (bukan yarn) sehingga pohon dependensi kena konflik klasik `ajv@8` vs `ajv-keywords@3` (stack: schema-utils → terser-webpack-plugin). Fix: `vercel.json` kini memaksa `installCommand: yarn install` + `buildCommand: yarn build`
 - [x] Fix runtime Vercel kelima: deploy Ready tapi blank di URL standalone — aset dicari di `/admin/static/*` (PUBLIC_URL) sementara file ada di `/static/*`. Fix: rewrite `/admin/static/:path* → /static/:path*` (+ manifest/favicon) di vercel.json — URL standalone langsung berfungsi, dan di belakang rewrite PWA utama tetap aman (filesystem Vercel didahulukan)
 - [x] Fix runtime Vercel keenam: bundle berisi `undefined/api` — file `.env*` difilter Save to GitHub sehingga REACT_APP_AIROXLY_API_URL hilang saat build. Fix: api.js fail-fast dengan pesan jelas + dokumentasi WAJIB set env var di dashboard Vercel (DEPLOY.md)
+- [x] **DEPLOY LIVE (22 Agu 2026): https://airoxly-admin.vercel.app/admin** — env var diset di dashboard Vercel → redeploy → testing iterasi 9: 6/6 flow PASS (login superadmin 8 KPI, login sales 6 KPI tanpa Pengeluaran/Setoran, deep link, SPA fallback, CORS, logout)
 
 ## Backlog Prioritas
 - P1: Eksekusi deploy Vercel mengikuti /app/DEPLOY.md (butuh akses akun Vercel user)
@@ -81,4 +82,4 @@ Web admin companion untuk airoxly (Expo tetap untuk lapangan). v1 fokus: Login (
 ## Next Tasks
 1. (Opsional) Minta pemilik backend airoxly membuka POST /api/customers untuk super_admin/admin bila ingin tambah pelanggan dari web — saat ini backend membatasi create pelanggan ke role sales (by design aplikasi lapangan: butuh foto + GPS).
 2. Fase 4 sisa: AI Vision, import Excel, reminder pelanggan.
-3. Eksekusi deploy Vercel mengikuti /app/DEPLOY.md (import repo → project admin, tambah rewrite di project PWA, cek service worker).
+3. Wiring domain utama: tambah rewrite `/admin/*` → `https://airoxly-admin.vercel.app/:path*` di vercel.json project PWA (Langkah 2 DEPLOY.md) + cek service worker PWA (Langkah 3).

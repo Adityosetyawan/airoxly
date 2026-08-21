@@ -46,13 +46,17 @@ Web admin companion untuk airoxly (Expo tetap untuk lapangan). v1 fokus: Login (
 - [x] Penyesuaian RBAC backend asli: create pelanggan dibatasi backend ke role sales → tombol Tambah di web diganti hint "Pelanggan baru ditambahkan sales via aplikasi lapangan"; super_admin terverifikasi bisa PATCH/DELETE customer & full CRUD transaksi (probe API, cleanup 0 residu)
 - [x] Testing iterasi 3: 17/18 lulus; mismatch RBAC create-pelanggan diperbaiki; record uji TEST-QA dibersihkan penuh
 
+## Fase 3 — Live Map + User Management (21 Agu 2026)
+- [x] Peta Live (/map, super_admin+admin): Leaflet + OpenStreetMap, marker posisi live sales (auto-refresh 30 dtk) + pin pelanggan (toggle), filter per grup, panel Sales Aktif dengan waktu relatif, popup detail
+- [x] Pengguna & Peran (/users, khusus super_admin, route guard RequireRole): tabel 108 user, cari + filter peran, tambah user (5 role), edit (nama/role/kode sales/grup/WA/reset password opsional), nonaktifkan/aktifkan (PATCH disabled) — tanpa hapus permanen di UI
+- [x] Testing iterasi 4: 100% lulus — RBAC peta & users, toggle disable terverifikasi menolak login API (401), cleanup testqa_user 0 residu
+
 ## Backlog Prioritas
 - P1: Deploy sub-path /admin di Vercel
-- P1 (Fase 3): Live Map (endpoint /api/location/live sudah ada) + user & role management (/api/users)
 - P2 (Fase 4): warehouse, production, shifts, AI Vision, import Excel, reminder pelanggan
 - P2: Migrasi TypeScript + Vite, refresh token flow penuh, lupa/reset password UI
 
 ## Next Tasks
 1. (Opsional) Minta pemilik backend airoxly membuka POST /api/customers untuk super_admin/admin bila ingin tambah pelanggan dari web — saat ini backend membatasi create pelanggan ke role sales (by design aplikasi lapangan: butuh foto + GPS).
-2. Fase 3: Live Map + user & role management.
+2. Fase 4: Gudang, Produksi, Shift, AI Vision (endpoint asli sudah ada: /api/warehouse/*, /api/production/*, /api/shifts, /api/ai/*), import Excel, reminder pelanggan.
 3. Siapkan deploy Vercel sub-path /admin (base path + rewrite + cek service worker PWA root).

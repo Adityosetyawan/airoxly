@@ -2,6 +2,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   LayoutDashboard, Users, Package, ShoppingCart, Wallet, Map, UserCog, LogOut, Droplets,
+  Warehouse, Factory, Clock, Sparkles,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { ROLE_LABELS } from "@/lib/format";
@@ -12,11 +13,15 @@ const NAV = [
   { to: "/products", label: "Produk", icon: Package, roles: ["super_admin", "admin"] },
   { to: "/transactions", label: "Transaksi", icon: ShoppingCart, roles: ["super_admin", "admin", "sales"] },
   { to: "/expenses", label: "Pengeluaran", icon: Wallet, roles: ["super_admin", "admin"] },
+  { to: "/map", label: "Peta Live", icon: Map, roles: ["super_admin", "admin"] },
+  { to: "/users", label: "Pengguna", icon: UserCog, roles: ["super_admin"] },
 ];
 
 const UPCOMING = [
-  { label: "Peta Live", icon: Map, fase: "Fase 3", roles: ["super_admin", "admin"] },
-  { label: "Pengguna & Peran", icon: UserCog, fase: "Fase 3", roles: ["super_admin"] },
+  { label: "Gudang", icon: Warehouse, fase: "Fase 4", roles: ["super_admin", "admin", "gudang"] },
+  { label: "Produksi", icon: Factory, fase: "Fase 4", roles: ["super_admin", "admin", "produksi"] },
+  { label: "Shift", icon: Clock, fase: "Fase 4", roles: ["super_admin", "admin"] },
+  { label: "AI Vision", icon: Sparkles, fase: "Fase 4", roles: ["super_admin"] },
 ];
 
 const TITLES = {
@@ -25,6 +30,8 @@ const TITLES = {
   "/products": "Produk",
   "/transactions": "Transaksi",
   "/expenses": "Pengeluaran",
+  "/map": "Peta Live",
+  "/users": "Pengguna & Peran",
 };
 
 const initials = (name = "") =>
@@ -76,23 +83,27 @@ export default function AdminLayout() {
             </NavLink>
           ))}
 
-          <p className="px-2 pb-2 pt-6 text-[10px] font-semibold uppercase tracking-widest text-white/40">
-            Modul Berikutnya
-          </p>
-          {UPCOMING.filter((m) => m.roles.includes(user.role)).map((m) => (
-            <div
-              key={m.label}
-              data-testid={`sidebar-upcoming-${m.label.toLowerCase().replace(/\s+/g, "-")}`}
-              className="flex cursor-not-allowed items-center justify-between rounded-md px-3 py-2 text-sm text-white/35"
-              title={`${m.label} — tersedia di ${m.fase}`}
-            >
-              <span className="flex items-center gap-3">
-                <m.icon className="h-4 w-4" />
-                {m.label}
-              </span>
-              <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-medium">{m.fase}</span>
-            </div>
-          ))}
+          {UPCOMING.some((m) => m.roles.includes(user.role)) && (
+            <>
+              <p className="px-2 pb-2 pt-6 text-[10px] font-semibold uppercase tracking-widest text-white/40">
+                Modul Berikutnya
+              </p>
+              {UPCOMING.filter((m) => m.roles.includes(user.role)).map((m) => (
+                <div
+                  key={m.label}
+                  data-testid={`sidebar-upcoming-${m.label.toLowerCase().replace(/\s+/g, "-")}`}
+                  className="flex cursor-not-allowed items-center justify-between rounded-md px-3 py-2 text-sm text-white/35"
+                  title={`${m.label} — tersedia di ${m.fase}`}
+                >
+                  <span className="flex items-center gap-3">
+                    <m.icon className="h-4 w-4" />
+                    {m.label}
+                  </span>
+                  <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-medium">{m.fase}</span>
+                </div>
+              ))}
+            </>
+          )}
         </nav>
 
         <div className="border-t border-white/10 p-4">

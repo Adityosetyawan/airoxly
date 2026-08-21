@@ -11,6 +11,8 @@ import Customers from "@/pages/Customers";
 import Products from "@/pages/Products";
 import Transactions from "@/pages/Transactions";
 import Expenses from "@/pages/Expenses";
+import LiveMap from "@/pages/LiveMap";
+import Users from "@/pages/Users";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,6 +30,13 @@ const RequireAuth = ({ children }) => {
   const { user } = useAuth();
   if (user === undefined) return <FullScreenLoader />;
   if (user === null) return <Navigate to="/login" replace />;
+  return children;
+};
+
+const RequireRole = ({ roles, children }) => {
+  const { user } = useAuth();
+  if (user === undefined) return <FullScreenLoader />;
+  if (!roles.includes(user.role)) return <Navigate to="/" replace />;
   return children;
 };
 
@@ -51,6 +60,22 @@ function App() {
                 <Route path="/products" element={<Products />} />
                 <Route path="/transactions" element={<Transactions />} />
                 <Route path="/expenses" element={<Expenses />} />
+                <Route
+                  path="/map"
+                  element={
+                    <RequireRole roles={["super_admin", "admin"]}>
+                      <LiveMap />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="/users"
+                  element={
+                    <RequireRole roles={["super_admin"]}>
+                      <Users />
+                    </RequireRole>
+                  }
+                />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

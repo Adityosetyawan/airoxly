@@ -1,0 +1,46 @@
+{
+  "summary": "RETEST Fase 4 setelah perbaikan main agent — SEMUA SKENARIO LULUS. Guard duplikat Warehouse & Produksi bekerja (modal tetap terbuka, 0 POST, toast berisi 'sudah ada'). Create/edit/delete AMAN dengan tanggal 2030-01-15 (baris +1, bukan menimpa) untuk warehouse daily & production daily. Barang masuk kini menyimpan field 'note' dengan benar (TEST-QA-NOTE) — bug notes-vs-note frontend fix terverifikasi. Regresi 5 halaman superadmin render normal. Residual TEST-QA-VERIFY dari main agent (id 512795db) dan seluruh data uji sudah dihapus via API — 0 residu di ketiga endpoint.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/warehouse/daily & POST /api/production/daily",
+        "issue": "MASIH BERSIFAT UPSERT di backend (unchanged, sesuai konteks — backend di repo terpisah). Mitigasi frontend guard sudah efektif melindungi user dari data-loss silent-overwrite. Rekomendasi jangka panjang: backend sebaiknya mengembalikan HTTP 409 saat kombinasi (date, shift, sales_id) sudah ada agar guard berlapis (defense-in-depth).",
+        "priority": "MEDIUM (mitigasi frontend sudah aktif)"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "OPSIONAL (bukan blocker): koordinasi dengan tim backend untuk konversi POST upsert → reject 409 pada endpoint /warehouse/daily & /production/daily. Guard frontend saat ini bergantung pada data yang termuat di query aktif — jika user memfilter rentang yang TIDAK mencakup tanggal duplikat, guard akan miss dan upsert terjadi. Contoh skenario risiko: user set filter 2027-01-01→2027-12-31, lalu Catat Laporan untuk 2026-08-21 kombinasi existing → daily.some(...) return false karena data 2026 tidak dimuat → POST tetap terjadi → backend upsert menimpa record existing. Rekomendasi: (a) tambahkan check server-side (409), atau (b) fetch spesifik (date, shift, sales_id) sebelum submit untuk kombinasi yang tidak ada di list aktif."
+  ],
+  "critical_code_review_comments": [
+    "Warehouse.jsx line 76 & Production.jsx line 58: guard duplikat mengandalkan `daily.some(...)` / `(listQuery.data||[]).some(...)` yang HANYA memeriksa data yang termuat di query aktif (filter rentang tanggal). Jika user mengubah filter sehingga tanggal duplikat tidak termasuk, guard akan lolos dan backend upsert lagi. Butuh proteksi server-side atau pre-check via API sebelum submit.",
+    "Warehouse.jsx submitSimple (line 89-95): payload incoming kini mengirim 'note' (benar), transfer mengirim 'notes' (benar untuk SparepartTransferCreate). Field mapping sudah konsisten dengan skema backend."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only)", "frontend": "100% (6/6 skenario lulus)"},
+  "test_credentials": "super_admin: superadmin/Adityo67890 (dari /app/memory/test_credentials.md)",
+  "seed_data_creation": "Tidak ada seed permanen. Semua record uji (warehouse-daily 7452a887, production-daily 2c27cbac, warehouse-incoming d6236700) sudah dihapus via UI dan/atau API. Residual TEST-QA-VERIFY (512795db) yang ditinggalkan main agent juga sudah dibersihkan via API DELETE.",
+  "cleanup_status": {
+    "warehouse_daily_2030_01_15": "0 records (verified via GET)",
+    "production_daily_2030_01_15": "0 records (verified via GET)",
+    "warehouse_incoming_TEST-QA": "0 records (verified via GET)"
+  },
+  "detailed_results": {
+    "1_guard_warehouse": {"modal_still_open": true, "post_count": 0, "toast_matches_sudah_ada": true, "verdict": "PASS"},
+    "2_guard_production": {"modal_still_open": true, "post_count": 0, "toast_matches_sudah_ada": true, "verdict": "PASS"},
+    "3_warehouse_create_2030": {"post_status": 200, "new_id": "7452a887-1d21-43fc-bd26-9050fba7736d", "rows_before": 0, "rows_after": 1, "patch_status": 200, "delete_status": 200, "verdict": "PASS"},
+    "4_production_create_2030": {"post_status": 200, "new_id": "2c27cbac-2f3f-4253-bd96-671b93fc7a3a", "rows_before": 0, "rows_after": 1, "patch_status": 200, "delete_status": 200, "verdict": "PASS"},
+    "5_incoming_note_persistence": {"post_status": 200, "note_returned": "TEST-QA-NOTE", "note_in_get": "TEST-QA-NOTE", "delete_status": 200, "verdict": "PASS — bug notes-vs-note fixed"},
+    "6_regression": {"paths_tested": ["/", "/customers", "/transactions", "/map", "/users"], "errors": "none", "verdict": "PASS"}
+  },
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Guard duplikat frontend saat ini efektif untuk skenario umum (user membuka form ketika filter sudah menampilkan record duplikat). Namun guard TIDAK melindungi ketika filter aktif tidak mencakup tanggal duplikat — backend upsert masih bisa terjadi. Untuk regresi masa depan: (a) pertahankan tanggal 2030-01-15 sebagai kombinasi 'known-safe' untuk record uji, (b) selalu ambil id dari response POST (bukan first-row), (c) selalu cleanup via API DELETE dan verifikasi 0 residu setelah selesai."
+}

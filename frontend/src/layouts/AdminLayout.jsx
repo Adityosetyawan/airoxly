@@ -15,12 +15,12 @@ const NAV = [
   { to: "/expenses", label: "Pengeluaran", icon: Wallet, roles: ["super_admin", "admin"] },
   { to: "/map", label: "Peta Live", icon: Map, roles: ["super_admin", "admin"] },
   { to: "/users", label: "Pengguna", icon: UserCog, roles: ["super_admin"] },
+  { to: "/warehouse", label: "Gudang", icon: Warehouse, roles: ["super_admin", "admin", "gudang"] },
+  { to: "/production", label: "Produksi", icon: Factory, roles: ["super_admin", "admin", "produksi"] },
+  { to: "/shifts", label: "Shift", icon: Clock, roles: ["super_admin", "admin"] },
 ];
 
 const UPCOMING = [
-  { label: "Gudang", icon: Warehouse, fase: "Fase 4", roles: ["super_admin", "admin", "gudang"] },
-  { label: "Produksi", icon: Factory, fase: "Fase 4", roles: ["super_admin", "admin", "produksi"] },
-  { label: "Shift", icon: Clock, fase: "Fase 4", roles: ["super_admin", "admin"] },
   { label: "AI Vision", icon: Sparkles, fase: "Fase 4", roles: ["super_admin"] },
 ];
 
@@ -32,6 +32,9 @@ const TITLES = {
   "/expenses": "Pengeluaran",
   "/map": "Peta Live",
   "/users": "Pengguna & Peran",
+  "/warehouse": "Gudang",
+  "/production": "Produksi",
+  "/shifts": "Shift",
 };
 
 const initials = (name = "") =>

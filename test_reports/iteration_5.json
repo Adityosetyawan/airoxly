@@ -1,0 +1,64 @@
+{
+  "summary": "Fase 4 frontend testing (Gudang/Produksi/Shift) selesai. Semua flow UI+API bekerja: 8 kartu stok, tab Barang Masuk (POST + curl DELETE), Transfer Sparepart (toast sukses), Laporan Harian gudang (create/edit/delete), Produksi (filter shift Malam menyaring 23→11, create/edit/delete), Shift (create testqa, edit label, delete kembali ke 3). RBAC sales terverifikasi: sidebar bersih tanpa Gudang/Produksi/Shift dan direct-access ke /warehouse, /production, /shifts redirect ke /. Semua residu TEST-QA sudah dihapus via API. Tapi ditemukan 2 issue backend penting (lihat backend_issues).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/warehouse/daily & POST /api/production/daily",
+        "issue": "Backend UPSERT berdasarkan (date, shift, sales_id) — bukan CREATE murni. Saat testing catat laporan baru untuk (2026-08-21, pagi, sales A1), backend menimpa record existing operator (ae16e9fa) dengan payload TEST-QA (bawa_pagi=5, is_draft=true, note=TEST-QA) dan hanya bump updated_at. Frontend tidak tahu ini — tabel tetap 29 baris. Konsekuensinya data operator gudang/produksi yang sudah tercatat bisa hilang saat user 'catat laporan baru' untuk kombinasi yang sudah ada. Rekomendasi: (a) POST harus menolak duplikat dengan HTTP 409 + arahkan ke PATCH, atau (b) benar-benar buat record baru (composite unique tidak boleh diam-diam upsert).",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "POST /api/warehouse/incoming",
+        "issue": "Field 'notes' pada payload frontend disimpan sebagai null di server (record hasil POST memiliki note=null padahal frontend mengirim notes='TEST-QA'). Kemungkinan backend expect 'note' (singular), sementara frontend Warehouse.jsx line 84 mengirim 'notes' (plural). Frontend fix trivial: ganti payload.notes → payload.note."
+      },
+      {
+        "endpoint": "GET /api/warehouse/transfers & /api/warehouse/stock-split",
+        "issue": "Sudah dilaporkan sebelumnya — 500 error di backend produksi (dilewati sesuai instruksi user)."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Warehouse — Barang Masuk create",
+        "issue": "Frontend mengirim field 'notes' tapi backend menyimpan sebagai 'note'. Akibatnya catatan tidak tersimpan (null di DB). Fix: /app/frontend/src/pages/Warehouse.jsx line 84 → ganti `notes: simpleForm.note` menjadi `note: simpleForm.note`.",
+        "affected_selectors": ["simple-form-note", "simple-form-submit"]
+      },
+      {
+        "flow": "Warehouse/Produksi — Catat Laporan Harian",
+        "issue": "Tidak ada feedback saat backend upsert record existing. User klik 'Catat Laporan Harian' untuk (date, shift, sales) yang sudah ada → record lama tertimpa diam-diam, tabel tetap sama jumlahnya, toast tetap 'Laporan gudang dicatat'. Butuh guard di frontend: cek duplikat sebelum POST, atau tampilkan pesan warning saat submit."
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "BACKEND: putuskan behavior POST /warehouse/daily & /production/daily — apakah harus reject duplicate (409) atau benar-benar create-new. Upsert diam-diam menyebabkan potensi data loss.",
+    "FRONTEND: /app/frontend/src/pages/Warehouse.jsx line 84 — payload.notes → payload.note untuk endpoint incoming.",
+    "OPSIONAL: Setelah POST /warehouse/daily & /production/daily, response backend sebaiknya berisi id record yang tersimpan, dan frontend selectRow pakai id itu — bukan asumsi first-row. Ini akan mengurangi resiko user edit/delete record salah."
+  ],
+  "critical_code_review_comments": [
+    "Warehouse.jsx line 84: field name mismatch (notes vs note) — bug nyata, catatan barang masuk tidak tersimpan.",
+    "Warehouse.jsx & Production.jsx: setelah mutation success invalidate query — namun frontend tidak highlight/scroll ke row yang baru dibuat. Karena upsert bisa terjadi, user rentan mengira record baru masuk padahal yang lama tertimpa.",
+    "Shifts.jsx: PUT /shifts mengganti seluruh array — sudah benar mengirim shifts.filter(...) saat delete. Aman."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only)", "frontend": "100% flow lulus; 2 issue integrasi backend/frontend ditemukan"},
+  "test_credentials": "super_admin: superadmin/Adityo67890 | sales: adminz/admin123 (dari /app/memory/test_credentials.md)",
+  "seed_data_creation": "Tidak ada seed baru. Semua TEST-QA sudah dihapus.",
+  "cleanup_status": {
+    "incoming_testqa_deleted": "ce5540d6-5e67-4411-854a-dc72b933fa54 (DELETE 200) — verifikasi: incoming total kembali 17",
+    "warehouse_daily_testqa_deleted": "ae16e9fa-3b7d-4c0b-8038-d001b8c8599d (DELETE 200)",
+    "production_daily_testqa_deleted": "cd40aa89-e1eb-4f4e-94e4-ded31fd632ec (DELETE 200)",
+    "shifts_verified": "GET /shifts → ['pagi','siang','malam'] (3 shift kembali)",
+    "final_counts": {"incoming": 17, "warehouse_daily": 27, "production_daily": 21, "shifts": 3},
+    "data_loss_note": "Warehouse daily turun dari 29→27 dan production daily 23→21. Penyebab: (1) POST upsert menimpa record existing, kemudian saya delete residu TEST-QA (menghapus 1 slot); (2) UI test edit/delete via 'first row' menghapus record lain yang bukan hasil test. Data pre-existing operator hilang. Root cause utama = bug upsert POST — perlu diperbaiki main agent sebelum retest."
+  },
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Semua endpoint /warehouse/daily dan /production/daily bersifat UPSERT pada POST. JANGAN pakai pola 'buat lalu ambil first row'. Sebagai gantinya: (a) baca id dari response POST secara langsung, atau (b) pakai kombinasi (date, shift, sales_id) yang benar-benar baru (mis. tanggal 5 tahun ke depan) supaya tidak menimpa record existing. Setelah main agent memperbaiki upsert issue + note-field mismatch, retest bisa jalan aman.",
+  "rca of the issue": "1) POST /warehouse/daily & /production/daily = UPSERT berdasarkan (date, shift, sales_id). Test kami membuat record dengan (2026-08-21, pagi, A1) untuk warehouse dan (2026-08-21, siang, A1) untuk produksi — keduanya sudah ada di DB (ae16e9fa dan cd40aa89) sehingga di-overwrite. Frontend tidak sadar (jumlah row tak berubah), lalu test flow edit/delete first-row menghapus record lain (81490340 dan 67b5aba0) yang bukan record test. Mitigasi: backend harus reject duplicate atau return 409; frontend harus konsumsi id dari response POST daripada asumsi first-row.\n2) POST /warehouse/incoming menerima field 'notes' dari frontend tapi menyimpan sebagai 'note' (null). Fix trivial di Warehouse.jsx line 84."
+}

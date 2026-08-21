@@ -13,6 +13,9 @@ import Transactions from "@/pages/Transactions";
 import Expenses from "@/pages/Expenses";
 import LiveMap from "@/pages/LiveMap";
 import Users from "@/pages/Users";
+import Warehouse from "@/pages/Warehouse";
+import Production from "@/pages/Production";
+import Shifts from "@/pages/Shifts";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -73,6 +76,30 @@ function App() {
                   element={
                     <RequireRole roles={["super_admin"]}>
                       <Users />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="/warehouse"
+                  element={
+                    <RequireRole roles={["super_admin", "admin", "gudang"]}>
+                      <Warehouse />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="/production"
+                  element={
+                    <RequireRole roles={["super_admin", "admin", "produksi"]}>
+                      <Production />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="/shifts"
+                  element={
+                    <RequireRole roles={["super_admin", "admin"]}>
+                      <Shifts />
                     </RequireRole>
                   }
                 />

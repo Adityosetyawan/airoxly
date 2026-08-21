@@ -51,12 +51,21 @@ Web admin companion untuk airoxly (Expo tetap untuk lapangan). v1 fokus: Login (
 - [x] Pengguna & Peran (/users, khusus super_admin, route guard RequireRole): tabel 108 user, cari + filter peran, tambah user (5 role), edit (nama/role/kode sales/grup/WA/reset password opsional), nonaktifkan/aktifkan (PATCH disabled) — tanpa hapus permanen di UI
 - [x] Testing iterasi 4: 100% lulus — RBAC peta & users, toggle disable terverifikasi menolak login API (401), cleanup testqa_user 0 residu
 
+## Fase 4 (sebagian) — Gudang, Produksi, Shift (21 Agu 2026)
+- [x] Gudang (/warehouse): 8 kartu stok, tab Barang Masuk + Transfer Sparepart (catat), tab Laporan Harian (CRUD), guard duplikat (date+shift+sales) di frontend
+- [x] Produksi (/production): list + filter tanggal/shift, form lengkap (hasil produksi, part diganti, sisa), draft saat create, CRUD + guard duplikat
+- [x] Shift (/shifts): tambah/edit/hapus via PUT array penuh
+- [x] Testing iterasi 5+6: 100% lulus (6/6 retest); fix field `note` barang masuk; guard duplikat via pre-check API (tidak bergantung filter aktif) sebagai mitigasi bug upsert backend
+- [!] Insiden saat tes (21 Agu): bug backend POST /warehouse/daily & /production/daily = UPSERT diam-diam per (date, shift, sales_id) → 2 record operator (warehouse `81490340`, production `67b5aba0`) tertimpa payload uji lalu terhapus. Konten asli kedua record terekam di log probe main agent (dapat direstorasi manual bila perilaku backend dibetulkan)
+- [!] Bug backend dilaporkan ke pemilik airoxly: (1) upsert diam-diam harusnya 409/create-baru, (2) GET /api/warehouse/transfers & /stock-split → 500
+
 ## Backlog Prioritas
 - P1: Deploy sub-path /admin di Vercel
-- P2 (Fase 4): warehouse, production, shifts, AI Vision, import Excel, reminder pelanggan
+- P2 (Fase 4 sisa): AI Vision, import Excel, reminder pelanggan
+- P2 (backend airoxly, di luar repo ini): perbaiki upsert POST warehouse/production daily + 500 di /warehouse/transfers & /stock-split
 - P2: Migrasi TypeScript + Vite, refresh token flow penuh, lupa/reset password UI
 
 ## Next Tasks
 1. (Opsional) Minta pemilik backend airoxly membuka POST /api/customers untuk super_admin/admin bila ingin tambah pelanggan dari web — saat ini backend membatasi create pelanggan ke role sales (by design aplikasi lapangan: butuh foto + GPS).
-2. Fase 4: Gudang, Produksi, Shift, AI Vision (endpoint asli sudah ada: /api/warehouse/*, /api/production/*, /api/shifts, /api/ai/*), import Excel, reminder pelanggan.
+2. Fase 4 sisa: AI Vision, import Excel, reminder pelanggan.
 3. Siapkan deploy Vercel sub-path /admin (base path + rewrite + cek service worker PWA root).

@@ -261,52 +261,30 @@ function ProductEditor({ visible, product, onClose, onSaved }: { visible: boolea
               yang bisa melihat & menjual produk ini.
             </Text>
 
-            <Text style={styles.subLabel}>Wilayah (Group Letter)</Text>
-            {availableGroups.length === 0 ? (
-              <Text style={styles.emptyChip}>Belum ada sales terdaftar</Text>
-            ) : (
-              <View style={styles.chipsWrap}>
-                {availableGroups.map((g) => {
-                  const active = allowedGroups.includes(g);
-                  return (
-                    <TouchableOpacity
-                      key={g}
-                      onPress={() => toggleGroup(g)}
-                      style={[styles.chip, active && styles.chipOn]}
-                      testID={`p-group-${g}`}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.chipText, active && styles.chipTextOn]}>Wilayah {g}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
+            <SearchableMultiSelect
+              label="Wilayah (Group Letter)"
+              placeholder="Cari wilayah…"
+              emptyText={availableGroups.length === 0 ? "Belum ada sales terdaftar" : "Tidak ada yang cocok"}
+              options={availableGroups.map((g) => ({ value: g, label: `Wilayah ${g}` }))}
+              selected={allowedGroups}
+              onToggle={toggleGroup}
+              onClearAll={() => setAllowedGroups([])}
+              testIdPrefix="p-group"
+            />
 
-            <Text style={styles.subLabel}>Sales Spesifik</Text>
-            {allSales.length === 0 ? (
-              <Text style={styles.emptyChip}>Belum ada sales terdaftar</Text>
-            ) : (
-              <View style={styles.chipsWrap}>
-                {allSales.map((u) => {
-                  const code = (u.sales_code || u.username || "").toUpperCase();
-                  const active = allowedSales.includes(code);
-                  return (
-                    <TouchableOpacity
-                      key={u.id}
-                      onPress={() => toggleSalesCode(code)}
-                      style={[styles.chip, active && styles.chipOn]}
-                      testID={`p-sales-${code}`}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.chipText, active && styles.chipTextOn]}>
-                        {code}{u.name ? ` · ${u.name}` : ""}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
+            <SearchableMultiSelect
+              label="Sales Spesifik"
+              placeholder="Cari sales code atau nama…"
+              emptyText={allSales.length === 0 ? "Belum ada sales terdaftar" : "Tidak ada yang cocok"}
+              options={allSales.map((u) => {
+                const code = (u.sales_code || u.username || "").toUpperCase();
+                return { value: code, label: `${code}${u.name ? ` · ${u.name}` : ""}` };
+              })}
+              selected={allowedSales}
+              onToggle={toggleSalesCode}
+              onClearAll={() => setAllowedSales([])}
+              testIdPrefix="p-sales"
+            />
 
             {(allowedGroups.length > 0 || allowedSales.length > 0) && (
               <TouchableOpacity
@@ -327,6 +305,113 @@ function ProductEditor({ visible, product, onClose, onSaved }: { visible: boolea
         </View>
       </KeyboardAvoidingView>
     </Modal>
+  );
+}
+
+// ---------- Searchable Multi-Select (collapsible dropdown) ----------
+type Option = { value: string; label: string };
+function SearchableMultiSelect({
+  label,
+  placeholder,
+  emptyText,
+  options,
+  selected,
+  onToggle,
+  onClearAll,
+  testIdPrefix,
+}: {
+  label: string;
+  placeholder: string;
+  emptyText: string;
+  options: Option[];
+  selected: string[];
+  onToggle: (value: string) => void;
+  onClearAll: () => void;
+  testIdPrefix: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+
+  const filtered = React.useMemo(() => {
+    const kw = q.trim().toLowerCase();
+    if (!kw) return options;
+    return options.filter((o) => o.label.toLowerCase().includes(kw) || o.value.toLowerCase().includes(kw));
+  }, [q, options]);
+
+  const selectedLabels = React.useMemo(() => {
+    const map = new Map(options.map((o) => [o.value, o.label]));
+    return selected.map((v) => map.get(v) || v);
+  }, [selected, options]);
+
+  return (
+    <View style={{ marginTop: 10 }}>
+      <Text style={styles.subLabel}>{label}</Text>
+      <TouchableOpacity
+        onPress={() => setOpen((v) => !v)}
+        style={styles.msTrigger}
+        testID={`${testIdPrefix}-trigger`}
+        activeOpacity={0.7}
+      >
+        <View style={{ flex: 1 }}>
+          {selected.length === 0 ? (
+            <Text style={styles.msTriggerPlaceholder}>Pilih (kosong = semua)</Text>
+          ) : (
+            <Text style={styles.msTriggerText} numberOfLines={2}>
+              {selectedLabels.join(", ")}
+            </Text>
+          )}
+        </View>
+        <View style={styles.msBadge}>
+          <Text style={styles.msBadgeText}>{selected.length}</Text>
+        </View>
+        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={18} color={theme.color.onSurfaceSecondary} />
+      </TouchableOpacity>
+
+      {open && (
+        <View style={styles.msPanel}>
+          <View style={styles.msSearchWrap}>
+            <Ionicons name="search" size={16} color={theme.color.muted} />
+            <TextInput
+              value={q}
+              onChangeText={setQ}
+              placeholder={placeholder}
+              placeholderTextColor={theme.color.muted}
+              style={styles.msSearchInput}
+              testID={`${testIdPrefix}-search`}
+              autoCapitalize="none"
+            />
+            {selected.length > 0 && (
+              <TouchableOpacity onPress={onClearAll} testID={`${testIdPrefix}-clear`}>
+                <Text style={styles.msClearText}>Bersihkan</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <ScrollView style={styles.msList} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+            {filtered.length === 0 ? (
+              <Text style={styles.emptyChip}>{emptyText}</Text>
+            ) : (
+              filtered.map((o) => {
+                const active = selected.includes(o.value);
+                return (
+                  <TouchableOpacity
+                    key={o.value}
+                    onPress={() => onToggle(o.value)}
+                    style={styles.msOption}
+                    testID={`${testIdPrefix}-${o.value}`}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.checkbox, active && styles.checkboxOn]}>
+                      {active && <Ionicons name="checkmark" size={14} color="#fff" />}
+                    </View>
+                    <Text style={styles.msOptionText}>{o.label}</Text>
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </ScrollView>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -374,4 +459,16 @@ const styles = StyleSheet.create({
   clearBtnText: { fontSize: 12, fontWeight: "600", color: theme.color.error },
   accessBadge: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4, alignSelf: "flex-start", backgroundColor: "#FEF3C7", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   accessBadgeText: { fontSize: 11, fontWeight: "600", color: theme.color.warning },
+  msTrigger: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderColor: theme.color.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: "#fff" },
+  msTriggerPlaceholder: { fontSize: 13, color: theme.color.muted },
+  msTriggerText: { fontSize: 13, fontWeight: "600", color: theme.color.onSurface },
+  msBadge: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: theme.color.brandPrimary, paddingHorizontal: 6, alignItems: "center", justifyContent: "center" },
+  msBadgeText: { color: "#fff", fontSize: 11, fontWeight: "700" },
+  msPanel: { borderWidth: 1, borderColor: theme.color.border, borderTopWidth: 0, borderBottomLeftRadius: 12, borderBottomRightRadius: 12, backgroundColor: "#fff", marginTop: -1 },
+  msSearchWrap: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.color.border, backgroundColor: theme.color.surfaceSecondary },
+  msSearchInput: { flex: 1, fontSize: 13, color: theme.color.onSurface, paddingVertical: 4 },
+  msClearText: { fontSize: 12, color: theme.color.error, fontWeight: "600" },
+  msList: { maxHeight: 200 },
+  msOption: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, paddingHorizontal: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.color.border },
+  msOptionText: { fontSize: 13, color: theme.color.onSurface, flex: 1 },
 });

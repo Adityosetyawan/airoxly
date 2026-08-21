@@ -16,7 +16,7 @@ Tujuan: web admin tampil di `https://<domain-utama>/admin` tanpa menabrak PWA Ex
 3. Environment variable (atau sudah tercakup via `.env.production`):
    - `REACT_APP_AIROXLY_API_URL=https://oxly-crm.emergent.host`
 4. Deploy → dapat URL, mis. `https://oxly-admin.vercel.app`
-5. `vercel.json` di repo ini sudah berisi SPA fallback (`/(.*)` → `/index.html`)
+5. `vercel.json` di repo ini sudah berisi: paksa yarn (`installCommand`/`buildCommand`), rewrite `/admin/static/* → /static/*` (agar URL standalone `*.vercel.app/admin` langsung berfungsi), dan SPA fallback ke `index.html`
 
 ## Langkah 2 — Project PWA utama (repo airoxly Expo/web)
 
@@ -58,6 +58,7 @@ Uji: buka `https://<domain>/admin` dalam mode penyamaran (tanpa cache) dan pasti
 1. **Gagal ~6 detik setelah "Installing dependencies" tanpa pesan** → pin `packageManager: yarn@...` memicu corepack download yang gagal. Sudah dihapus dari package.json.
 2. **Gagal build ±1 menit, log berhenti di tengah** → Vercel menset `CI=true`; CRA mengubah warning ESLint jadi error. Semua warning sudah dibersihkan (terverifikasi `CI=true yarn build` lolos 0 warning).
 3. **`Error: Command "npm run build" exited with 1` + stack `ajv-keywords`/`schema-utils`/`terser-webpack-plugin`** → Vercel memakai npm (yarn.lock tidak ikut ter-push) dan pohon npm kena konflik ajv@8 vs ajv-keywords@3. Sudah dipaksa yarn via `installCommand: "yarn install"` + `buildCommand: "yarn build"` di `frontend/vercel.json`.
+4. **Deploy Ready tapi halaman blank (console: `Unexpected token '<'`)** → aset dibangun dengan prefix `/admin/static/*` (PUBLIC_URL) tapi file fisik ada di `/static/*`; rewrite SPA yang rakus mengembalikan index.html untuk request aset. Sudah diperbaiki dengan rewrite eksplisit `/admin/static/:path* → /static/:path*` (+ manifest/favicon) sebelum fallback `index.html`.
 
 ## Catatan
 

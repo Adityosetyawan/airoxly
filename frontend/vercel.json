@@ -1,5 +1,10 @@
 {
   "installCommand": "yarn install",
   "buildCommand": "yarn build",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/admin/static/:path*", "destination": "/static/:path*" },
+    { "source": "/admin/(manifest.json|favicon.ico|logo192.png|logo512.png|asset-manifest.json)", "destination": "/$1" },
+    { "source": "/admin/:path*", "destination": "/index.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }

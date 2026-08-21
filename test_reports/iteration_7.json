@@ -1,0 +1,40 @@
+{
+  "summary": "Smoke test of Vercel production deployment https://airoxly-admin.vercel.app/admin FAILED at the very first step. The app renders a blank white page because all static JS/CSS assets return index.html (HTML) instead of their real content. Root cause: overly broad SPA rewrite in frontend/vercel.json catches every path (including /admin/static/*), while the CRA build placed real assets at /static/* (Vercel serves the build folder from its root, PUBLIC_URL=/admin only rewrote in-HTML references). Because the JS bundle never executes, no route/redirect/login form renders, and none of the 6 requested test cases can be exercised.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Vercel deployment (frontend/vercel.json)",
+        "issue": "SPA rewrite '/(.*) -> /index.html' catches static assets. Request to /admin/static/js/main.67a744e3.js returns content-type text/html (index.html body, identical etag). Browser throws 'Unexpected token <' and React never mounts. App at https://airoxly-admin.vercel.app/admin/ is a blank white page.",
+        "selector": "N/A (deployment config)",
+        "priority": "CRITICAL"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "All flows (login / dashboard / deep link /admin/customers / logout / sales role)",
+        "issue": "Untestable — JS bundle never loads. login-username-input never appears (wait_for_selector timeout). Only 1 of 6 requested checks could even be attempted; asset URL discovery in HTML source confirms references are /admin/static/... but those return HTML.",
+        "affected_selectors": ["[data-testid=login-username-input]", "[data-testid=dashboard-page]", "[data-testid^=kpi-card-]", "[data-testid=sidebar-logout-button]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Fix /app/frontend/vercel.json rewrites so /admin/static/* is mapped to the real assets and only non-asset routes fall through to index.html. Suggested config:\n{\n  \"installCommand\": \"yarn install\",\n  \"buildCommand\": \"yarn build\",\n  \"rewrites\": [\n    { \"source\": \"/admin/static/(.*)\", \"destination\": \"/static/$1\" },\n    { \"source\": \"/admin/favicon.ico\", \"destination\": \"/favicon.ico\" },\n    { \"source\": \"/admin/manifest.json\", \"destination\": \"/manifest.json\" },\n    { \"source\": \"/admin/asset-manifest.json\", \"destination\": \"/asset-manifest.json\" },\n    { \"source\": \"/admin\", \"destination\": \"/index.html\" },\n    { \"source\": \"/admin/(.*)\", \"destination\": \"/index.html\" }\n  ]\n}\nAlternative: move build output into a build/admin/ subdirectory so paths line up naturally (e.g., set outputDirectory or use a custom postbuild step), OR remove PUBLIC_URL=/admin and host at Vercel root.",
+    "After redeploy, re-run this iteration to verify: (1) /admin/ redirects to /admin/login, (2) superadmin login → 8 KPI cards + trend chart, (3) deep link /admin/customers renders table, (4) API calls hit oxly-crm.emergent.host with CORS OK, (5) sales login (adminz/admin123) shows 6 KPI cards without expense card, (6) logout returns to /admin/login."
+  ],
+  "critical_code_review_comments": [
+    "vercel.json rewrite is too greedy: '/(.*) -> /index.html' will always shadow static assets when combined with a non-root basename. Standard pattern is to either scope rewrite to app routes only or serve assets at the same prefix as basename.",
+    "PUBLIC_URL=/admin at build time hardcodes the /admin/static/... paths into the built HTML. If Vercel's project outputDirectory is 'build/', those URLs will 404 (and here get rewritten to index.html) unless an explicit rewrite bridges /admin/static -> /static.",
+    "Root domain (https://airoxly-admin.vercel.app/) also returns index.html but still references /admin/static/... assets, so even the root URL is broken by design of PUBLIC_URL."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped as requested)", "frontend": "0% (0/6 test cases could complete; only asset-path-in-source check succeeded but the actual asset serves HTML)"},
+  "test_credentials": "superadmin/Adityo67890 and adminz/admin123 (from /app/memory/test_credentials.md) — not exercisable due to blank page.",
+  "seed_data_creation": "None — read-only smoke test only, no writes attempted (also blocked by blank page).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The fix is a 1-file config change to /app/frontend/vercel.json (see action_items). After main agent redeploys to Vercel, retest the 6 flows from the request. Preview env (oxly-admin.preview.emergentagent.com) already passed in iterations 1-6 so no changes to app code should be required. Evidence: curl -I https://airoxly-admin.vercel.app/admin/static/js/main.67a744e3.js returns content-type: text/html with same etag as /admin/ index.html, while curl -I https://airoxly-admin.vercel.app/static/js/main.67a744e3.js returns proper JS with 'cache-control: s-maxage=31536000, immutable'.",
+  "rca of the issue": "REPRO: (1) GET https://airoxly-admin.vercel.app/admin/ -> 200 HTML that references src='/admin/static/js/main.67a744e3.js'. (2) GET that JS URL -> 200 with content-type text/html and body starting '<!doctype html>' (same etag fd081429e9af98ac79942e43d6c6f259 as index.html). (3) Browser console shows 'Unexpected token <'. (4) React never mounts, so <BrowserRouter basename='/admin'> never runs the /admin -> /login redirect and no data-testid elements render. CAUSE: frontend/vercel.json rewrite '/(.*) -> /index.html' matches static asset requests before Vercel can serve them from the build output (which stores them at /static/*, not /admin/static/*). PUBLIC_URL=/admin only rewrites references inside index.html; it does not change the filesystem layout of the build folder. MITIGATION: add explicit /admin/static/(.*) -> /static/$1 rewrite (and similar for favicon/manifest) before the generic /admin/(.*) -> /index.html fallback, then redeploy."
+}

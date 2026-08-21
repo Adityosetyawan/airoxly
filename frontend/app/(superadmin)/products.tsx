@@ -65,17 +65,7 @@ export default function SuperProducts() {
                 const roles = item.hide_price_roles || [];
                 const legacySales = !!item.hide_price && roles.length === 0;
                 const effRoles = legacySales ? ["sales"] : roles;
-                if (effRoles.length > 0) {
-                  const labels: Record<string, string> = { sales: "Sales", admin: "Admin", gudang: "Gudang", produksi: "Produksi" };
-                  return (
-                    <View style={styles.hiddenBadgeRow}>
-                      <Ionicons name="eye-off-outline" size={12} color={theme.color.muted} />
-                      <Text style={styles.hiddenBadge}>
-                        Harga hidden: {effRoles.map((r) => labels[r] || r).join(", ")}
-                      </Text>
-                    </View>
-                  );
-                }
+                if (effRoles.length > 0) return null;
                 return <Text style={styles.price}>Rp {rp(item.price)} / {item.unit}</Text>;
               })()}
             </View>

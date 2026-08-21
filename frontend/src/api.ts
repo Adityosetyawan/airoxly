@@ -31,6 +31,8 @@ export type Product = {
   unit: string;
   price: number;
   order: number;
+  hide_price?: boolean;
+  hide_price_roles?: string[];
 };
 
 export type Customer = {

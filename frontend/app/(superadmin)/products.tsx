@@ -61,7 +61,23 @@ export default function SuperProducts() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>{item.name}</Text>
-              <Text style={styles.price}>Rp {rp(item.price)} / {item.unit}</Text>
+              {(() => {
+                const roles = item.hide_price_roles || [];
+                const legacySales = !!item.hide_price && roles.length === 0;
+                const effRoles = legacySales ? ["sales"] : roles;
+                if (effRoles.length > 0) {
+                  const labels: Record<string, string> = { sales: "Sales", admin: "Admin", gudang: "Gudang", produksi: "Produksi" };
+                  return (
+                    <View style={styles.hiddenBadgeRow}>
+                      <Ionicons name="eye-off-outline" size={12} color={theme.color.muted} />
+                      <Text style={styles.hiddenBadge}>
+                        Harga hidden: {effRoles.map((r) => labels[r] || r).join(", ")}
+                      </Text>
+                    </View>
+                  );
+                }
+                return <Text style={styles.price}>Rp {rp(item.price)} / {item.unit}</Text>;
+              })()}
             </View>
             <TouchableOpacity onPress={() => setEditing(item)} style={styles.iconBtn} testID={`edit-product-${item.id}`}>
               <Ionicons name="create-outline" size={20} color={theme.color.brand} />
@@ -90,6 +106,12 @@ function ProductEditor({ visible, product, onClose, onSaved }: { visible: boolea
   const [unit, setUnit] = useState("gln");
   const [price, setPrice] = useState("");
   const [order, setOrder] = useState("");
+  const [hideRoles, setHideRoles] = useState<Record<string, boolean>>({
+    sales: false,
+    admin: false,
+    gudang: false,
+    produksi: false,
+  });
 
   React.useEffect(() => {
     if (product) {
@@ -97,13 +119,25 @@ function ProductEditor({ visible, product, onClose, onSaved }: { visible: boolea
       setUnit(product.unit);
       setPrice(String(product.price));
       setOrder(String(product.order || 0));
+      const roles = product.hide_price_roles || [];
+      // Legacy fallback: if hide_price=true and roles empty → treat as sales.
+      const legacySales = !!product.hide_price && roles.length === 0;
+      setHideRoles({
+        sales: roles.includes("sales") || legacySales,
+        admin: roles.includes("admin"),
+        gudang: roles.includes("gudang"),
+        produksi: roles.includes("produksi"),
+      });
     } else {
       setName("");
       setUnit("gln");
       setPrice("");
       setOrder("");
+      setHideRoles({ sales: false, admin: false, gudang: false, produksi: false });
     }
   }, [product, visible]);
+
+  const toggleRole = (r: string) => setHideRoles((s) => ({ ...s, [r]: !s[r] }));
 
   const save = async () => {
     if (!name.trim()) {
@@ -111,7 +145,15 @@ function ProductEditor({ visible, product, onClose, onSaved }: { visible: boolea
       return;
     }
     try {
-      const payload = { name, unit, price: parseFloat(price) || 0, order: parseInt(order) || 0 };
+      const roles = Object.entries(hideRoles).filter(([, v]) => v).map(([k]) => k);
+      const payload = {
+        name,
+        unit,
+        price: parseFloat(price) || 0,
+        order: parseInt(order) || 0,
+        hide_price: roles.includes("sales"), // keep legacy in sync
+        hide_price_roles: roles,
+      };
       if (product) await api.updateProduct(product.id, payload);
       else await api.createProduct(payload);
       toast.show("Tersimpan", "success");
@@ -139,6 +181,39 @@ function ProductEditor({ visible, product, onClose, onSaved }: { visible: boolea
           <TextInput value={price} onChangeText={(v) => setPrice(v.replace(/[^\d.]/g, ""))} keyboardType="number-pad" style={styles.input} testID="p-price-input" />
           <Text style={styles.label}>Urutan</Text>
           <TextInput value={order} onChangeText={setOrder} keyboardType="number-pad" style={styles.input} testID="p-order-input" />
+
+          <View style={styles.privacyCard}>
+            <View style={styles.privacyHeader}>
+              <Ionicons name="eye-off" size={16} color={theme.color.brand} />
+              <Text style={styles.privacyTitle}>Sembunyikan Harga dari Role</Text>
+            </View>
+            <Text style={styles.toggleHint}>
+              Role yang di-centang tidak akan melihat harga produk ini di aplikasinya. Superadmin selalu bisa lihat.
+            </Text>
+            {[
+              { key: "sales", label: "Sales", desc: "Halaman pilih produk saat input transaksi" },
+              { key: "admin", label: "Admin", desc: "Dashboard, laporan, dan detail transaksi" },
+              { key: "gudang", label: "Gudang", desc: "Jaga-jaga jika kelak ada tampilan harga" },
+              { key: "produksi", label: "Produksi", desc: "Jaga-jaga jika kelak ada tampilan harga" },
+            ].map((r) => (
+              <TouchableOpacity
+                key={r.key}
+                onPress={() => toggleRole(r.key)}
+                style={styles.roleRow}
+                testID={`p-hide-${r.key}-switch`}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.checkbox, hideRoles[r.key] && styles.checkboxOn]}>
+                  {hideRoles[r.key] && <Ionicons name="checkmark" size={14} color="#fff" />}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.roleLabel}>{r.label}</Text>
+                  <Text style={styles.roleDesc}>{r.desc}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           <TouchableOpacity onPress={save} style={styles.saveBtn} testID="save-product-btn">
             <Text style={styles.saveBtnText}>Simpan</Text>
           </TouchableOpacity>
@@ -168,4 +243,17 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: theme.color.border, borderRadius: 12, padding: 14, fontSize: 15, color: theme.color.onSurface, backgroundColor: theme.color.surfaceSecondary },
   saveBtn: { backgroundColor: theme.color.brandPrimary, padding: 16, borderRadius: 14, alignItems: "center", marginTop: 20 },
   saveBtnText: { color: "#fff", fontWeight: "600", fontSize: 15 },
+  toggleRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 16, paddingVertical: 12, paddingHorizontal: 12, borderRadius: 12, backgroundColor: theme.color.surfaceSecondary, borderWidth: 1, borderColor: theme.color.border },
+  toggleTitle: { fontSize: 14, fontWeight: "600", color: theme.color.onSurface },
+  toggleHint: { fontSize: 12, color: theme.color.muted, marginTop: 2, marginBottom: 8 },
+  hiddenBadgeRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
+  hiddenBadge: { fontSize: 12, color: theme.color.muted, fontStyle: "italic" },
+  privacyCard: { marginTop: 16, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.color.border, backgroundColor: theme.color.surfaceSecondary },
+  privacyHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
+  privacyTitle: { fontSize: 14, fontWeight: "700", color: theme.color.onSurface },
+  roleRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.color.border },
+  roleLabel: { fontSize: 14, fontWeight: "600", color: theme.color.onSurface },
+  roleDesc: { fontSize: 11, color: theme.color.muted, marginTop: 1 },
+  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: theme.color.border, alignItems: "center", justifyContent: "center", backgroundColor: "#fff" },
+  checkboxOn: { backgroundColor: theme.color.brandPrimary, borderColor: theme.color.brandPrimary },
 });

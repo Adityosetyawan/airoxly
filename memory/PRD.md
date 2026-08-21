@@ -176,3 +176,22 @@ Aplikasi mobile (Expo/React Native) untuk penjualan air minum galon dengan hirar
 - SuperAdmin: `/(superadmin)/inventory` → tab Bahan/Barang Jadi, CRUD dengan nama + satuan
 - Gudang: tab baru "Bahan" (di sebelah "Stok") → Barang Masuk, Kirim ke Produksi, Kotak Pantau + Riwayat
 - Produksi: tab baru "Barang Jadi" (di sebelah "Stok") → Catat Produksi, Kirim ke Gudang, Kotak Pantau + Riwayat
+
+## Privasi Harga per-Produk (Sept 2026)
+- Field `hide_price: bool` ditambahkan ke schema `Product` (create/update/read).
+- Superadmin dapat toggle "Sembunyikan Harga dari Sales" per-produk di halaman `Produk & Harga`.
+- Global toggle `hide_prices_from_sales` di Settings dihapus/diarahkan ke per-produk (halaman Settings sekarang menampilkan link ke Produk & Harga).
+- Di aplikasi Sales:
+  - `transaction/new.tsx`: baris harga "Rp XX / unit" tidak ditampilkan bila `product.hide_price = true`.
+  - `transaction/[id].tsx` (detail transaksi): untuk role Sales, item dengan `hide_price = true` menyembunyikan "× Rp XXX" dan subtotal, hanya menampilkan qty + unit.
+- Total transaksi tetap ditampilkan agar Sales tetap tahu total yang harus dibayar customer.
+
+## Privasi Harga per-Role (Sept 2026 v2)
+- Refactor field ke `hide_price_roles: List[str]` di schema `Product` (create/update/read).
+- Field lama `hide_price: bool` dipertahankan sebagai mirror ("sales" in hide_price_roles) untuk backward compat.
+- UI Superadmin `Produk & Harga` menampilkan 4 checkbox role per produk: Sales, Admin, Gudang, Produksi.
+- Legacy migration: bila `hide_price=true` & `hide_price_roles=[]` (data lama), diperlakukan seolah `["sales"]`.
+- Efek saat ini:
+  - Sales `transaction/new.tsx` menyembunyikan baris harga produk bila role "sales" ada di list.
+  - Detail transaksi Sales (`transaction/[id].tsx`) TETAP menampilkan harga (per keputusan bisnis: Sales berhak lihat harga dari transaksi yang dia buat sendiri).
+  - Admin/Gudang/Produksi belum menampilkan harga produk di UI saat ini — toggle disimpan untuk masa depan (future-proof).

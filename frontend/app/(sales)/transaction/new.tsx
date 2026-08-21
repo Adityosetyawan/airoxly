@@ -36,7 +36,6 @@ export default function TransactionForm() {
 
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
-  const [hidePrices, setHidePrices] = useState(false);
   const [qtys, setQtys] = useState<Record<string, number>>({});
   const [bayar, setBayar] = useState("");
   const [pinjam, setPinjam] = useState("");
@@ -56,12 +55,6 @@ export default function TransactionForm() {
           prods = await getCachedProducts();
         }
         setProducts(prods);
-
-        // Load "hide prices" toggle (Super Admin setting). Sales-only respect.
-        try {
-          const s = await api.getSetting("hide_prices_from_sales");
-          setHidePrices(Boolean(s?.value));
-        } catch { /* keep default false */ }
 
         if (params.edit_id) {
           const t = await api.listTransactions({ customer_id: params.customer_id });
@@ -324,11 +317,17 @@ export default function TransactionForm() {
           </View>
 
           <Text style={styles.section}>Produk</Text>
-          {products.map((p) => (
+          {products.map((p) => {
+            const hideRoles = p.hide_price_roles || [];
+            const legacySales = !!p.hide_price && hideRoles.length === 0;
+            const hideForSales = legacySales || hideRoles.includes("sales");
+            return (
             <View key={p.id} style={styles.pRow} testID={`product-${p.id}`}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.pName}>{p.name}</Text>
-                <Text style={styles.pPrice}>{hidePrices ? `/ ${p.unit}` : `Rp ${rp(p.price)} / ${p.unit}`}</Text>
+                {!hideForSales && (
+                  <Text style={styles.pPrice}>Rp {rp(p.price)} / {p.unit}</Text>
+                )}
               </View>
               <View style={styles.stepper}>
                 <TouchableOpacity onPress={() => setQ(p.id, -1)} style={styles.stepBtn} testID={`minus-${p.id}`}>
@@ -346,7 +345,8 @@ export default function TransactionForm() {
                 </TouchableOpacity>
               </View>
             </View>
-          ))}
+            );
+          })}
 
           <Text style={styles.section}>Galon</Text>
           <View style={styles.gallonRow}>

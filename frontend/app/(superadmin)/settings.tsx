@@ -43,19 +43,16 @@ export default function SuperSettings() {
   const [confirmText, setConfirmText] = useState("");
   const [resetting, setResetting] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
-  const [hidePrices, setHidePrices] = useState(false);
-  const [savingHide, setSavingHide] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [r, g, sh, pp, lot, hp] = await Promise.all([
+      const [r, g, sh, pp, lot] = await Promise.all([
         api.getSetting("visit_radius_m").catch(() => null),
         api.getSetting("gps_min_move_m").catch(() => null),
         api.getShifts().catch(() => null),
         api.listPartPrices().catch(() => null),
         api.getSetting("lottery_min_price_per_galon").catch(() => null),
-        api.getSetting("hide_prices_from_sales").catch(() => null),
       ]);
       if (r?.value) setRadius(String(r.value));
       if (g?.value) setGpsMin(String(g.value));
@@ -65,7 +62,6 @@ export default function SuperSettings() {
         setParts(sorted);
       }
       if (lot?.value != null) setLotteryMin(String(lot.value));
-      setHidePrices(Boolean(hp?.value));
     } catch (e: any) {
       toast.show(e.message || "Gagal memuat pengaturan", "error");
     } finally {
@@ -490,39 +486,18 @@ export default function SuperSettings() {
             <Text style={styles.sectionTitle}>Privasi Harga Produk</Text>
           </View>
           <Text style={styles.sectionDesc}>
-            Sembunyikan harga produk dari tampilan Sales (form transaksi baru). Superadmin & Admin tetap bisa lihat.
+            Privasi harga sekarang diatur <Text style={{ fontWeight: "700" }}>per-produk</Text>. Buka menu{" "}
+            <Text style={{ fontWeight: "700" }}>Produk & Harga</Text> lalu aktifkan toggle{" "}
+            <Text style={{ fontWeight: "700" }}>“Sembunyikan Harga dari Sales”</Text> pada produk yang harganya ingin disembunyikan.
           </Text>
           <TouchableOpacity
-            onPress={async () => {
-              setSavingHide(true);
-              const next = !hidePrices;
-              try {
-                await api.setSetting("hide_prices_from_sales", next);
-                setHidePrices(next);
-                toast.show(next ? "Harga disembunyikan dari Sales" : "Harga tampil kembali di Sales", "success");
-              } catch (e: any) {
-                toast.show(e?.message || "Gagal simpan", "error");
-              } finally {
-                setSavingHide(false);
-              }
-            }}
-            disabled={savingHide}
-            style={[styles.toggleRow, hidePrices && styles.toggleRowActive]}
-            testID="toggle-hide-prices"
+            onPress={() => router.push("/(superadmin)/products")}
+            style={styles.linkBtn}
+            testID="goto-products-btn"
           >
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.toggleTitle, hidePrices && { color: "#fff" }]}>
-                {hidePrices ? "✅ Harga TERSEMBUNYI dari Sales" : "Tampilkan harga ke Sales"}
-              </Text>
-              <Text style={[styles.toggleDesc, hidePrices && { color: "rgba(255,255,255,0.85)" }]}>
-                {hidePrices
-                  ? "Sales lihat produk tanpa nominal Rp — hanya nama & satuan"
-                  : "Sales lihat 'Rp XX.XXX / unit' di form transaksi"}
-              </Text>
-            </View>
-            <View style={[styles.toggleKnob, hidePrices && styles.toggleKnobActive]}>
-              <View style={[styles.toggleDot, hidePrices && styles.toggleDotActive]} />
-            </View>
+            <Ionicons name="pricetag" size={16} color={theme.color.brandPrimary} />
+            <Text style={styles.linkBtnText}>Buka Produk & Harga</Text>
+            <Ionicons name="chevron-forward" size={16} color={theme.color.brandPrimary} />
           </TouchableOpacity>
         </View>
 
@@ -772,6 +747,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     transform: [{ translateX: 18 }],
   },
+  linkBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.color.brandPrimary,
+    backgroundColor: theme.color.brandTertiary,
+    marginTop: 8,
+  },
+  linkBtnText: { flex: 1, fontSize: 13, fontWeight: "700", color: theme.color.brandPrimary },
   dangerHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
   dangerTitle: { fontSize: 15, fontWeight: "700", color: theme.color.error },
   dangerDesc: { fontSize: 12, color: "#7f1d1d", marginBottom: 12, lineHeight: 18 },

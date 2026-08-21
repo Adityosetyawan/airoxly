@@ -93,6 +93,8 @@ class Product(BaseModel):
     unit: str  # "gln", "box"
     price: float
     order: int = 0
+    hide_price: bool = False  # legacy — mirrors ("sales" in hide_price_roles)
+    hide_price_roles: List[str] = []  # roles: "sales" | "admin" | "gudang" | "produksi"
 
 
 class ProductCreate(BaseModel):
@@ -100,6 +102,8 @@ class ProductCreate(BaseModel):
     unit: str
     price: float
     order: int = 0
+    hide_price: bool = False
+    hide_price_roles: List[str] = []
 
 
 class ProductUpdate(BaseModel):
@@ -107,6 +111,8 @@ class ProductUpdate(BaseModel):
     unit: Optional[str] = None
     price: Optional[float] = None
     order: Optional[int] = None
+    hide_price: Optional[bool] = None
+    hide_price_roles: Optional[List[str]] = None
 
 
 # ============================================================

@@ -73,8 +73,16 @@ Web admin companion untuk airoxly (Expo tetap untuk lapangan). v1 fokus: Login (
 - [x] Fix runtime Vercel keenam: bundle berisi `undefined/api` — file `.env*` difilter Save to GitHub sehingga REACT_APP_AIROXLY_API_URL hilang saat build. Fix: api.js fail-fast dengan pesan jelas + dokumentasi WAJIB set env var di dashboard Vercel (DEPLOY.md)
 - [x] **DEPLOY LIVE (22 Agu 2026): https://airoxly-admin.vercel.app/admin** — env var diset di dashboard Vercel → redeploy → testing iterasi 9: 6/6 flow PASS (login superadmin 8 KPI, login sales 6 KPI tanpa Pengeluaran/Setoran, deep link, SPA fallback, CORS, logout)
 
+## Wiring Domain Utama (22 Agu 2026) — SELESAI
+- [x] Kode PWA Expo ditemukan sebagai commit yatim `8865af7` (main tertimpa kode Web Admin saat Save to GitHub) → dibuat branch **`pwa`** dari commit itu via GitHub web UI
+- [x] `frontend/vercel.json` di branch `pwa` ditambah rewrite `/admin` & `/admin/:path*` → `https://airoxly-admin.vercel.app` (di ATAS catch-all SPA `/(.*)` → `/index.html`)
+- [x] Deployment `pwa` (commit `c8ea411`) dipromosikan ke Production project Vercel `airoxly`
+- [x] Verifikasi live: `airoxly.vercel.app/admin` → "Air OXLY — Admin" + login superadmin sukses (dasbor data asli); `/admin/transactions` SPA fallback OK; aset `/admin/static/*` → 200 application/javascript; root `/` tetap PWA Expo (expo-reset); login API asli 200 dengan Origin airoxly.vercel.app
+- [!] Catatan: URL preview deployment Vercel diproteksi SSO (302) — normal, tidak bisa di-curl tanpa login
+- [!] Deploy otomatis project `airoxly` dari branch `main` masih Error (main = kode admin CRA, bukan Expo) — aman diabaikan selama produksi tetap menunjuk deployment `pwa`, atau putus auto-deploy main di Settings → Git
+
 ## Backlog Prioritas
-- P1: Eksekusi deploy Vercel mengikuti /app/DEPLOY.md (butuh akses akun Vercel user)
+- P1: ~~Eksekusi deploy Vercel mengikuti /app/DEPLOY.md~~ SELESAI (22 Agu 2026)
 - P2 (Fase 4 sisa): AI Vision, import Excel, reminder pelanggan
 - P2 (backend airoxly, di luar repo ini): perbaiki upsert POST warehouse/production daily + 500 di /warehouse/transfers & /stock-split
 - P2: Migrasi TypeScript + Vite, refresh token flow penuh, lupa/reset password UI

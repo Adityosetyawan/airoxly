@@ -2,7 +2,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   LayoutDashboard, Users, Package, ShoppingCart, Wallet, Map, UserCog, LogOut, Droplets,
-  Warehouse, Factory, Clock, Sparkles,
+  Warehouse, Factory, Clock, Sparkles, Bell,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { ROLE_LABELS } from "@/lib/format";
@@ -10,6 +10,7 @@ import { ROLE_LABELS } from "@/lib/format";
 const NAV = [
   { to: "/", label: "Dasbor", icon: LayoutDashboard, roles: ["super_admin", "admin", "sales", "produksi", "gudang"] },
   { to: "/customers", label: "Pelanggan", icon: Users, roles: ["super_admin", "admin", "sales"] },
+  { to: "/reminders", label: "Reminder", icon: Bell, roles: ["super_admin", "admin", "sales"] },
   { to: "/products", label: "Produk", icon: Package, roles: ["super_admin", "admin"] },
   { to: "/transactions", label: "Transaksi", icon: ShoppingCart, roles: ["super_admin", "admin", "sales"] },
   { to: "/expenses", label: "Pengeluaran", icon: Wallet, roles: ["super_admin", "admin"] },
@@ -27,6 +28,7 @@ const UPCOMING = [
 const TITLES = {
   "/": "Dasbor Overview",
   "/customers": "Pelanggan",
+  "/reminders": "Reminder Pelanggan",
   "/products": "Produk",
   "/transactions": "Transaksi",
   "/expenses": "Pengeluaran",

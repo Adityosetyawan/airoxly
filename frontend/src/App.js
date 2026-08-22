@@ -16,6 +16,7 @@ import Users from "@/pages/Users";
 import Warehouse from "@/pages/Warehouse";
 import Production from "@/pages/Production";
 import Shifts from "@/pages/Shifts";
+import Reminders from "@/pages/Reminders";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -60,6 +61,7 @@ function App() {
               >
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/customers" element={<Customers />} />
+                <Route path="/reminders" element={<Reminders />} />
                 <Route path="/products" element={<Products />} />
                 <Route path="/transactions" element={<Transactions />} />
                 <Route path="/expenses" element={<Expenses />} />

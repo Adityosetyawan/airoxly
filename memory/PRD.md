@@ -81,6 +81,14 @@ Web admin companion untuk airoxly (Expo tetap untuk lapangan). v1 fokus: Login (
 - [!] Catatan: URL preview deployment Vercel diproteksi SSO (302) — normal, tidak bisa di-curl tanpa login
 - [!] Deploy otomatis project `airoxly` dari branch `main` masih Error (main = kode admin CRA, bukan Expo) — aman diabaikan selama produksi tetap menunjuk deployment `pwa`, atau putus auto-deploy main di Settings → Git
 
+## Reminder Pelanggan (22 Agu 2026) — Fase 4 sisa
+- [x] Halaman `/reminders` (menu "Reminder", ikon Bell; role super_admin/admin/sales): daftar pelanggan yang belum order ≥ X hari — dihitung client-side dari `last_purchase_date` di `/api/customers` (tanpa perubahan backend)
+- [x] Preset ambang 3/7/14/30 hari + input kustom; pencarian nama/alamat; urut hari tanpa order terlama; badge severity (≥30 hari merah, ≥14 oranye); pelanggan "Belum pernah order" tetap ditampilkan di urutan bawah
+- [x] Tombol WA per pelanggan → `wa.me` dengan nomor dinormalisasi (08→62) + pesan pengingat terisi otomatis; state "Tanpa WA" bila nomor kosong
+- [x] Export CSV daftar reminder; `CI=true yarn build` lolos 0 warning
+- [x] Testing preview (Playwright): login superadmin → 285 pelanggan ≥7 hari; threshold 30 → 206; cari "joko" → 3; link WA terverifikasi `https://wa.me/628…?text=Halo…` — PASS
+- [!] Belum live di produksi: butuh "Save to GitHub" dari Emergent → Vercel `airoxly-admin` auto-rebuild
+
 ## Backlog Prioritas
 - P1: ~~Eksekusi deploy Vercel mengikuti /app/DEPLOY.md~~ SELESAI (22 Agu 2026)
 - P2 (Fase 4 sisa): AI Vision, import Excel, reminder pelanggan

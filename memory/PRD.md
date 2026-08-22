@@ -91,7 +91,8 @@ Web admin companion untuk airoxly (Expo tetap untuk lapangan). v1 fokus: Login (
 
 ## Backlog Prioritas
 - P1: ~~Eksekusi deploy Vercel mengikuti /app/DEPLOY.md~~ SELESAI (22 Agu 2026)
-- P2 (Fase 4 sisa): AI Vision, import Excel, reminder pelanggan
+- P2: Notifikasi otomatis WA harian (rekap reminder ke admin) — DITUNDA user (22 Agu 2026). Estimasi biaya sudah diberikan: Twilio ~Rp 40rb/bln (rekap) / ~Rp 750rb/bln (blast 285 pelanggan); alternatif gateway lokal Fonnte/Wablas ~Rp 50rb/bln flat. Menunggu keputusan user + API key.
+- P2 (Fase 4 sisa): AI Vision, import Excel
 - P2 (backend airoxly, di luar repo ini): perbaiki upsert POST warehouse/production daily + 500 di /warehouse/transfers & /stock-split
 - P2: Migrasi TypeScript + Vite, refresh token flow penuh, lupa/reset password UI
 

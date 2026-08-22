@@ -3,6 +3,8 @@
   "cleanUrls": false,
   "trailingSlash": false,
   "rewrites": [
+    { "source": "/admin", "destination": "https://airoxly-admin.vercel.app/" },
+    { "source": "/admin/:path*", "destination": "https://airoxly-admin.vercel.app/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
